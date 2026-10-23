@@ -18,6 +18,7 @@ FULLSCREEN = False
 QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'
 
 # Performance & Effect Toggles
+DEBUG = True
 ENABLE_BLOOM = True
 ENABLE_FILM_GRAIN = True
 ENABLE_FOG = True

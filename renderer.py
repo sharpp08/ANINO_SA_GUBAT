@@ -530,25 +530,25 @@ class Renderer:
 
         if self.ward_effect_type == 'repel':
             radius = int((1.5 - t) * self.w * 0.4)
-            alpha = int(t / 1.5 * 150)
+            alpha = int(max(0, min(255, t / 1.5 * 150)))
             pygame.draw.circle(effect, (255, 215, 0, alpha), (cx, cy), radius, 3)
-            pygame.draw.circle(effect, (255, 255, 200, alpha // 2), (cx, cy), radius - 10, 2)
+            pygame.draw.circle(effect, (255, 255, 200, max(0, min(255, alpha // 2))), (cx, cy), max(0, radius - 10), 2)
         elif self.ward_effect_type == 'shield':
-            alpha = int(t / 1.5 * 80)
+            alpha = int(max(0, min(255, t / 1.5 * 80)))
             pygame.draw.rect(effect, (100, 150, 255, alpha), (0, 0, self.w, self.h))
-            pygame.draw.rect(effect, (150, 200, 255, alpha + 20),
+            pygame.draw.rect(effect, (150, 200, 255, max(0, min(255, alpha + 20))),
                              (10, 10, self.w - 20, self.h - 20), 3)
         elif self.ward_effect_type == 'banish':
             radius = int((1.5 - t) * self.w * 0.5)
-            alpha = int(t / 1.5 * 180)
+            alpha = int(max(0, min(255, t / 1.5 * 180)))
             pygame.draw.circle(effect, (255, 255, 220, alpha), (cx, cy), radius, 4)
         elif self.ward_effect_type == 'bind':
-            alpha = int(t / 1.5 * 120)
+            alpha = int(max(0, min(255, t / 1.5 * 120)))
             for i in range(5):
                 r = 20 + i * 15
                 pygame.draw.circle(effect, (120, 60, 200, alpha), (cx, cy), r, 2)
         elif self.ward_effect_type == 'ultimate':
-            alpha = int(t / 1.5 * 200)
+            alpha = int(max(0, min(255, t / 1.5 * 200)))
             effect.fill((255, 255, 200, min(alpha, 100)))
             radius = int((1.5 - t) * self.w * 0.6)
             pygame.draw.circle(effect, (255, 215, 0, alpha), (cx, cy), radius, 5)

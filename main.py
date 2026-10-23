@@ -5,26 +5,10 @@ Main game loop and entry point.
 import os
 import sys
 import math
+import random
 import json
-import datetime
-import traceback
+import pygame
 
-# ─── Dependency & Environment Check ──────────────────────────────────────────
-try:
-    import numpy
-except ImportError:
-    print("FATAL ERROR: numpy is not installed. Please run 'pip install numpy'.")
-    sys.exit(1)
-
-try:
-    import pygame
-    if not getattr(pygame, 'IS_CE', False):
-        print("WARNING: Standard pygame detected. Pygame-CE is recommended for optimal performance.")
-except ImportError:
-    print("FATAL ERROR: pygame-ce is not installed. Please run 'pip install pygame-ce'.")
-    sys.exit(1)
-
-from numpy import random
 from settings import *
 from player import Player
 from map_system import GameMap
@@ -35,41 +19,6 @@ from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
 )
-
-# ─── Global Exception Handler ────────────────────────────────────────────────
-def global_exception_handler(ex_type, ex_value, ex_tb):
-    os.makedirs("logs", exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join("logs", f"crash_{timestamp}.txt")
-    
-    tb_str = "".join(traceback.format_exception(ex_type, ex_value, ex_tb))
-    report = f"""CRASH REPORT - ANINO SA GUBAT: Mga Bulong ng Dilim
-Timestamp: {timestamp}
-Python Version: {sys.version}
-Pygame Version: {pygame.__version__} (CE: {getattr(pygame, 'IS_CE', False)})
-NumPy Version: {numpy.__version__}
-
-Traceback:
-{tb_str}
-"""
-    try:
-        with open(log_path, 'w', encoding='utf-8') as f:
-            f.write(report)
-        print(f"Crash report written to {log_path}")
-    except Exception as e:
-        print(f"Failed to write crash log: {e}")
-
-    if DEBUG:
-        sys.__excepthook__(ex_type, ex_value, ex_tb)
-    else:
-        print("\nA fatal error occurred. Please check logs/ for details.")
-        try:
-            pygame.quit()
-        except Exception:
-            pass
-        sys.exit(1)
-
-sys.excepthook = global_exception_handler
 
 # ─── Game States ─────────────────────────────────────────────────────────────
 STATE_MENU     = 'menu'
@@ -548,8 +497,4 @@ class Game:
 # ─── Entry point ─────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    if '--selftest' in sys.argv:
-        import subprocess
-        result = subprocess.run([sys.executable, "tests/smoke_test.py"])
-        sys.exit(result.returncode)
     Game().run()
