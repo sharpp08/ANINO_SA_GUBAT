@@ -340,6 +340,27 @@ class Renderer:
                 'type': 'enemy', 'data': enemy,
             })
 
+        # Add pickups
+        for pickup in game_map.pickups:
+            if not pickup.get('active', True):
+                continue
+            dx = pickup['x'] - player.x
+            dy = pickup['y'] - player.y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist < 0.3 or dist > MAX_DEPTH:
+                continue
+            angle = math.atan2(dy, dx) - player.angle
+            while angle > math.pi:
+                angle -= 2 * math.pi
+            while angle < -math.pi:
+                angle += 2 * math.pi
+            if abs(angle) > self.half_fov + 0.2:
+                continue
+            sprite_list.append({
+                'dist': dist, 'angle': angle,
+                'type': 'pickup', 'data': pickup,
+            })
+
         # Sort back to front
         sprite_list.sort(key=lambda s: s['dist'], reverse=True)
 
@@ -389,6 +410,16 @@ class Renderer:
                     bound_surf.fill((100, 50, 200, 80))
                     bound_img.blit(bound_surf, (0, 0))
                     img = bound_img
+            elif sprite['type'] == 'pickup':
+                pickup = sprite['data']
+                ptype = pickup['type']
+                if ptype in self.pickup_sprites:
+                    img = self.pickup_sprites[ptype]
+                else:
+                    img = None
+                if img is None:
+                    img = pygame.Surface((32, 32), pygame.SRCALPHA)
+                    pygame.draw.rect(img, (255, 255, 0), (8, 8, 16, 16))
 
             scaled = pygame.transform.scale(img, (max(1, sprite_w), max(1, sprite_h)))
 

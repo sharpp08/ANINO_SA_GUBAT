@@ -44,8 +44,11 @@ class SoundManager:
 
     def play(self, name, volume=1.0, pan=0.0):
         if name in self.sounds and self.sounds[name]:
-            snd = self.sounds[name]
-            snd.set_volume(max(0.0, min(1.0, volume)))
-            snd.play()
+            try:
+                snd = self.sounds[name]
+                snd.set_volume(max(0.0, min(1.0, volume)))
+                snd.play()
+            except Exception:
+                pass
 
 audio_mgr = SoundManager()

@@ -5,6 +5,7 @@ Main game loop and entry point.
 import os
 import sys
 import math
+import random
 import json
 import pygame
 
@@ -255,7 +256,7 @@ class Game:
             return
         chapter = data.get('chapter', 1)
         self.load_chapter(chapter)
-        self.player.load_state(data['player'])
+        self.player.load_state(data.get('player', {}))
         self.state = STATE_PLAYING
         safe_set_relative_mouse(True)
         self.notify("Game loaded.")

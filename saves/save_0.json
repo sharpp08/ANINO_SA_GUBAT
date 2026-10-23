@@ -1,0 +1,34 @@
+{
+  "chapter": 1,
+  "player": {
+    "x": 2.5,
+    "y": 2.5,
+    "angle": 0,
+    "health": 100,
+    "armor": 0,
+    "sanity": 100.0,
+    "stamina": 100.0,
+    "current_weapon": 2,
+    "ammo_shotgun": 10,
+    "ammo_revolver": 12,
+    "shotgun_mag": 2,
+    "revolver_mag": 6,
+    "flashlight_battery": 100,
+    "faith_energy": 5.0,
+    "salt_count": 4,
+    "garlic_count": 2,
+    "bible_pages": 0,
+    "wards_unlocked": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "journal_entries": [],
+    "relics": [],
+    "current_chapter": 1,
+    "checkpoint_x": 2.5,
+    "checkpoint_y": 2.5
+  }
+}
