@@ -14,7 +14,10 @@ FPS = 60
 TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
 FULLSCREEN = False
 
-# Performance & Effect Toggles (Phases 1-5)
+# Quality Tiers & Graphics Pipeline
+QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'
+
+# Performance & Effect Toggles
 ENABLE_BLOOM = True
 ENABLE_FILM_GRAIN = True
 ENABLE_FOG = True
@@ -24,6 +27,39 @@ ENABLE_AUDIO_SYNTH = True
 ENABLE_SANITY = True
 ENABLE_STEALTH_NOISE = True
 DEBUG_OVERLAY = True
+
+# HDR / PBR Graphics Settings
+ENABLE_HDR = True
+ENABLE_PBR = True
+ENABLE_NORMAL_MAPPING = True
+ENABLE_SSAO = True
+ENABLE_GOD_RAYS = True
+ENABLE_COLOR_GRADING = True
+ENABLE_CHROMATIC_ABERRATION = True
+
+
+# Quality Tier Presets
+QUALITY_PRESETS = {
+    'low': {
+        'internal_width': 320, 'internal_height': 180,
+        'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
+        'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
+        'enable_particles': False, 'enable_dynamic_lights': False,
+    },
+    'medium': {
+        'internal_width': 640, 'internal_height': 360,
+        'enable_hdr': True, 'enable_pbr': True, 'enable_normal_mapping': True,
+        'enable_ssao': True, 'enable_bloom': True, 'enable_god_rays': True,
+        'enable_particles': True, 'enable_dynamic_lights': True,
+    },
+    'high': {
+        'internal_width': 960, 'internal_height': 540,
+        'enable_hdr': True, 'enable_pbr': True, 'enable_normal_mapping': True,
+        'enable_ssao': True, 'enable_bloom': True, 'enable_god_rays': True,
+        'enable_particles': True, 'enable_dynamic_lights': True,
+    }
+}
+
 
 # Raycasting
 FOV = 60

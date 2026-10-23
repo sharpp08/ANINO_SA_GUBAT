@@ -37,7 +37,7 @@ def generate_wall_texture(width=64, height=64, base_color=(60, 40, 25), variatio
     """Generate high-fidelity wall texture with fBm noise and ambient occlusion."""
     import numpy as np
     surf = pygame.Surface((width, height))
-    noise = generate_fbm_noise(width, height, octaves=4, seed=abs(hash(base_color) + hash(style)) % 10000)
+    noise = generate_fbm_noise(width, height, octaves=4, seed=abs(hash(str(base_color)) + hash(style)) % 10000)
     base = np.array(base_color, dtype=np.float32)
 
     arr = np.zeros((height, width, 3), dtype=np.float32)
