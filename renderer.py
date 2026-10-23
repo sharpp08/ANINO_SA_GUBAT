@@ -2,6 +2,7 @@
 Raycasting renderer - provides pseudo-3D first-person view.
 """
 import math
+import random
 import pygame
 import numpy as np
 from settings import *
@@ -45,6 +46,23 @@ class Renderer:
         self.screen_shake = 0
         self.vignette = self._generate_vignette()
 
+        # Particles (Fireflies, dust motes)
+        self.particles = []
+        for _ in range(35):
+            self.particles.append({
+                'x': random.uniform(0, self.w),
+                'y': random.uniform(0, self.h),
+                'vx': random.uniform(-0.5, 0.5),
+                'vy': random.uniform(-0.3, 0.3),
+                'size': random.uniform(1.0, 2.5),
+                'phase': random.uniform(0, math.pi * 2),
+                'color': (random.randint(180, 255), random.randint(200, 255), random.randint(100, 180))
+            })
+
+        # Debug overlay (F3)
+        self.show_debug = True
+        self.timings = {'rays': 0.0, 'post': 0.0, 'total': 0.0}
+
         # Ward visual effects
         self.ward_effect_timer = 0
         self.ward_effect_type = None
@@ -71,22 +89,26 @@ class Renderer:
 
     def render_frame(self, player, game_map, enemies, effects, dt):
         """Render a complete frame."""
+        t_start = pygame.time.get_ticks()
         self.surface.fill(SKY_COLOR)
 
-        # Draw ceiling
+        # Draw ceiling with colored fog gradient
+        pitch_offset = int(player.pitch * self.h)
         half_h = self.h // 2
-        for y in range(half_h):
-            t = 1.0 - y / half_h
-            r = int(SKY_COLOR[0] + t * 3)
-            g = int(SKY_COLOR[1] + t * 3)
-            b = int(SKY_COLOR[2] + t * 5)
+        for y in range(max(0, half_h + pitch_offset)):
+            t = y / max(1, half_h + pitch_offset)
+            r = int(SKY_COLOR[0] * (1 - t) + FOG_COLOR[0] * t)
+            g = int(SKY_COLOR[1] * (1 - t) + FOG_COLOR[1] * t)
+            b = int(SKY_COLOR[2] * (1 - t) + FOG_COLOR[2] * t)
             pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
         # Draw floor
-        self.surface.blit(self.floor_surf, (0, half_h))
+        self.surface.blit(self.floor_surf, (0, max(0, half_h + pitch_offset)))
 
         # Cast rays and draw walls
+        t_rays = pygame.time.get_ticks()
         self._cast_rays(player, game_map)
+        self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
         # Draw sprites (enemies and pickups)
         self._draw_sprites(player, enemies, game_map)
@@ -95,8 +117,25 @@ class Renderer:
         if player.flashlight_on and player.flashlight_battery > 0:
             self._draw_flashlight(player)
 
-        # Vignette
+        # Particles (Fireflies and dust motes)
+        if ENABLE_PARTICLES:
+            for p in self.particles:
+                p['x'] = (p['x'] + p['vx']) % self.w
+                p['y'] = (p['y'] + p['vy']) % self.h
+                p['phase'] += dt * 2
+                alpha = int(abs(math.sin(p['phase'])) * 180)
+                psurf = pygame.Surface((int(p['size'] * 2), int(p['size'] * 2)), pygame.SRCALPHA)
+                pygame.draw.circle(psurf, (*p['color'], alpha), (int(p['size']), int(p['size'])), int(p['size']))
+                self.surface.blit(psurf, (int(p['x']), int(p['y'])))
+
+        # Vignette and Sanity / Low HP blood vignette
         self.surface.blit(self.vignette, (0, 0))
+        if player.health < 35 or (ENABLE_SANITY and player.sanity < 30):
+            urgency = max((35 - player.health) / 35.0, (30 - player.sanity) / 30.0)
+            blood_vig = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            alpha = int(urgency * 120 + math.sin(pygame.time.get_ticks() * 0.006) * 30)
+            pygame.draw.rect(blood_vig, (180, 0, 0, max(0, min(200, alpha))), (0, 0, self.w, self.h), int(20 * urgency))
+            self.surface.blit(blood_vig, (0, 0))
 
         # Ward effects
         if self.ward_effect_timer > 0:

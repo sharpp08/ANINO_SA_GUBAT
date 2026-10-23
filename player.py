@@ -20,6 +20,9 @@ class Player:
         self.armor = 0
         self.alive = True
         self.damage_flash = 0
+        self.sanity = SANITY_MAX
+        self.stamina = STAMINA_MAX
+        self.noise_level = 0.0
 
         # Weapons: 0=bolo, 1=shotgun, 2=revolver
         self.current_weapon = 0
@@ -74,7 +77,18 @@ class Player:
         self.pitch -= mouse_dy * PLAYER_ROT_SPEED * 0.5
         self.pitch = max(-0.5, min(0.5, self.pitch))
 
-        # Movement
+        # Sprint & Crouch with Stamina
+        wants_sprint = keys[pygame.K_LSHIFT] and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d])
+        if wants_sprint and self.stamina > 5.0 and not self.is_crouching:
+            self.is_sprinting = True
+            self.stamina = max(0.0, self.stamina - STAMINA_DRAIN_RATE * dt)
+        else:
+            self.is_sprinting = False
+            self.stamina = min(STAMINA_MAX, self.stamina + STAMINA_REGEN_RATE * dt)
+
+        self.is_crouching = keys[pygame.K_LCTRL]
+
+        # Movement speed
         speed = PLAYER_SPRINT_SPEED if self.is_sprinting else PLAYER_SPEED
         if self.is_crouching:
             speed *= 0.5
@@ -104,18 +118,28 @@ class Player:
         if not game_map.is_solid(self.x, new_y + pad) and not game_map.is_solid(self.x, new_y - pad):
             self.y = new_y
 
-        # Head bob
-        if abs(move_x) > 0.001 or abs(move_y) > 0.001:
+        # Head bob & footsteps noise
+        moving = abs(move_x) > 0.001 or abs(move_y) > 0.001
+        if moving:
             bob_speed = 8 if self.is_sprinting else 5
             self.bob_timer += dt * bob_speed
             self.bob_amount = math.sin(self.bob_timer) * (4 if self.is_sprinting else 2)
+            if self.is_sprinting:
+                self.noise_level = max(self.noise_level, 3.5)
+            elif not self.is_crouching:
+                self.noise_level = max(self.noise_level, 1.2)
         else:
             self.bob_timer = 0
             self.bob_amount *= 0.8
 
-        # Sprint
-        self.is_sprinting = keys[pygame.K_LSHIFT]
-        self.is_crouching = keys[pygame.K_LCTRL]
+        # Noise decay
+        self.noise_level = max(0.0, self.noise_level - dt * 3.0)
+
+        # Sanity mechanics: drain in dark or low battery, restore in light
+        if not self.flashlight_on or self.flashlight_battery < 15:
+            self.sanity = max(0.0, self.sanity - SANITY_DRAIN_DARK * dt)
+        else:
+            self.sanity = min(SANITY_MAX, self.sanity + SANITY_REGEN_LIGHT * dt * 0.5)
 
         # Weapon cooldown
         if self.weapon_cooldown > 0:
@@ -167,12 +191,18 @@ class Player:
             self.damage_flash -= dt * 3
 
     def fire_weapon(self):
-        """Attempt to fire the current weapon. Returns hit info."""
-        if self.weapon_cooldown > 0 or self.reloading:
+        """Attempt to fire the current weapon. Cancel reload if active. Returns hit info."""
+        if self.weapon_cooldown > 0:
             return None
+
+        # Cancel reload if player attacks
+        if self.reloading:
+            self.reloading = False
+            self.reload_timer = 0
 
         if self.current_weapon == 0:  # Bolo
             self.weapon_cooldown = BOLO_COOLDOWN
+            self.noise_level = max(self.noise_level, BOLO_NOISE)
             return {
                 'type': 'bolo',
                 'damage': BOLO_DAMAGE,
@@ -185,6 +215,7 @@ class Player:
                 return None
             self.shotgun_mag -= 1
             self.weapon_cooldown = SHOTGUN_COOLDOWN
+            self.noise_level = max(self.noise_level, SHOTGUN_NOISE)
             return {
                 'type': 'shotgun',
                 'damage': SHOTGUN_DAMAGE,
@@ -198,6 +229,7 @@ class Player:
                 return None
             self.revolver_mag -= 1
             self.weapon_cooldown = REVOLVER_COOLDOWN
+            self.noise_level = max(self.noise_level, REVOLVER_NOISE)
             return {
                 'type': 'revolver',
                 'damage': REVOLVER_DAMAGE,
@@ -214,10 +246,12 @@ class Player:
             if self.ammo_shotgun > 0 and self.shotgun_mag < SHOTGUN_MAG_SIZE:
                 self.reloading = True
                 self.reload_timer = SHOTGUN_RELOAD_TIME
+                self.noise_level = max(self.noise_level, RELOAD_NOISE)
         elif self.current_weapon == 2:
             if self.ammo_revolver > 0 and self.revolver_mag < REVOLVER_MAG_SIZE:
                 self.reloading = True
                 self.reload_timer = REVOLVER_RELOAD_TIME
+                self.noise_level = max(self.noise_level, RELOAD_NOISE)
 
     def switch_weapon(self, weapon_id):
         """Switch to weapon by index."""
@@ -336,16 +370,18 @@ class Player:
         return False
 
     def use_rosary(self):
-        """Activate rosary prayer."""
+        """Activate rosary prayer and restore sanity."""
         if self.rosary_cooldown <= 0:
             self.rosary_cooldown = 8.0
+            self.sanity = min(SANITY_MAX, self.sanity + 25.0)
             return True
         return False
 
     def use_cross(self):
-        """Activate cross radiance."""
+        """Activate cross radiance and restore sanity."""
         if self.cross_cooldown <= 0:
             self.cross_cooldown = 6.0
+            self.sanity = min(SANITY_MAX, self.sanity + 35.0)
             return True
         return False
 
@@ -361,6 +397,8 @@ class Player:
         self.y = self.checkpoint_y
         self.angle = self.checkpoint_angle
         self.health = PLAYER_MAX_HEALTH
+        self.sanity = SANITY_MAX
+        self.stamina = STAMINA_MAX
         self.alive = True
         self.damage_flash = 0
 
@@ -369,6 +407,7 @@ class Player:
         return {
             'x': self.x, 'y': self.y, 'angle': self.angle,
             'health': self.health, 'armor': self.armor,
+            'sanity': self.sanity, 'stamina': self.stamina,
             'current_weapon': self.current_weapon,
             'ammo_shotgun': self.ammo_shotgun,
             'ammo_revolver': self.ammo_revolver,
@@ -394,6 +433,8 @@ class Player:
         self.angle = state.get('angle', 0)
         self.health = state.get('health', PLAYER_MAX_HEALTH)
         self.armor = state.get('armor', 0)
+        self.sanity = state.get('sanity', SANITY_MAX)
+        self.stamina = state.get('stamina', STAMINA_MAX)
         self.current_weapon = state.get('current_weapon', 0)
         self.ammo_shotgun = state.get('ammo_shotgun', 10)
         self.ammo_revolver = state.get('ammo_revolver', 12)

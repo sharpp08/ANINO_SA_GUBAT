@@ -13,6 +13,7 @@ from player import Player
 from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
+from audio_synth import audio_mgr
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
@@ -27,6 +28,13 @@ STATE_WIN      = 'win'
 
 
 # ─── HUD helpers ─────────────────────────────────────────────────────────────
+def safe_set_relative_mouse(enabled):
+    try:
+        pygame.mouse.set_relative_mode(enabled)
+    except Exception:
+        pass
+
+
 def draw_bar(surf, x, y, w, h, value, max_val, fg, bg=(30, 30, 30)):
     pygame.draw.rect(surf, bg, (x, y, w, h))
     filled = int(w * max(0, value) / max_val)
@@ -40,14 +48,24 @@ def draw_hud(surf, player, font_sm, font_tiny):
     pad = 8
 
     # ── Health & Armor ────────────────────────────────────────────────────
-    draw_bar(surf, pad, sh - 52, 120, 10, player.health, PLAYER_MAX_HEALTH, HEALTH_GREEN)
+    draw_bar(surf, pad, sh - 52, 120, 8, player.health, PLAYER_MAX_HEALTH, HEALTH_GREEN)
     hp_txt = font_tiny.render(f"HP {int(player.health)}", True, WHITE)
-    surf.blit(hp_txt, (pad, sh - 65))
+    surf.blit(hp_txt, (pad, sh - 64))
+
+    # ── Stamina ───────────────────────────────────────────────────────────
+    draw_bar(surf, pad + 130, sh - 52, 80, 8, player.stamina, STAMINA_MAX, (50, 180, 120))
+    stm_txt = font_tiny.render(f"STM {int(player.stamina)}", True, (160, 240, 180))
+    surf.blit(stm_txt, (pad + 130, sh - 64))
+
+    # ── Sanity ────────────────────────────────────────────────────────────
+    draw_bar(surf, pad + 130, sh - 22, 80, 6, player.sanity, SANITY_MAX, SANITY_PURPLE)
+    san_txt = font_tiny.render(f"SAN {int(player.sanity)}%", True, (210, 160, 255))
+    surf.blit(san_txt, (pad + 130, sh - 33))
 
     if player.armor > 0:
-        draw_bar(surf, pad, sh - 38, 120, 7, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
+        draw_bar(surf, pad, sh - 38, 120, 6, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
         arm_txt = font_tiny.render(f"AP {int(player.armor)}", True, (180, 210, 255))
-        surf.blit(arm_txt, (pad, sh - 50))
+        surf.blit(arm_txt, (pad, sh - 49))
 
     # ── Flashlight ───────────────────────────────────────────────────────
     batt_col = (220, 220, 50) if player.flashlight_battery > 30 else HEALTH_RED
@@ -228,7 +246,7 @@ class Game:
     def start_new_game(self):
         self.load_chapter(1)
         self.state = STATE_PLAYING
-        pygame.mouse.set_relative_mode(True)
+        safe_set_relative_mouse(True)
 
     def load_saved_game(self):
         data = load_game()
@@ -239,7 +257,7 @@ class Game:
         self.load_chapter(chapter)
         self.player.load_state(data['player'])
         self.state = STATE_PLAYING
-        pygame.mouse.set_relative_mode(True)
+        safe_set_relative_mouse(True)
         self.notify("Game loaded.")
 
     def notify(self, text, duration=2.5):
@@ -253,7 +271,9 @@ class Game:
             k = event.key
             if k == pygame.K_ESCAPE:
                 self.state = STATE_PAUSED
-                pygame.mouse.set_relative_mode(False)
+                safe_set_relative_mouse(False)
+            elif k == pygame.K_F3:
+                self.renderer.show_debug = not self.renderer.show_debug
             elif k == pygame.K_r:
                 p.start_reload()
             elif k == pygame.K_f:
@@ -282,6 +302,8 @@ class Game:
         wi = p.fire_weapon()
         if wi:
             self.renderer.trigger_muzzle_flash()
+            if wi['type'] in ('shotgun', 'revolver', 'bolo'):
+                audio_mgr.play(wi['type'])
             hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi)
             if hits:
                 self.renderer.trigger_screen_shake(4)
@@ -310,6 +332,7 @@ class Game:
         look_x = p.x + math.cos(p.angle) * 1.2
         look_y = p.y + math.sin(p.angle) * 1.2
         if self.game_map.open_door(look_x, look_y):
+            audio_mgr.play('door')
             self.notify("Door opened.")
         for cp in self.game_map.checkpoints:
             dx = cp['x'] - p.x
@@ -325,8 +348,12 @@ class Game:
         keys = pygame.key.get_pressed()
         p.update(dt, keys, mouse_dx, mouse_dy, self.game_map)
 
-        # Enemy AI
-        self.enemy_manager.update(dt, p.x, p.y, self.game_map)
+        # Footstep audio on movement
+        if abs(p.bob_amount) > 1.8 and random.random() < 0.12:
+            audio_mgr.play('footstep', volume=0.4 if not p.is_sprinting else 0.8)
+
+        # Enemy AI with stealth sensing and sanity proximity
+        self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)
 
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
@@ -338,6 +365,7 @@ class Game:
         for pickup in self.game_map.get_nearby_pickups(p.x, p.y):
             if p.pickup_item(pickup):
                 pickup['active'] = False
+                audio_mgr.play('pickup')
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
         # Check level exit
@@ -351,7 +379,7 @@ class Game:
         # Death check
         if not p.alive:
             self.state = STATE_GAMEOVER
-            pygame.mouse.set_relative_mode(False)
+            safe_set_relative_mouse(False)
 
         # Notification timer
         if self.notif_t > 0:
@@ -424,22 +452,22 @@ class Game:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             self.state = STATE_PLAYING
-                            pygame.mouse.set_relative_mode(True)
+                            safe_set_relative_mouse(True)
                         elif event.key == pygame.K_s:
                             ok = save_game(self.player, self.chapter)
                             self.notify("Saved!" if ok else "Save failed.")
                             self.state = STATE_PLAYING
-                            pygame.mouse.set_relative_mode(True)
+                            safe_set_relative_mouse(True)
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
-                            pygame.mouse.set_relative_mode(False)
+                            safe_set_relative_mouse(False)
 
                 elif self.state == STATE_GAMEOVER:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_r:
                             self.player.respawn()
                             self.state = STATE_PLAYING
-                            pygame.mouse.set_relative_mode(True)
+                            safe_set_relative_mouse(True)
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
 
@@ -450,7 +478,7 @@ class Game:
                             if next_ch <= 2:
                                 self.load_chapter(next_ch)
                                 self.state = STATE_PLAYING
-                                pygame.mouse.set_relative_mode(True)
+                                safe_set_relative_mouse(True)
                             else:
                                 self.state = STATE_MENU
                         elif event.key == pygame.K_m:

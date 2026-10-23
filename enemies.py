@@ -393,10 +393,28 @@ class EnemyManager:
             enemy = Enemy(edata['type'], edata['x'], edata['y'])
             self.enemies.append(enemy)
 
-    def update(self, dt, player_x, player_y, game_map):
-        """Update all enemies."""
+    def update(self, dt, player_x, player_y, game_map, player=None):
+        """Update all enemies with noise sensing, flashlight reaction, and sanity drain."""
         for enemy in self.enemies:
             enemy.update(dt, player_x, player_y, game_map)
+            if not enemy.alive:
+                continue
+
+            # Stealth & Noise mechanic (Phase 5)
+            if player and hasattr(player, 'noise_level') and player.noise_level > 1.5:
+                dist = enemy.distance_to(player_x, player_y)
+                if dist < player.noise_level * 2.5:
+                    if enemy.state in (EnemyState.IDLE, EnemyState.PATROL):
+                        enemy.state = EnemyState.INVESTIGATE
+                        enemy.investigate_x = player_x
+                        enemy.investigate_y = player_y
+                        enemy.state_timer = 4.0
+
+            # Proximity sanity drain (Phase 4)
+            if player and hasattr(player, 'sanity'):
+                dist = enemy.distance_to(player_x, player_y)
+                if dist < 4.0:
+                    player.sanity = max(0.0, player.sanity - SANITY_DRAIN_ENEMY * dt)
 
         # Update active effect zones
         expired = []

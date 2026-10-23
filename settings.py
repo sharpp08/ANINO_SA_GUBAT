@@ -1,6 +1,6 @@
 """
 ANINO SA GUBAT: Mga Bulong ng Dilim
-Game Settings and Configuration
+Game Settings and Configuration (Enhanced - Phases 1 to 5)
 """
 import json
 import os
@@ -13,6 +13,17 @@ INTERNAL_HEIGHT = 360
 FPS = 60
 TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
 FULLSCREEN = False
+
+# Performance & Effect Toggles (Phases 1-5)
+ENABLE_BLOOM = True
+ENABLE_FILM_GRAIN = True
+ENABLE_FOG = True
+ENABLE_PARTICLES = True
+ENABLE_DYNAMIC_LIGHTS = True
+ENABLE_AUDIO_SYNTH = True
+ENABLE_SANITY = True
+ENABLE_STEALTH_NOISE = True
+DEBUG_OVERLAY = True
 
 # Raycasting
 FOV = 60
@@ -29,27 +40,41 @@ PLAYER_ROT_SPEED = 0.002
 PLAYER_MAX_HEALTH = 100
 PLAYER_MAX_ARMOR = 50
 PLAYER_SIZE = 0.3
+STAMINA_MAX = 100.0
+STAMINA_DRAIN_RATE = 35.0
+STAMINA_REGEN_RATE = 25.0
 
-# Weapons
+# Sanity / Fear (Phase 4)
+SANITY_MAX = 100.0
+SANITY_DRAIN_DARK = 4.0
+SANITY_DRAIN_ENEMY = 8.0
+SANITY_REGEN_LIGHT = 6.0
+
+# Weapons (Rebalanced Phase 5)
 BOLO_DAMAGE = 25
 BOLO_RANGE = 1.5
 BOLO_COOLDOWN = 0.4
+BOLO_NOISE = 1.0
 
 SHOTGUN_DAMAGE = 40
 SHOTGUN_RANGE = 8
 SHOTGUN_SPREAD = 0.1
 SHOTGUN_PELLETS = 5
 SHOTGUN_COOLDOWN = 0.8
-SHOTGUN_MAX_AMMO = 50
+SHOTGUN_MAX_AMMO = 16  # Rebalanced
 SHOTGUN_RELOAD_TIME = 1.5
 SHOTGUN_MAG_SIZE = 2
+SHOTGUN_NOISE = 8.0
 
 REVOLVER_DAMAGE = 30
 REVOLVER_RANGE = 15
 REVOLVER_COOLDOWN = 0.5
-REVOLVER_MAX_AMMO = 36
+REVOLVER_MAX_AMMO = 24  # Rebalanced
 REVOLVER_RELOAD_TIME = 1.2
 REVOLVER_MAG_SIZE = 6
+REVOLVER_NOISE = 6.0
+
+RELOAD_NOISE = 4.0
 
 # Flashlight
 FLASHLIGHT_MAX_BATTERY = 100
@@ -117,7 +142,7 @@ GOLD = (220, 180, 50)
 LIGHT_GOLD = (255, 220, 100)
 SKY_COLOR = (5, 5, 15)
 FLOOR_COLOR = (25, 18, 12)
-FOG_COLOR = (8, 10, 8)
+FOG_COLOR = (12, 18, 15)
 HUD_BG = (20, 20, 20, 180)
 BLOOD_RED = (150, 0, 0)
 SACRED_GOLD = (255, 215, 0)
@@ -126,6 +151,7 @@ HEALTH_GREEN = (50, 200, 50)
 HEALTH_RED = (200, 50, 50)
 AMMO_YELLOW = (220, 200, 50)
 FAITH_BLUE = (80, 120, 220)
+SANITY_PURPLE = (140, 80, 200)
 
 # Map tiles
 EMPTY = 0
@@ -184,6 +210,7 @@ CONTROLS = {
     'rosary': 'v',
     'cross': 'c',
     'pause': 'escape',
+    'debug_toggle': 'f3',
 }
 
 SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saves')
@@ -199,6 +226,13 @@ def load_settings(path='settings.json'):
         'master_volume': MASTER_VOLUME,
         'music_volume': MUSIC_VOLUME,
         'sfx_volume': SFX_VOLUME,
+        'enable_bloom': ENABLE_BLOOM,
+        'enable_film_grain': ENABLE_FILM_GRAIN,
+        'enable_fog': ENABLE_FOG,
+        'enable_particles': ENABLE_PARTICLES,
+        'enable_audio_synth': ENABLE_AUDIO_SYNTH,
+        'enable_sanity': ENABLE_SANITY,
+        'debug_overlay': DEBUG_OVERLAY,
         'controls': CONTROLS.copy(),
     }
     if os.path.exists(path):

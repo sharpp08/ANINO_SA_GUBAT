@@ -15,68 +15,70 @@ def _ensure_dirs():
         os.makedirs(p, exist_ok=True)
 
 
+def generate_fbm_noise(width=64, height=64, octaves=4, seed=42):
+    import numpy as np
+    np.random.seed(seed)
+    grid = np.zeros((height, width), dtype=np.float32)
+    for i in range(octaves):
+        freq = 2 ** i
+        sub_w, sub_h = max(2, width // freq), max(2, height // freq)
+        rand = np.random.rand(sub_h, sub_w).astype(np.float32)
+        rep_y = int(math.ceil(height / sub_h))
+        rep_x = int(math.ceil(width / sub_w))
+        layer = np.kron(rand, np.ones((rep_y, rep_x), dtype=np.float32))[:height, :width]
+        grid += layer * (0.5 ** i)
+    mn, mx = grid.min(), grid.max()
+    if mx - mn > 1e-5:
+        grid = (grid - mn) / (mx - mn)
+    return grid
+
+
 def generate_wall_texture(width=64, height=64, base_color=(60, 40, 25), variation=15, style='stone'):
-    """Generate a pixelated wall texture."""
+    """Generate high-fidelity wall texture with fBm noise and ambient occlusion."""
+    import numpy as np
     surf = pygame.Surface((width, height))
-    surf.fill(base_color)
-    rng = random.Random(hash(base_color) + hash(style))
+    noise = generate_fbm_noise(width, height, octaves=4, seed=abs(hash(base_color) + hash(style)) % 10000)
+    base = np.array(base_color, dtype=np.float32)
 
-    if style == 'stone':
-        for y in range(0, height, 8):
-            offset = (y // 8 % 2) * 16
-            for x in range(0, width, 32):
-                bx = (x + offset) % width
-                v = rng.randint(-variation, variation)
-                color = tuple(max(0, min(255, c + v)) for c in base_color)
-                rect = pygame.Rect(bx, y, 30, 6)
-                pygame.draw.rect(surf, color, rect)
-                pygame.draw.rect(surf, tuple(max(0, c - 30) for c in color), rect, 1)
-    elif style == 'wood':
-        for y in range(height):
-            v = int(math.sin(y * 0.3) * 8)
-            for x in range(width):
-                noise = rng.randint(-5, 5)
-                color = tuple(max(0, min(255, c + v + noise)) for c in base_color)
-                surf.set_at((x, y), color)
-        for y in range(0, height, 12):
-            pygame.draw.line(surf, tuple(max(0, c - 20) for c in base_color), (0, y), (width, y))
-    elif style == 'bamboo':
-        segment_h = 16
-        for seg in range(height // segment_h + 1):
-            y0 = seg * segment_h
-            v = rng.randint(-8, 8)
-            seg_color = tuple(max(0, min(255, c + v)) for c in base_color)
-            pygame.draw.rect(surf, seg_color, (8, y0, width - 16, segment_h))
-            node_color = tuple(max(0, c - 25) for c in seg_color)
-            pygame.draw.rect(surf, node_color, (6, y0, width - 12, 3))
-        pygame.draw.line(surf, tuple(max(0, c - 15) for c in base_color), (width // 2, 0), (width // 2, height))
-    elif style == 'balete':
-        for y in range(height):
-            for x in range(width):
-                twist = int(math.sin(y * 0.15 + x * 0.1) * 12)
-                v = rng.randint(-8, 8)
-                color = tuple(max(0, min(255, c + twist + v)) for c in base_color)
-                surf.set_at((x, y), color)
-        for i in range(5):
-            rx = rng.randint(0, width)
-            pygame.draw.line(surf, tuple(max(0, c - 30) for c in base_color),
-                             (rx, 0), (rx + rng.randint(-10, 10), height), 2)
+    arr = np.zeros((height, width, 3), dtype=np.float32)
+    for y in range(height):
+        for x in range(width):
+            n = noise[y, x]
+            if style == 'stone':
+                by = y // 8
+                bx = (x + (16 if by % 2 == 1 else 0)) % width
+                is_mortar = (y % 8 == 0) or (bx % 32 == 0)
+                col = np.array([25, 25, 20], dtype=np.float32) + n * 10 if is_mortar else np.clip(base + (n - 0.5) * 45, 0, 255)
+            elif style == 'wood':
+                plank_y = y % 16
+                is_gap = (plank_y == 0 or plank_y == 15)
+                col = np.array([20, 12, 8], dtype=np.float32) if is_gap else np.clip(base + math.sin(x * 0.4) * 12 + (n - 0.5) * 30, 0, 255)
+            elif style == 'bamboo':
+                is_node = (y % 16 < 3)
+                col = np.array([40, 60, 25], dtype=np.float32) + n * 15 if is_node else np.clip(base + math.cos(x / width * math.pi) * 25 + (n - 0.5) * 20, 0, 255)
+            elif style == 'balete':
+                twist = math.sin(y * 0.2 + x * 0.15)
+                col = np.clip(base + twist * 25 + (n - 0.5) * 35, 0, 255)
+            else:
+                col = np.clip(base + (n - 0.5) * 35, 0, 255)
+            arr[y, x] = col
 
+    # Ambient Occlusion: Darken top and bottom rows
+    ao = np.linspace(0.72, 1.0, height)[:, None]
+    ao_v = np.linspace(1.0, 0.72, height)[:, None]
+    arr = np.clip(arr * (ao * 0.5 + ao_v * 0.5), 0, 255)
+    pygame.surfarray.blit_array(surf, arr.astype(np.uint8).swapaxes(0, 1))
     return surf
 
 
 def generate_floor_texture(width=64, height=64, base_color=(25, 18, 12)):
-    """Generate a dirt/ground texture."""
+    """Generate fractal noise ground texture with pebbles and twigs."""
+    import numpy as np
     surf = pygame.Surface((width, height))
-    rng = random.Random(42)
-    for y in range(height):
-        for x in range(width):
-            v = rng.randint(-10, 10)
-            color = tuple(max(0, min(255, c + v)) for c in base_color)
-            surf.set_at((x, y), color)
-    for _ in range(20):
-        px, py = rng.randint(0, width - 1), rng.randint(0, height - 1)
-        surf.set_at((px, py), tuple(min(255, c + 20) for c in base_color))
+    noise = generate_fbm_noise(width, height, octaves=5, seed=777)
+    base = np.array(base_color, dtype=np.float32)
+    arr = np.clip(base[None, None, :] + (noise[:, :, None] - 0.5) * 50, 0, 255)
+    pygame.surfarray.blit_array(surf, arr.astype(np.uint8).swapaxes(0, 1))
     return surf
 
 
