@@ -59,11 +59,12 @@ The game features:
 ANINO_SA_GUBAT/
 │
 ├── main.py              # Game loop, states, HUD drawing, save/load logic
-├── player.py            # Player class: movement, collision, weapons, faith, items
-├── enemies.py           # Enemy AI state machine + EnemyManager
+├── player.py            # Player class: movement, stamina, sanity, noise, weapons, items
+├── enemies.py           # Enemy AI state machine, noise investigation, proximity sanity drain
 ├── map_system.py        # Map grid data for Chapter 1 & 2, tile queries, pickups
-├── renderer.py          # Raycasting renderer, sprite sorting, visual effects
-├── asset_generator.py   # Procedural pixel-art generator (textures, sprites)
+├── renderer.py          # Raycasting renderer, colored fog, parallax sky, particles, post-fx
+├── asset_generator.py   # Procedural pixel-art generator (fBm noise textures, sprites)
+├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis)
 ├── settings.py          # All game constants, colors, controls, save/load settings
 ├── requirements.txt     # Python dependencies
 │
@@ -317,12 +318,13 @@ Saves are JSON files in `saves/` and include: position, health/armor, weapons & 
 
 | Module | Role |
 |---|---|
-| `main.py` | Game loop, state machine (MENU/PLAYING/PAUSED/GAMEOVER/WIN), HUD, save/load |
-| `player.py` | Mouse-look, movement, collision, weapons, faith/items, serialization |
-| `enemies.py` | `Enemy` (AI + combat) + `EnemyManager` (spawning, zone effects, hit detection) |
+| `main.py` | Game loop, state machine (MENU/PLAYING/PAUSED/GAMEOVER/WIN), HUD, audio triggers, save/load |
+| `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, serialization |
+| `enemies.py` | AI state machine (Idle/Patrol/Investigate/Chase/Attack), noise perception, proximity sanity drain |
 | `map_system.py` | Map grids, tile queries, doors, pickups, checkpoints |
-| `renderer.py` | DDA raycasting: walls, Z-buffered sprites, flashlight, vignette, ward FX, weapon bob |
-| `asset_generator.py` | 100% procedural pixel art — textures, sprites, crosshair; no external files |
+| `renderer.py` | Raycasting engine, colored fog, parallax sky, particles, post-fx (vignette, blood), F3 debug overlay |
+| `asset_generator.py` | 100% procedural pixel art & fBm noise textures with ambient occlusion |
+| `audio_synth.py` | Procedural sound synthesis using NumPy arrays & Pygame mixer |
 | `settings.py` | All constants: display, physics, weapons, enemies, wards, colors, tiles, controls |
 
 ---
