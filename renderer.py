@@ -33,7 +33,26 @@ class Renderer:
         # Z-buffer for sprite occlusion
         self.z_buffer = [0.0] * self.num_rays
 
-        # Floor/ceiling cache
+        # Floor/ceiling cache & procedural forest assets
+        from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
+        self.tree_sprites = {
+            'balete': generate_tree_billboard('balete', 64, 128),
+            'bamboo': generate_tree_billboard('bamboo', 64, 128),
+            'banana': generate_tree_billboard('banana', 64, 128),
+            'pine': generate_tree_billboard('pine', 64, 128),
+            'dead': generate_tree_billboard('dead', 64, 128),
+            'palm': generate_tree_billboard('palm', 64, 128),
+        }
+        self.undergrowth_sprites = {
+            'fern': generate_undergrowth_sprite('fern', 32, 32),
+            'mushroom': generate_undergrowth_sprite('mushroom', 32, 32),
+            'rock': generate_undergrowth_sprite('rock', 32, 32),
+            'bush': generate_undergrowth_sprite('bush', 32, 32),
+        }
+        self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
+        self.screenshot_saved = False
+        self.frame_counter = 0
+
         self.floor_surf = pygame.Surface((self.w, self.h // 2))
         self._generate_floor_gradient()
 
@@ -110,8 +129,18 @@ class Renderer:
         self._cast_rays(player, game_map)
         self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
+        # Draw procedural forest tree billboards
+        self._draw_trees(player, game_map)
+
         # Draw sprites (enemies and pickups)
         self._draw_sprites(player, enemies, game_map)
+
+        # Screenshot capture for chapter comparison
+        self.frame_counter += 1
+        if self.frame_counter == 30 and not self.screenshot_saved:
+            os.makedirs('screenshots', exist_ok=True)
+            pygame.image.save(self.surface, 'screenshots/chapter_1_after.png')
+            self.screenshot_saved = True
 
         # Draw flashlight cone effect
         if player.flashlight_on and player.flashlight_battery > 0:
@@ -314,6 +343,66 @@ class Renderer:
         }
         base = colors.get(wall_type, (60, 60, 60))
         return tuple(int(c * shade) for c in base)
+
+    def _draw_trees(self, player, game_map):
+        """Draw procedural forest tree billboards with Z-buffer occlusion, culling, and sorting."""
+        tree_list = []
+        for t in game_map.trees:
+            dx = t['x'] - player.x
+            dy = t['y'] - player.y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist < 0.4 or dist > MAX_DEPTH:
+                continue
+            angle = math.atan2(dy, dx) - player.angle
+            while angle > math.pi:
+                angle -= 2 * math.pi
+            while angle < -math.pi:
+                angle += 2 * math.pi
+            if abs(angle) > self.half_fov + 0.3:
+                continue
+            tree_list.append({
+                'dist': dist, 'angle': angle, 'tree': t
+            })
+
+        tree_list.sort(key=lambda s: s['dist'], reverse=True)
+        tree_list = tree_list[:MAX_RENDER_TREES]
+
+        pitch_offset = int(player.pitch * self.h)
+
+        for item in tree_list:
+            dist = item['dist']
+            angle = item['angle']
+            t_data = item['tree']
+
+            screen_x = int((angle / self.fov_rad + 0.5) * self.w)
+            tree_h = int(self.h * 1.2 * t_data['scale'] / dist)
+            tree_w = int(tree_h * 0.5)
+
+            if tree_h < 4:
+                continue
+
+            img = self.tree_sprites.get(t_data['type'], self.tree_sprites['balete'])
+            scaled = pygame.transform.scale(img, (max(2, tree_w), max(2, tree_h)))
+
+            shade = max(0.15, 1.0 - dist / MAX_DEPTH)
+            dark = pygame.Surface(scaled.get_size(), pygame.SRCALPHA)
+            dark.fill((0, 0, 0, int((1 - shade) * 180)))
+            scaled.blit(dark, (0, 0))
+
+            draw_x = screen_x - tree_w // 2
+            draw_y = self.h // 2 - tree_h // 2 + pitch_offset + int(tree_h * 0.1)
+
+            start_col = max(0, draw_x)
+            end_col = min(self.w, draw_x + tree_w)
+            visible = False
+            step = max(1, (end_col - start_col) // 6)
+            for col in range(start_col, end_col, step):
+                if col < len(self.z_buffer) and self.z_buffer[col] > dist:
+                    visible = True
+                    break
+
+            if visible:
+                self.surface.blit(scaled, (draw_x, draw_y))
 
     def _draw_sprites(self, player, enemies, game_map):
         """Draw enemy and pickup sprites using billboard rendering."""

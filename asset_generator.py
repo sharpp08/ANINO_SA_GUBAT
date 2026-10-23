@@ -258,6 +258,98 @@ def generate_pickup_sprite(pickup_type='health', size=32):
     return surf
 
 
+
+def generate_tree_billboard(tree_type='balete', width=64, height=128, seed=42):
+    """Generate detailed procedural tree billboards with bark shading, roots, moss, and canopy."""
+    import numpy as np
+    random.seed(seed)
+    surf = pygame.Surface((width, height), pygame.SRCALPHA)
+    cx = width // 2
+
+    if tree_type == 'balete':
+        for rx in range(-20, 21, 4):
+            rx_pos = cx + rx
+            ry_base = height - 10
+            ry_top = height - 40 - abs(rx) * 0.8
+            pygame.draw.line(surf, (45, 30, 20), (cx + rx // 2, ry_base), (rx_pos, int(ry_top)), 5)
+        pygame.draw.rect(surf, (55, 38, 25), (cx - 14, height - 70, 28, 60))
+        for bx in range(cx - 12, cx + 12, 4):
+            pygame.draw.line(surf, (35, 22, 15), (bx, height - 68), (bx + random.randint(-2, 2), height - 15), 2)
+        for _ in range(5):
+            mx = cx + random.randint(-12, 8)
+            my = random.randint(height - 50, height - 20)
+            pygame.draw.circle(surf, (30, 60, 30, 200), (mx, my), random.randint(3, 6))
+        for i in range(7):
+            ox = random.randint(-22, 22)
+            oy = random.randint(10, 50 - i * 5)
+            cr = random.randint(18, 30)
+            col = (20 + random.randint(0, 20), 45 + random.randint(0, 25), 20 + random.randint(0, 15))
+            pygame.draw.circle(surf, col, (cx + ox, height - oy - 55), cr)
+            pygame.draw.circle(surf, (10, 25, 10, 180), (cx + ox + 2, height - oy - 53), cr - 3)
+
+    elif tree_type == 'bamboo':
+        for b_idx in range(5):
+            bx = cx - 16 + b_idx * 8 + random.randint(-2, 2)
+            b_height = height - random.randint(10, 30)
+            pygame.draw.line(surf, (110, 140, 80), (bx, height - 5), (bx + random.randint(-2, 2), height - b_height), 5)
+            for ny in range(height - 15, height - b_height, 14):
+                pygame.draw.line(surf, (80, 100, 50), (bx - 3, ny), (bx + 3, ny), 2)
+            for lx in range(-12, 14, 6):
+                pygame.draw.line(surf, (90, 130, 60), (bx, height - b_height), (bx + lx, height - b_height - 15), 2)
+
+    elif tree_type == 'banana' or tree_type == 'palm':
+        for ty in range(height - 20, height - 80, -2):
+            tx_off = int(math.sin(ty * 0.05) * 4)
+            pygame.draw.rect(surf, (70, 80, 50), (cx - 6 + tx_off, ty, 12, 3))
+        fy = height - 85
+        for angle_deg in range(-70, 75, 25):
+            rad = math.radians(angle_deg)
+            fx = cx + int(math.cos(rad) * 35)
+            f_end_y = fy + int(math.sin(rad) * 25) - 15
+            pygame.draw.line(surf, (50, 110, 40), (cx, fy), (fx, f_end_y), 4)
+            pygame.draw.line(surf, (70, 140, 50), (cx + (fx - cx)//2, fy + (f_end_y - fy)//2), (fx + 5, f_end_y - 8), 2)
+
+    elif tree_type == 'pine':
+        pygame.draw.rect(surf, (60, 45, 30), (cx - 5, height - 40, 10, 40))
+        for layer in range(5):
+            ly = height - 40 - layer * 20
+            lw = 32 - layer * 5
+            pts = [(cx, ly - 22), (cx - lw, ly), (cx + lw, ly)]
+            pygame.draw.polygon(surf, (20 + layer * 5, 55 + layer * 10, 30), pts)
+            pygame.draw.polygon(surf, (10, 35, 15), [(cx, ly - 22), (cx - lw, ly), (cx, ly)])
+
+    else:
+        pygame.draw.rect(surf, (60, 55, 50), (cx - 8, height - 80, 16, 75))
+        pygame.draw.line(surf, (50, 45, 40), (cx, height - 50), (cx - 25, height - 85), 4)
+        pygame.draw.line(surf, (50, 45, 40), (cx, height - 60), (cx + 22, height - 90), 4)
+
+    return surf
+
+
+def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42):
+    random.seed(seed)
+    surf = pygame.Surface((width, height), pygame.SRCALPHA)
+    cx, cy = width // 2, height // 2
+
+    if plant_type == 'fern':
+        for i in range(5):
+            fx = cx + (i - 2) * 5
+            fy = height - 4
+            pygame.draw.line(surf, (40, 110, 40), (cx, fy), (fx, fy - 18), 2)
+            pygame.draw.line(surf, (60, 150, 50), (fx, fy - 18), (fx - 4, fy - 22), 1)
+            pygame.draw.line(surf, (60, 150, 50), (fx, fy - 18), (fx + 4, fy - 22), 1)
+    elif plant_type == 'mushroom':
+        pygame.draw.rect(surf, (200, 180, 150), (cx - 4, cy, 8, 12))
+        pygame.draw.arc(surf, (220, 40, 40), (cx - 10, cy - 8, 20, 12), 0, math.pi, 6)
+    elif plant_type == 'rock':
+        pygame.draw.ellipse(surf, (90, 95, 100), (4, height - 16, 24, 14))
+    else:
+        pygame.draw.circle(surf, (30, 80, 35), (cx - 6, cy + 4), 10)
+        pygame.draw.circle(surf, (40, 100, 45), (cx + 6, cy + 2), 11)
+
+    return surf
+
+
 def generate_crosshair(size=16):
     """Generate a simple crosshair."""
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
@@ -311,3 +403,41 @@ def generate_all_pickups():
     pickup_types = ['health', 'ammo_shotgun', 'ammo_revolver', 'salt', 'garlic',
                     'battery', 'faith', 'bible_page']
     return {t: generate_pickup_sprite(t, 32) for t in pickup_types}
+
+
+def generate_world_ground_texture(width=1024, height=1024):
+    """Bake a large world-sized ground texture with fBm noise, moss, mud, and paths, with disk caching."""
+    cache_path = os.path.join(ASSET_DIR, 'cache', 'world_ground.npy')
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    import numpy as np
+
+    if os.path.exists(cache_path):
+        try:
+            arr = np.load(cache_path)
+            surf = pygame.Surface((width, height))
+            pygame.surfarray.blit_array(surf, arr)
+            return surf
+        except Exception:
+            pass
+
+    noise = generate_fbm_noise(width, height, octaves=6, seed=999)
+    base = np.array([25, 18, 12], dtype=np.float32)
+    arr = np.zeros((height, width, 3), dtype=np.float32)
+
+    for y in range(height):
+        for x in range(width):
+            n = noise[y, x]
+            if n > 0.65:
+                col = np.array([35, 55, 30], dtype=np.float32) + (n - 0.65) * 30
+            elif n < 0.35:
+                col = np.array([18, 12, 8], dtype=np.float32) + n * 25
+            else:
+                col = base + (n - 0.5) * 40
+            arr[y, x] = np.clip(col, 0, 255)
+
+    uint_arr = arr.astype(np.uint8)
+    np.save(cache_path, uint_arr)
+    surf = pygame.Surface((width, height))
+    pygame.surfarray.blit_array(surf, uint_arr)
+    return surf
+
