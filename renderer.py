@@ -567,9 +567,9 @@ class Renderer:
         sh = sprite.get_height() * scale
         scaled = pygame.transform.scale(sprite, (sw, sh))
 
-        # Position
-        base_x = self.w // 2 - sw // 2
-        base_y = self.h - sh + 20
+        # Position (shifted to right arm perspective)
+        base_x = self.w // 2 - sw // 3 + 45
+        base_y = self.h - sh + 25
 
         # Bob
         bob_x = int(math.sin(self.weapon_bob) * 3)
