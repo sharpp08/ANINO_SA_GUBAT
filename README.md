@@ -13,30 +13,32 @@
 3. [Project Structure](#project-structure)
 4. [Requirements & Installation](#requirements--installation)
 5. [How to Run](#how-to-run)
-6. [Controls](#controls)
-7. [Gameplay Guide](#gameplay-guide)
-8. [Enemy Roster](#enemy-roster)
-9. [Map & Tile System](#map--tile-system)
-10. [Chapters](#chapters)
-11. [Save System](#save-system)
-12. [Settings](#settings)
-13. [Architecture & Modules](#architecture--modules)
-14. [Technical Notes](#technical-notes)
+6. [Standalone Executable Build](#standalone-executable-build)
+7. [Controls](#controls)
+8. [Gameplay Guide](#gameplay-guide)
+9. [Enemy Roster](#enemy-roster)
+10. [Map & Tile System](#map--tile-system)
+11. [Chapters](#chapters)
+12. [Save System](#save-system)
+13. [Settings](#settings)
+14. [Architecture & Modules](#architecture--modules)
+15. [Technical Notes & Screenshots](#technical-notes--screenshots)
 
 ---
 
 ## Overview
 
-**ANINO SA GUBAT** is a pseudo-3D first-person game rendered using the classic **raycasting** technique (Wolfenstein-style), reimagined in a Philippine horror setting. You play as a lone survivor navigating cursed forests and ruins, hunted by mythical creatures (*aswang*, *manananggal*, *kapre*, and more) straight out of Filipino legend.
+**ANINO SA GUBAT** is a pseudo-3D first-person game rendered using the classic **raycasting** technique (Wolfenstein-style), reimagined in a Philippine horror setting. You play as a lone survivor navigating cursed forests and ruins, hunted by mythical creatures (*aswang*, *manananggal*, *kapre*, *multo*, *sigbin*, *tikbalang*, *tiyanak*) straight out of Filipino legend.
 
 The game features:
-- Procedurally generated pixel-art assets (no external texture files needed)
-- An atmospheric raycasting renderer with fog, vignette, and flashlight effects
-- Multiple weapons with reload mechanics
-- A unique **Sacred Ward** system based on Filipino spiritual traditions
-- Multi-chapter progression with save/load support
+- 100% procedurally generated pixel-art assets and textures (no external texture files needed)
+- An atmospheric raycasting renderer with colored fog, vignette, particle systems, and flashlight effects
+- Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver)
+- A unique **Sacred Ward** and faith system based on Filipino spiritual traditions
+- Multi-chapter progression with JSON save/load support and standalone Windows executable build
 
 ---
+
 
 ## Features
 
@@ -110,6 +112,27 @@ python main.py
 The game opens at **1280×720** (windowed by default). It automatically sets its working directory to its own folder on startup.
 
 ---
+---
+
+## Standalone Executable Build
+
+ANINO SA GUBAT can be packaged as a standalone Windows executable using PyInstaller.
+
+### Running the Executable
+Once built, the standalone executable is located at:
+```bash
+dist\ANINO_SA_GUBAT.exe
+```
+
+### Building via PyInstaller
+To rebuild the executable from source:
+```bash
+pyinstaller ANINO_SA_GUBAT.spec
+```
+The spec file (`ANINO_SA_GUBAT.spec`) bundles all procedural asset generators, audio synthesis modules, and dependencies into a self-contained distribution folder/binary.
+
+---
+
 
 ## Controls
 
