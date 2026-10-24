@@ -59,7 +59,10 @@ class SoundManager:
         self.play('intro_wind', 0.5)
 
     def stop_intro_ambience(self):
-        pass
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
 
     def play_drone(self, vol=0.4):
         self.play('drone', vol)

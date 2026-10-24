@@ -260,10 +260,18 @@ CONTROLS = {
     'debug_toggle': 'f3',
 }
 
-SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saves')
+import sys
+
+if getattr(sys, 'frozen', False):
+    BASE_PATH = os.path.dirname(sys.executable)
+else:
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+SAVE_DIR = os.path.join(BASE_PATH, 'saves')
+SETTINGS_PATH = os.path.join(BASE_PATH, 'settings.json')
 
 
-def load_settings(path='settings.json'):
+def load_settings(path=SETTINGS_PATH):
     """Load user settings from JSON file."""
     defaults = {
         'screen_width': SCREEN_WIDTH,
@@ -293,7 +301,7 @@ def load_settings(path='settings.json'):
     return defaults
 
 
-def save_settings(settings, path='settings.json'):
+def save_settings(settings, path=SETTINGS_PATH):
     """Save user settings to JSON file."""
     try:
         with open(path, 'w') as f:

@@ -21,7 +21,7 @@ from enemies import EnemyManager
 from renderer import Renderer
 from audio_synth import audio_mgr
 from asset_generator import generate_all_textures, generate_all_weapons, generate_all_enemies, generate_all_pickups, generate_crosshair
-from main import Game, save_game, load_game, STATE_MENU, STATE_PLAYING, STATE_PAUSED, STATE_GAMEOVER, STATE_WIN
+from main import Game, save_game, load_game, STATE_MENU, STATE_INTRO, STATE_PLAYING, STATE_PAUSED, STATE_GAMEOVER, STATE_WIN
 
 
 def run_smoke_tests():
@@ -96,7 +96,8 @@ def run_smoke_tests():
 
     def test_ai():
         game = Game()
-        game.start_new_game()
+        game.load_chapter(1)
+        game.state = STATE_PLAYING
         for enemy in game.enemy_manager.enemies:
             for st in ['idle', 'patrol', 'investigate', 'stalk', 'attack']:
                 enemy.state = st
@@ -108,7 +109,8 @@ def run_smoke_tests():
     def test_state_machine():
         game = Game()
         assert game.state == STATE_MENU
-        game.start_new_game()
+        game.load_chapter(1)
+        game.state = STATE_PLAYING
         assert game.state == STATE_PLAYING
         game.state = STATE_PAUSED
         game.state = STATE_PLAYING
@@ -124,7 +126,8 @@ def run_smoke_tests():
 
     def test_save_load():
         game = Game()
-        game.start_new_game()
+        game.load_chapter(1)
+        game.state = STATE_PLAYING
         game.player.health = 77.0
         save_game(game.player, game.chapter, 0)
         game.load_saved_game()
@@ -149,6 +152,20 @@ def run_smoke_tests():
             f.write("")
         assert load_game(0) is None
     test_case("Save & Load Robustness", test_save_load)
+
+    def test_cinematic():
+        game = Game()
+        game.state = STATE_INTRO
+        game.cinematic.reset()
+        # Simulate update with skip key event
+        skip_event = pygame.event.Event(pygame.KEYDOWN, {'key': pygame.K_SPACE})
+        finished = game.cinematic.update(0.1, [skip_event])
+        assert finished
+        # Test normal timeout progression
+        game.cinematic.reset()
+        finished = game.cinematic.update(80.0, [])
+        assert finished
+    test_case("Cinematic Intro & Skip Logic", test_cinematic)
 
     print(f"=== SMOKE TEST COMPLETE: {passed} PASSED, {failed} FAILED ===")
     return failed == 0

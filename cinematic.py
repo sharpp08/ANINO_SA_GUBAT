@@ -21,10 +21,17 @@ class Cinematic:
         self.time = 0.0
         self.skipped = False
         self.finished = False
-        self.font_sm = pygame.font.Font(None, 18)
-        self.font_md = pygame.font.Font(None, 24)
-        self.font_lg = pygame.font.Font(None, 34)
-        self.font_tiny = pygame.font.Font(None, 14)
+        try:
+            pygame.font.init()
+            self.font_sm = pygame.font.SysFont('consolas', 16)
+            self.font_md = pygame.font.SysFont('consolas', 22, bold=True)
+            self.font_lg = pygame.font.SysFont('consolas', 32, bold=True)
+            self.font_tiny = pygame.font.SysFont('consolas', 12)
+        except Exception:
+            self.font_sm = pygame.font.Font(None, 18)
+            self.font_md = pygame.font.Font(None, 24)
+            self.font_lg = pygame.font.Font(None, 34)
+            self.font_tiny = pygame.font.Font(None, 14)
         random.seed(1337)
         self.cues = set()
 
@@ -33,32 +40,45 @@ class Cinematic:
         self.skipped = False
         self.finished = False
         self.cues.clear()
-        audio_mgr.start_intro_ambience()
+        try:
+            audio_mgr.start_intro_ambience()
+        except Exception:
+            pass
 
     def update(self, dt, events):
         for e in events:
             if e.type == pygame.KEYDOWN and e.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_ESCAPE):
                 self.skipped = True; self.finished = True
-                audio_mgr.stop_intro_ambience()
+                try:
+                    audio_mgr.stop_intro_ambience()
+                except Exception:
+                    pass
                 return True
         if self.finished or self.skipped: return True
         self.time += dt
         if self.time >= self.duration:
-            self.finished = True; audio_mgr.stop_intro_ambience()
+            self.finished = True
+            try:
+                audio_mgr.stop_intro_ambience()
+            except Exception:
+                pass
             return True
         t = self.time
-        if 0.5 <= t < 1.0 and 1 not in self.cues:
-            self.cues.add(1); audio_mgr.play('intro_wind', 0.6)
-        elif 12.0 <= t < 12.5 and 2 not in self.cues:
-            self.cues.add(2); audio_mgr.play_drone(0.4)
-        elif 26.0 <= t < 26.5 and 3 not in self.cues:
-            self.cues.add(3); audio_mgr.play('creature_call', 0.7)
-        elif 41.0 <= t < 41.5 and 4 not in self.cues:
-            self.cues.add(4); audio_mgr.play('flashlight_click', 0.8)
-        elif 56.0 <= t < 56.5 and 5 not in self.cues:
-            self.cues.add(5); audio_mgr.play('page_rustle', 0.7)
-        elif 68.0 <= t < 68.5 and 6 not in self.cues:
-            self.cues.add(6); audio_mgr.play('title_sting', 1.0)
+        try:
+            if 0.5 <= t < 1.0 and 1 not in self.cues:
+                self.cues.add(1); audio_mgr.play('intro_wind', 0.6)
+            elif 12.0 <= t < 12.5 and 2 not in self.cues:
+                self.cues.add(2); audio_mgr.play_drone(0.4)
+            elif 26.0 <= t < 26.5 and 3 not in self.cues:
+                self.cues.add(3); audio_mgr.play('creature_call', 0.7)
+            elif 41.0 <= t < 41.5 and 4 not in self.cues:
+                self.cues.add(4); audio_mgr.play('flashlight_click', 0.8)
+            elif 56.0 <= t < 56.5 and 5 not in self.cues:
+                self.cues.add(5); audio_mgr.play('page_rustle', 0.7)
+            elif 68.0 <= t < 68.5 and 6 not in self.cues:
+                self.cues.add(6); audio_mgr.play('title_sting', 1.0)
+        except Exception:
+            pass
         return False
 
     def render(self):

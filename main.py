@@ -201,58 +201,45 @@ def load_game(slot=0):
 
 
 # ─── Startup Loading Animation ───────────────────────────────────────────────
-def show_loading_screen(screen, clock, font_lg, font_sm):
-    steps = [
-        "Initializing Pygame & Subsystems...",
-        "Synthesizing Procedural Audio & DSP...",
-        "Generating fBm Noise & Environment Textures...",
-        "Assembling Enemy Sprites & AI Behaviors...",
-        "Constructing Chapter Grids & Shrines...",
-        "Entering the Forest..."
-    ]
+def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
     sw, sh = screen.get_size()
-    total_steps = len(steps)
+    clock.tick(60)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+    screen.fill((5, 5, 12))
     
-    for i, step_text in enumerate(steps):
-        # Simulate loading progress or asset generation ticks
-        for frame in range(12):
-            clock.tick(60)
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-            
-            screen.fill((5, 5, 12))
-            
-            # Title
-            title = font_lg.render("ANINO SA GUBAT", True, (212, 175, 55))
-            screen.blit(title, (sw // 2 - title.get_width() // 2, sh // 3 - 40))
-            
-            sub = font_sm.render("Mga Bulong ng Dilim", True, (180, 160, 110))
-            screen.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 3 + 10))
-            
-            # Loading bar container
-            bar_w, bar_h = 500, 16
-            bx = sw // 2 - bar_w // 2
-            by = sh // 2 + 60
-            pygame.draw.rect(screen, (30, 30, 45), (bx, by, bar_w, bar_h), border_radius=4)
-            
-            # Progress fill
-            progress = (i + (frame + 1) / 12.0) / total_steps
-            fill_w = int(bar_w * progress)
-            if fill_w > 0:
-                pygame.draw.rect(screen, (212, 175, 55), (bx, by, fill_w, bar_h), border_radius=4)
-            pygame.draw.rect(screen, (100, 90, 60), (bx, by, bar_w, bar_h), 1, border_radius=4)
-            
-            # Step description
-            txt = font_sm.render(step_text, True, (220, 220, 220))
-            screen.blit(txt, (sw // 2 - txt.get_width() // 2, by + 30))
-            
-            # Pulsing prompt or spinner
-            pct_txt = font_sm.render(f"{int(progress * 100)}%", True, (150, 140, 100))
-            screen.blit(pct_txt, (sw // 2 - pct_txt.get_width() // 2, by + 65))
-            
-            pygame.display.flip()
+    # Title
+    title = font_lg.render("ANINO SA GUBAT", True, (212, 175, 55))
+    screen.blit(title, (sw // 2 - title.get_width() // 2, sh // 3 - 40))
+    
+    sub = font_sm.render("Mga Bulong ng Dilim", True, (180, 160, 110))
+    screen.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 3 + 10))
+    
+    # Loading bar container
+    bar_w, bar_h = 500, 16
+    bx = sw // 2 - bar_w // 2
+    by = sh // 2 + 60
+    pygame.draw.rect(screen, (30, 30, 45), (bx, by, bar_w, bar_h), border_radius=4)
+    
+    # Progress fill
+    fill_w = int(bar_w * progress)
+    if fill_w > 0:
+        pygame.draw.rect(screen, (212, 175, 55), (bx, by, fill_w, bar_h), border_radius=4)
+    pygame.draw.rect(screen, (100, 90, 60), (bx, by, bar_w, bar_h), 1, border_radius=4)
+    
+    # Step description
+    txt = font_sm.render(step_text, True, (220, 220, 220))
+    screen.blit(txt, (sw // 2 - txt.get_width() // 2, by + 30))
+    
+    # Percentage
+    pct_txt = font_sm.render(f"{int(progress * 100)}%", True, (150, 140, 100))
+    screen.blit(pct_txt, (sw // 2 - pct_txt.get_width() // 2, by + 65))
+    
+    pygame.display.flip()
+
 
 # ─── Game class ───────────────────────────────────────────────────────────────
 class Game:
@@ -269,14 +256,22 @@ class Game:
         self.font_sm   = pygame.font.SysFont('consolas', 18)
         self.font_tiny = pygame.font.SysFont('consolas', 13)
 
-        # Show visual loading animation during initial asset generation
-        show_loading_screen(self.screen, self.clock, self.font_lg, self.font_sm)
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Initializing Display & Subsystems...", 0.1)
 
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Generating Procedural Textures & Sprites...", 0.3)
         textures      = generate_all_textures()
+
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Forging Weapons & Tools...", 0.5)
         weapon_spr    = generate_all_weapons()
+
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Summoning Forest Entities & AI...", 0.7)
         enemy_spr     = generate_all_enemies()
+
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Preparing Items & Relics...", 0.85)
         pickup_spr    = generate_all_pickups()
         crosshair_spr = generate_crosshair(16)
+
+        draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Entering the Forest...", 1.0)
 
         self.game_map      = GameMap()
         self.enemy_manager = EnemyManager()
@@ -508,7 +503,8 @@ class Game:
             mouse_dx = 0
             mouse_dy = 0
 
-            for event in pygame.event.get():
+            events = pygame.event.get()
+            for event in events:
                 if event.type == pygame.QUIT:
                     running = False
 
@@ -526,13 +522,6 @@ class Game:
                             running = False
                         elif event.key == pygame.K_F11:
                             self.toggle_fullscreen()
-
-                elif self.state == STATE_INTRO:
-                    finished = self.cinematic.update(dt, pygame.event.get())
-                    if finished:
-                        self.load_chapter(1)
-                        self.state = STATE_PLAYING
-                        safe_set_relative_mouse(True)
 
                 elif self.state == STATE_PLAYING:
                     if event.type == pygame.MOUSEMOTION:
@@ -578,7 +567,14 @@ class Game:
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
 
-            if self.state == STATE_PLAYING:
+            if self.state == STATE_INTRO:
+                finished = self.cinematic.update(dt, events)
+                if finished:
+                    self.load_chapter(1)
+                    self.state = STATE_PLAYING
+                    safe_set_relative_mouse(True)
+
+            elif self.state == STATE_PLAYING:
                 self.update_playing(dt, mouse_dx, mouse_dy)
 
             self.render(dt)
@@ -589,5 +585,26 @@ class Game:
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    Game().run()
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(base_dir)
+    try:
+        Game().run()
+    except Exception as e:
+        crash_log_path = os.path.join(base_dir, 'crash.log')
+        import traceback
+        tb = traceback.format_exc()
+        try:
+            with open(crash_log_path, 'w') as f:
+                f.write(tb)
+        except Exception:
+            pass
+        print(f"[FATAL CRASH] {e}\nTraceback saved to {crash_log_path}")
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, f"An error occurred:\n{e}\n\nTraceback saved to crash.log", "ANINO SA GUBAT - Fatal Error", 16)
+        except Exception:
+            pass
+        sys.exit(1)
