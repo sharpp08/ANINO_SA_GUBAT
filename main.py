@@ -134,10 +134,10 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
     surf.blit(title, (sw // 2 - title.get_width() // 2, sh // 4))
     surf.blit(sub,   (sw // 2 - sub.get_width() // 2,   sh // 4 + 48))
 
-    options = ["ENTER  -  New Game", "L  -  Load Game", "ESC  -  Quit"]
+    options = ["ENTER  -  New Game", "L  -  Load Game", "F11  -  Toggle Fullscreen", "ESC  -  Quit"]
     for i, opt in enumerate(options):
         t = font_sm.render(opt, True, WHITE)
-        surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 + i * 40))
+        surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 + i * 36))
 
     tip = font_tiny.render("A survival horror game set in Philippine mythology", True, GRAY)
     surf.blit(tip, (sw // 2 - tip.get_width() // 2, sh - 30))
@@ -149,10 +149,10 @@ def draw_paused(surf, font_lg, font_sm):
     surf.blit(overlay, (0, 0))
     sw, sh = surf.get_size()
     t = font_lg.render("PAUSED", True, WHITE)
-    surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 60))
-    for i, line in enumerate(["ESC  -  Resume", "S  -  Save", "M  -  Main Menu"]):
+    surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 80))
+    for i, line in enumerate(["ESC  -  Resume", "S  -  Save", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
         lt = font_sm.render(line, True, (200, 200, 200))
-        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + i * 36))
+        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 - 20 + i * 32))
 
 
 def draw_gameover(surf, font_lg, font_sm):
@@ -198,6 +198,60 @@ def load_game(slot=0):
         return None
 
 
+# ─── Startup Loading Animation ───────────────────────────────────────────────
+def show_loading_screen(screen, clock, font_lg, font_sm):
+    steps = [
+        "Initializing Pygame & Subsystems...",
+        "Synthesizing Procedural Audio & DSP...",
+        "Generating fBm Noise & Environment Textures...",
+        "Assembling Enemy Sprites & AI Behaviors...",
+        "Constructing Chapter Grids & Shrines...",
+        "Entering the Forest..."
+    ]
+    sw, sh = screen.get_size()
+    total_steps = len(steps)
+    
+    for i, step_text in enumerate(steps):
+        # Simulate loading progress or asset generation ticks
+        for frame in range(12):
+            clock.tick(60)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+            
+            screen.fill((5, 5, 12))
+            
+            # Title
+            title = font_lg.render("ANINO SA GUBAT", True, (212, 175, 55))
+            screen.blit(title, (sw // 2 - title.get_width() // 2, sh // 3 - 40))
+            
+            sub = font_sm.render("Mga Bulong ng Dilim", True, (180, 160, 110))
+            screen.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 3 + 10))
+            
+            # Loading bar container
+            bar_w, bar_h = 500, 16
+            bx = sw // 2 - bar_w // 2
+            by = sh // 2 + 60
+            pygame.draw.rect(screen, (30, 30, 45), (bx, by, bar_w, bar_h), border_radius=4)
+            
+            # Progress fill
+            progress = (i + (frame + 1) / 12.0) / total_steps
+            fill_w = int(bar_w * progress)
+            if fill_w > 0:
+                pygame.draw.rect(screen, (212, 175, 55), (bx, by, fill_w, bar_h), border_radius=4)
+            pygame.draw.rect(screen, (100, 90, 60), (bx, by, bar_w, bar_h), 1, border_radius=4)
+            
+            # Step description
+            txt = font_sm.render(step_text, True, (220, 220, 220))
+            screen.blit(txt, (sw // 2 - txt.get_width() // 2, by + 30))
+            
+            # Pulsing prompt or spinner
+            pct_txt = font_sm.render(f"{int(progress * 100)}%", True, (150, 140, 100))
+            screen.blit(pct_txt, (sw // 2 - pct_txt.get_width() // 2, by + 65))
+            
+            pygame.display.flip()
+
 # ─── Game class ───────────────────────────────────────────────────────────────
 class Game:
     def __init__(self):
@@ -212,6 +266,9 @@ class Game:
         self.font_lg   = pygame.font.SysFont('consolas', 32, bold=True)
         self.font_sm   = pygame.font.SysFont('consolas', 18)
         self.font_tiny = pygame.font.SysFont('consolas', 13)
+
+        # Show visual loading animation during initial asset generation
+        show_loading_screen(self.screen, self.clock, self.font_lg, self.font_sm)
 
         textures      = generate_all_textures()
         weapon_spr    = generate_all_weapons()
@@ -230,6 +287,13 @@ class Game:
         self.effects = []
         self.notif   = ''
         self.notif_t = 0.0
+    def toggle_fullscreen(self):
+        global FULLSCREEN
+        FULLSCREEN = not FULLSCREEN
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+        self.notify("Fullscreen: ON" if FULLSCREEN else "Fullscreen: OFF")
+
 
         pygame.mouse.set_visible(False)
 
@@ -273,6 +337,8 @@ class Game:
             if k == pygame.K_ESCAPE:
                 self.state = STATE_PAUSED
                 safe_set_relative_mouse(False)
+            elif k == pygame.K_F11:
+                self.toggle_fullscreen()
             elif k == pygame.K_F3:
                 self.renderer.show_debug = not self.renderer.show_debug
             elif k == pygame.K_r:
@@ -442,6 +508,8 @@ class Game:
                             self.load_saved_game()
                         elif event.key == pygame.K_ESCAPE:
                             running = False
+                        elif event.key == pygame.K_F11:
+                            self.toggle_fullscreen()
 
                 elif self.state == STATE_PLAYING:
                     if event.type == pygame.MOUSEMOTION:
@@ -454,6 +522,8 @@ class Game:
                         if event.key == pygame.K_ESCAPE:
                             self.state = STATE_PLAYING
                             safe_set_relative_mouse(True)
+                        elif event.key == pygame.K_F11:
+                            self.toggle_fullscreen()
                         elif event.key == pygame.K_s:
                             ok = save_game(self.player, self.chapter)
                             self.notify("Saved!" if ok else "Save failed.")
