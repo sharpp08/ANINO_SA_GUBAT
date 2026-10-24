@@ -42,6 +42,28 @@ class SoundManager:
         t_door = np.linspace(0, 0.4, int(rate * 0.4), endpoint=False)
         self.sounds['door'] = self._generate_sound(np.sin(2 * np.pi * (200 + t_door * 300) * t_door) * np.exp(-t_door * 5))
 
+        tw = np.linspace(0, 3.0, int(rate * 3.0), endpoint=False)
+        self.sounds['intro_wind'] = self._generate_sound(np.random.randn(len(tw)) * 0.15 * np.exp(-tw * 0.5))
+        td = np.linspace(0, 4.0, int(rate * 4.0), endpoint=False)
+        self.sounds['drone'] = self._generate_sound(np.sin(2 * np.pi * 55 * td) * 0.2 + np.sin(2 * np.pi * 110 * td) * 0.1)
+        tc = np.linspace(0, 1.5, int(rate * 1.5), endpoint=False)
+        self.sounds['creature_call'] = self._generate_sound(np.sin(2 * np.pi * (300 - tc * 150) * tc) * 0.3 * np.exp(-tc * 2))
+        tf = np.linspace(0, 0.1, int(rate * 0.1), endpoint=False)
+        self.sounds['flashlight_click'] = self._generate_sound(np.sin(2 * np.pi * 1200 * tf) * 0.4 * np.exp(-tf * 40))
+        tp = np.linspace(0, 0.4, int(rate * 0.4), endpoint=False)
+        self.sounds['page_rustle'] = self._generate_sound(np.random.randn(len(tp)) * 0.3 * np.exp(-tp * 8))
+        ts = np.linspace(0, 2.0, int(rate * 2.0), endpoint=False)
+        self.sounds['title_sting'] = self._generate_sound(np.sin(2 * np.pi * 45 * ts) * 0.5 * np.exp(-ts * 3) + np.random.randn(len(ts)) * 0.2 * np.exp(-ts * 5))
+
+    def start_intro_ambience(self):
+        self.play('intro_wind', 0.5)
+
+    def stop_intro_ambience(self):
+        pass
+
+    def play_drone(self, vol=0.4):
+        self.play('drone', vol)
+
     def play(self, name, volume=1.0, pan=0.0):
         if name in self.sounds and self.sounds[name]:
             try:

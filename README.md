@@ -23,6 +23,7 @@
 13. [Settings](#settings)
 14. [Architecture & Modules](#architecture--modules)
 15. [Technical Notes & Screenshots](#technical-notes--screenshots)
+16. [Intro Cinematic](#intro-cinematic)
 
 ---
 
@@ -337,7 +338,16 @@ Saves are JSON files in `saves/` and include: position, health/armor, weapons & 
 
 ---
 
-## Architecture & Modules
+## Intro Cinematic
+
+ANINO SA GUBAT features an atmospheric 75-second animated **Intro Cinematic** that plays automatically when you select "New Game" from the Main Menu.
+
+- **Content:** 6 narrative scenes telling the backstory, lore, warning, living forest, awakening spirits, traveler items, Bible pages, and title slam.
+- **Skip:** Press `Space`, `Enter`, or `Escape` at any time to instantly skip the cinematic and jump straight into Chapter 1. Press `Shift` to speed up.
+- **Replay:** Press `I` on the Main Menu to replay the intro cinematic at any time.
+- **Toggle:** Controlled by the `enable_intro` setting in `settings.json` (default: `true`). Set to `false` to jump directly into gameplay on New Game.
+
+---
 
 | Module | Role |
 |---|---|

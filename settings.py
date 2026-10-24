@@ -24,6 +24,7 @@ ENABLE_FILM_GRAIN = True
 ENABLE_FOG = True
 ENABLE_PARTICLES = True
 ENABLE_DYNAMIC_LIGHTS = True
+ENABLE_INTRO = True
 ENABLE_AUDIO_SYNTH = True
 ENABLE_SANITY = True
 ENABLE_STEALTH_NOISE = True
@@ -278,6 +279,7 @@ def load_settings(path='settings.json'):
         'enable_particles': ENABLE_PARTICLES,
         'enable_audio_synth': ENABLE_AUDIO_SYNTH,
         'enable_sanity': ENABLE_SANITY,
+        'enable_intro': ENABLE_INTRO,
         'debug_overlay': DEBUG_OVERLAY,
         'controls': CONTROLS.copy(),
     }

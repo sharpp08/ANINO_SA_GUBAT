@@ -15,6 +15,7 @@ from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
 from audio_synth import audio_mgr
+from cinematic import Cinematic
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
@@ -22,6 +23,7 @@ from asset_generator import (
 
 # ─── Game States ─────────────────────────────────────────────────────────────
 STATE_MENU     = 'menu'
+STATE_INTRO    = 'intro'
 STATE_PLAYING  = 'playing'
 STATE_PAUSED   = 'paused'
 STATE_GAMEOVER = 'gameover'
@@ -281,6 +283,7 @@ class Game:
         self.player        = Player()
         self.renderer      = Renderer(self.internal, textures, weapon_spr, enemy_spr, pickup_spr)
         self.renderer.crosshair = crosshair_spr
+        self.cinematic     = Cinematic(self.internal)
 
         self.state   = STATE_MENU
         self.chapter = 1
@@ -309,9 +312,15 @@ class Game:
         self.effects = []
 
     def start_new_game(self):
-        self.load_chapter(1)
-        self.state = STATE_PLAYING
-        safe_set_relative_mouse(True)
+        settings = load_settings()
+        if settings.get('enable_intro', True):
+            self.state = STATE_INTRO
+            self.cinematic.reset()
+            safe_set_relative_mouse(False)
+        else:
+            self.load_chapter(1)
+            self.state = STATE_PLAYING
+            safe_set_relative_mouse(True)
 
     def load_saved_game(self):
         data = load_game()
@@ -475,6 +484,9 @@ class Game:
         elif self.state == STATE_MENU:
             draw_menu(self.internal, self.font_lg, self.font_sm, self.font_tiny)
 
+        elif self.state == STATE_INTRO:
+            self.cinematic.render()
+
         elif self.state == STATE_GAMEOVER:
             draw_gameover(self.internal, self.font_lg, self.font_sm)
 
@@ -504,12 +516,23 @@ class Game:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_RETURN:
                             self.start_new_game()
+                        elif event.key == pygame.K_i:
+                            self.state = STATE_INTRO
+                            self.cinematic.reset()
+                            safe_set_relative_mouse(False)
                         elif event.key == pygame.K_l:
                             self.load_saved_game()
                         elif event.key == pygame.K_ESCAPE:
                             running = False
                         elif event.key == pygame.K_F11:
                             self.toggle_fullscreen()
+
+                elif self.state == STATE_INTRO:
+                    finished = self.cinematic.update(dt, pygame.event.get())
+                    if finished:
+                        self.load_chapter(1)
+                        self.state = STATE_PLAYING
+                        safe_set_relative_mouse(True)
 
                 elif self.state == STATE_PLAYING:
                     if event.type == pygame.MOUSEMOTION:
