@@ -29,6 +29,7 @@ if (!(Test-Path "release")) {
     New-Item -ItemType Directory -Path "release" | Out-Null
 }
 Copy-Item "dist\ANINO_SA_GUBAT.exe" "release\ANINO_SA_GUBAT.exe" -Force
+Copy-Item "dist\ANINO_SA_GUBAT.exe" "ANINO_SA_GUBAT.exe" -Force
 
 # 4. Cleanup build and spec file
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
