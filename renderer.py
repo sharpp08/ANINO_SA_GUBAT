@@ -149,6 +149,30 @@ class Renderer:
 
         # Screen effects
         self.screen_shake = 0
+        
+        # Precompute stars (260 stars, local Random(999))
+        rng_stars = random.Random(999)
+        self.stars = []
+        for _ in range(260):
+            s_az = rng_stars.uniform(0, math.pi * 2)
+            s_el = rng_stars.uniform(0.04, 1.0)
+            phase = rng_stars.uniform(0, math.pi * 2)
+            big = rng_stars.random() < 0.15
+            self.stars.append((s_az, s_el, phase, big))
+
+        # Precompute moon surface (56 px disc with halo & craters)
+        moon_size = 56
+        moon_surf = pygame.Surface((moon_size, moon_size), pygame.SRCALPHA)
+        for r in range(moon_size // 2, 12, -4):
+            alpha = int(12 * (1.0 - r / (moon_size / 2)))
+            pygame.draw.circle(moon_surf, (210, 225, 255, alpha), (moon_size // 2, moon_size // 2), r)
+        pygame.draw.circle(moon_surf, (232, 238, 252), (moon_size // 2, moon_size // 2), 22)
+        pygame.draw.circle(moon_surf, (190, 202, 225), (moon_size // 2 - 5, moon_size // 2 - 4), 7)
+        pygame.draw.circle(moon_surf, (200, 210, 235), (moon_size // 2 + 7, moon_size // 2 + 6), 5)
+        pygame.draw.circle(moon_surf, (210, 218, 240), (moon_size // 2 - 6, moon_size // 2 + 8), 4)
+        self.moon_surf = moon_surf
+        self.moon_size = moon_size
+
         self.vignette = self._generate_vignette()
 
         # Particles (Fireflies, dust motes)
@@ -183,126 +207,133 @@ class Renderer:
             pygame.draw.line(self.floor_surf, (r, g, b), (0, y), (self.w, y))
 
     def _generate_vignette(self):
-        """Generate a vignette overlay."""
+        """Generate a proper vignette overlay (clear center, alpha ~170 at corners)."""
         vig = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         cx, cy = self.w // 2, self.h // 2
         max_dist = math.sqrt(cx * cx + cy * cy)
-        for ring in range(0, int(max_dist), 4):
-            alpha = int((ring / max_dist) ** 2 * 180)
-            alpha = min(180, alpha)
-            pygame.draw.circle(vig, (0, 0, 0, alpha), (cx, cy), int(max_dist) - ring, 4)
+        inner_r = max_dist * 0.35
+
+        y_indices, x_indices = np.ogrid[:self.h, :self.w]
+        dist_from_center = np.sqrt((x_indices - cx) ** 2 + (y_indices - cy) ** 2)
+
+        alpha_arr = np.zeros((self.h, self.w), dtype=np.float32)
+        mask = dist_from_center > inner_r
+        t = (dist_from_center[mask] - inner_r) / max(1.0, max_dist - inner_r)
+        alpha_arr[mask] = np.clip((t ** 2) * 170, 0, 170)
+
+        alpha_view = pygame.surfarray.pixels_alpha(vig)
+        alpha_view[:, :] = alpha_arr.T.astype(np.uint8)
+        del alpha_view
         return vig
 
     def render_frame(self, player, game_map, enemies, effects, dt):
-        """Render a complete frame."""
+        """Render a complete frame with correct pipeline order."""
         t_start = pygame.time.get_ticks()
         self.surface.fill(SKY_COLOR)
-        # ── 1. Moon, Stars, Clouds & Sky Gradient (Parallax Correct) ────────
+
         pitch_offset = int(player.pitch * self.h)
         half_h = self.h // 2
-        sky_height = max(0, half_h + pitch_offset)
+        horizon_y = max(0, half_h + pitch_offset)
 
-        for y in range(sky_height):
-            t = y / max(1, sky_height)
-            r = int(SKY_COLOR[0] * (1 - t) + FOG_COLOR[0] * t)
-            g = int(SKY_COLOR[1] * (1 - t) + FOG_COLOR[1] * t)
-            b = int(SKY_COLOR[2] * (1 - t) + FOG_COLOR[2] * t)
+        # 1. Sky Gradient (SKY_COLOR to blue-green haze (24,34,42))
+        for y in range(horizon_y):
+            t = y / max(1, horizon_y)
+            r = int(SKY_COLOR[0] * (1 - t) + 24 * t)
+            g = int(SKY_COLOR[1] * (1 - t) + 34 * t)
+            b = int(SKY_COLOR[2] * (1 - t) + 42 * t)
             pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
-        if sky_height > 0:
-            # Temporary red 40x40 square at top-right of 3D view (Step 0 requirement)
-            pygame.draw.rect(self.surface, (255, 0, 0), (self.w - 45, 5, 40, 40))
-            # 200 Twinkling World Stars (Fixed world azimuth/elevation, moving across screen as player turns)
-            rng_stars = random.Random(999)
-            star_list = []
-            for i in range(200):
-                s_az = rng_stars.uniform(0, math.pi * 2)
-                s_el = rng_stars.uniform(0.1, math.pi * 0.45)
-                star_list.append((s_az, s_el))
-
+        if horizon_y > 0:
             t_ticks = pygame.time.get_ticks()
-            for s_az, s_el in star_list:
+
+            # Stars (260 stars, local Random(999))
+            for s_az, s_el, phase, big in self.stars:
                 az_diff = s_az - player.angle
                 while az_diff > math.pi: az_diff -= 2 * math.pi
                 while az_diff < -math.pi: az_diff += 2 * math.pi
                 if abs(az_diff) < self.half_fov + 0.3:
                     sx = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
-                    sy = int(sky_height * 0.5 - (s_el - 0.25) * sky_height * 2.0 + pitch_offset)
-                    if 0 <= sx < self.w and 0 <= sy < sky_height:
-                        twinkle = int(180 + 75 * math.sin(t_ticks * 0.003 + s_az * 10))
-                        self.surface.set_at((sx, sy), (twinkle, twinkle, min(255, twinkle + 40)))
+                    sy = int(horizon_y - s_el * (0.8 * self.h))
+                    if 0 <= sx < self.w and 0 <= sy < horizon_y:
+                        twinkle = int(185 + 55 * math.sin(t_ticks * 0.003 + phase))
+                        col = (twinkle, twinkle, min(255, twinkle + 30))
+                        if big:
+                            pygame.draw.rect(self.surface, col, (sx, sy, 2, 2))
+                        else:
+                            self.surface.set_at((sx, sy), col)
 
-            # 4 Soft Clouds drifting across the moon and sky
+            # Moon (fixed world azimuth pi/4, elevation 0.42)
+            moon_world_az = math.pi / 4
+            moon_world_el = 0.42
+            az_diff = moon_world_az - player.angle
+            while az_diff > math.pi: az_diff -= 2 * math.pi
+            while az_diff < -math.pi: az_diff += 2 * math.pi
+            moon_screen_x = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
+            moon_screen_y = int(horizon_y - moon_world_el * (0.8 * self.h))
+
+            if -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= horizon_y + 40:
+                self.surface.blit(self.moon_surf, (moon_screen_x - self.moon_size // 2, moon_screen_y - self.moon_size // 2))
+
+            # Clouds
             cloud_t = t_ticks * 0.0008
             for c_idx in range(4):
                 cx = int((c_idx * 180 + cloud_t * 25) % (self.w + 300) - 150)
-                cy = int(sky_height * (0.2 + c_idx * 0.18))
-                if 0 <= cy < sky_height:
+                cy = int(horizon_y * (0.2 + c_idx * 0.18))
+                if 0 <= cy < horizon_y:
                     cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
                     pygame.draw.ellipse(cloud_surf, (30, 35, 50, 110), (0, 0, 180, 40))
                     self.surface.blit(cloud_surf, (cx, cy))
 
-            # Moon with soft glow halo, subtle maria, crater detail and blue-white tint at fixed world azimuth (pi/4) and elevation (0.35)
-            moon_world_az = math.pi / 4
-            az_diff = moon_world_az - player.angle
-            while az_diff > math.pi: az_diff -= 2 * math.pi
-            while az_diff < -math.pi: az_diff += 2 * math.pi
-            
-            moon_screen_x = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
-            moon_screen_y = int(sky_height * 0.35 - player.pitch * self.h * 0.5)
-
-            if -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= sky_height:
-                for r_halo in range(50, 15, -12):
-                    halo_surf = pygame.Surface((r_halo * 2, r_halo * 2), pygame.SRCALPHA)
-                    alpha = max(8, 45 - r_halo // 2)
-                    pygame.draw.circle(halo_surf, (210, 225, 255, alpha), (r_halo, r_halo), r_halo)
-                    self.surface.blit(halo_surf, (moon_screen_x - r_halo, moon_screen_y - r_halo))
-                moon_surf = pygame.Surface((32, 32), pygame.SRCALPHA)
-                pygame.draw.circle(moon_surf, (235, 242, 255), (16, 16), 16)
-                pygame.draw.circle(moon_surf, (195, 205, 225), (11, 11), 6)
-                pygame.draw.circle(moon_surf, (205, 215, 235), (21, 20), 5)
-                pygame.draw.circle(moon_surf, (215, 225, 240), (14, 22), 4)
-                self.surface.blit(moon_surf, (moon_screen_x - 16, moon_screen_y - 16))
-
-        # ── 2. Textured Floor Casting with Moonlight & Ambient (Min 8%) ───────
-        floor_h = self.h - sky_height
+        # 2. Vectorized Floor with exp-squared fog & min 8% ambient
+        floor_h = self.h - horizon_y
         if floor_h > 0:
-            for y in range(sky_height, self.h):
+            for y in range(horizon_y, self.h):
                 row_y = y - half_h - pitch_offset
                 if row_y <= 0:
                     continue
                 dist = (self.h * 0.5) / row_y
-                shade = max(0.08, min(1.0, 1.0 - dist / MAX_DEPTH))
-                r = int(FLOOR_COLOR[0] * shade * 0.8 + FOG_COLOR[0] * 0.2)
-                g = int(FLOOR_COLOR[1] * shade * 0.8 + FOG_COLOR[1] * 0.2)
-                b = int(FLOOR_COLOR[2] * shade * 0.8 + FOG_COLOR[2] * 0.2)
+                fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
+                shade = max(0.08, 1.0 - fog)
+                r = int(FLOOR_COLOR[0] * shade + 24 * (1 - shade))
+                g = int(FLOOR_COLOR[1] * shade + 34 * (1 - shade))
+                b = int(FLOOR_COLOR[2] * shade + 42 * (1 - shade))
                 pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
-
-
-        # Draw ceiling with colored fog gradient
-        pitch_offset = int(player.pitch * self.h)
-        half_h = self.h // 2
-        for y in range(max(0, half_h + pitch_offset)):
-            t = y / max(1, half_h + pitch_offset)
-            r = int(SKY_COLOR[0] * (1 - t) + FOG_COLOR[0] * t)
-            g = int(SKY_COLOR[1] * (1 - t) + FOG_COLOR[1] * t)
-            b = int(SKY_COLOR[2] * (1 - t) + FOG_COLOR[2] * t)
-            pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
-
-        # Draw floor
-        self.surface.blit(self.floor_surf, (0, max(0, half_h + pitch_offset)))
-
-        # Cast rays and draw walls
+        # 3. Cast rays and draw walls
         t_rays = pygame.time.get_ticks()
         self._cast_rays(player, game_map)
         self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
-        # Draw procedural forest tree billboards
+        # 4. Draw trees
         self._draw_trees(player, game_map)
 
-        # Draw sprites (enemies and pickups)
+        # 5. Draw sprites
         self._draw_sprites(player, enemies, game_map)
+
+        # Screenshot capture for chapter comparison
+        self.frame_counter += 1
+        if self.frame_counter == 30 and not self.screenshot_saved:
+            os.makedirs('screenshots', exist_ok=True)
+            pygame.image.save(self.surface, 'screenshots/chapter_1_after.png')
+            self.screenshot_saved = True
+
+        # 6. Flashlight (unchanged)
+        self.flashlight.update(dt, abs(player.bob_amount) > 0.5, 0, player.flashlight_battery)
+        self.flashlight.draw(self.surface, player)
+
+        # 7. Particles
+        if ENABLE_PARTICLES:
+            for p in self.particles:
+                p['x'] = (p['x'] + p['vx']) % self.w
+                p['y'] = (p['y'] + p['vy']) % self.h
+                p['phase'] += dt * 2
+                alpha = int(abs(math.sin(p['phase'])) * 180)
+                psurf = pygame.Surface((int(p['size'] * 2), int(p['size'] * 2)), pygame.SRCALPHA)
+                pygame.draw.circle(psurf, (*p['color'], alpha), (int(p['size']), int(p['size'])), int(p['size']))
+                self.surface.blit(psurf, (int(p['x']), int(p['y'])))
+
+        # 8. Vignette
+        self.surface.blit(self.vignette, (0, 0))
 
         # Screenshot capture for chapter comparison
         self.frame_counter += 1
@@ -377,12 +408,23 @@ class Renderer:
                 fps = sum(self.fps_history) / len(self.fps_history)
             except Exception:
                 pass
+        moon_world_az = math.pi / 4
+        moon_world_el = 0.42
+        az_diff = moon_world_az - player.angle
+        while az_diff > math.pi: az_diff -= 2 * math.pi
+        while az_diff < -math.pi: az_diff += 2 * math.pi
+        moon_screen_x = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
+        horizon_y = max(0, self.h // 2 + int(player.pitch * self.h))
+        moon_screen_y = int(horizon_y - moon_world_el * (0.8 * self.h))
+
         lines = [
             f"ANINO SA GUBAT - DEBUG (F3)",
             f"{BUILD_VERSION}",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
             f"Enemy Count: {len(enemies)}",
+            f"Moon Az: {moon_world_az:.2f} | El: {moon_world_el:.2f}",
+            f"Moon Screen Pos: ({moon_screen_x}, {moon_screen_y})",
             f"FPS (30f avg): {fps:.1f}",
         ]
         if hasattr(game_map, 'validation_errors') and game_map.validation_errors:
