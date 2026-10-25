@@ -24,7 +24,7 @@ class GameMap:
 
     def load_chapter(self, chapter_num):
         self.chapter_num = chapter_num
-        self.validation_errors = ["Map Validation: OK (Pass)"]
+        self.validation_errors = []  # Count only real warnings
         for y in range(self.height):
             for x in range(self.width):
                 if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
@@ -41,7 +41,7 @@ class GameMap:
 
         random.seed(42 + chapter_num)
         self.trees = []
-        tree_types = ['balete', 'bamboo', 'banana', 'pine', 'dead', 'palm']
+        tree_types = ['balete', 'bamboo', 'mahogany', 'dead']
         count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
 
         while len(self.trees) < count:

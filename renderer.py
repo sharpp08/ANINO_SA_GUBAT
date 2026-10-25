@@ -38,10 +38,8 @@ class Renderer:
         self.tree_sprites = {
             'balete': generate_tree_billboard('balete', 64, 128),
             'bamboo': generate_tree_billboard('bamboo', 64, 128),
-            'banana': generate_tree_billboard('banana', 64, 128),
-            'pine': generate_tree_billboard('pine', 64, 128),
+            'mahogany': generate_tree_billboard('mahogany', 64, 128),
             'dead': generate_tree_billboard('dead', 64, 128),
-            'palm': generate_tree_billboard('palm', 64, 128),
         }
         self.undergrowth_sprites = {
             'fern': generate_undergrowth_sprite('fern', 32, 32),
@@ -110,6 +108,86 @@ class Renderer:
         """Render a complete frame."""
         t_start = pygame.time.get_ticks()
         self.surface.fill(SKY_COLOR)
+        # ── 1. Moon, Stars, Clouds & Sky Gradient (Parallax Correct) ────────
+        pitch_offset = int(player.pitch * self.h)
+        half_h = self.h // 2
+        sky_height = max(0, half_h + pitch_offset)
+
+        for y in range(sky_height):
+            t = y / max(1, sky_height)
+            r = int(SKY_COLOR[0] * (1 - t) + FOG_COLOR[0] * t)
+            g = int(SKY_COLOR[1] * (1 - t) + FOG_COLOR[1] * t)
+            b = int(SKY_COLOR[2] * (1 - t) + FOG_COLOR[2] * t)
+            pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
+
+        if sky_height > 0:
+            # 200 Twinkling World Stars (Fixed world azimuth/elevation, moving across screen as player turns)
+            random.seed(999)
+            star_list = []
+            for i in range(200):
+                s_az = random.uniform(0, math.pi * 2)
+                s_el = random.uniform(0.1, math.pi * 0.45)
+                star_list.append((s_az, s_el))
+
+            t_ticks = pygame.time.get_ticks()
+            for s_az, s_el in star_list:
+                az_diff = s_az - player.angle
+                while az_diff > math.pi: az_diff -= 2 * math.pi
+                while az_diff < -math.pi: az_diff += 2 * math.pi
+                if abs(az_diff) < self.half_fov + 0.3:
+                    sx = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
+                    sy = int(sky_height * 0.5 - (s_el - 0.25) * sky_height * 2.0 + pitch_offset)
+                    if 0 <= sx < self.w and 0 <= sy < sky_height:
+                        twinkle = int(180 + 75 * math.sin(t_ticks * 0.003 + s_az * 10))
+                        self.surface.set_at((sx, sy), (twinkle, twinkle, min(255, twinkle + 40)))
+
+            # 4 Soft Clouds drifting across the moon and sky
+            cloud_t = t_ticks * 0.0008
+            for c_idx in range(4):
+                cx = int((c_idx * 180 + cloud_t * 25) % (self.w + 300) - 150)
+                cy = int(sky_height * (0.2 + c_idx * 0.18))
+                if 0 <= cy < sky_height:
+                    cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
+                    pygame.draw.ellipse(cloud_surf, (30, 35, 50, 110), (0, 0, 180, 40))
+                    self.surface.blit(cloud_surf, (cx, cy))
+
+            # Moon with soft glow halo, subtle maria, crater detail and blue-white tint at fixed world azimuth (pi/4) and elevation (0.35)
+            moon_world_az = math.pi / 4
+            az_diff = moon_world_az - player.angle
+            while az_diff > math.pi: az_diff -= 2 * math.pi
+            while az_diff < -math.pi: az_diff += 2 * math.pi
+            
+            moon_screen_x = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
+            moon_screen_y = int(sky_height * 0.35 - player.pitch * self.h * 0.5)
+
+            if -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= sky_height:
+                for r_halo in range(50, 15, -12):
+                    halo_surf = pygame.Surface((r_halo * 2, r_halo * 2), pygame.SRCALPHA)
+                    alpha = max(8, 45 - r_halo // 2)
+                    pygame.draw.circle(halo_surf, (210, 225, 255, alpha), (r_halo, r_halo), r_halo)
+                    self.surface.blit(halo_surf, (moon_screen_x - r_halo, moon_screen_y - r_halo))
+                moon_surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+                pygame.draw.circle(moon_surf, (235, 242, 255), (16, 16), 16)
+                pygame.draw.circle(moon_surf, (195, 205, 225), (11, 11), 6)
+                pygame.draw.circle(moon_surf, (205, 215, 235), (21, 20), 5)
+                pygame.draw.circle(moon_surf, (215, 225, 240), (14, 22), 4)
+                self.surface.blit(moon_surf, (moon_screen_x - 16, moon_screen_y - 16))
+
+        # ── 2. Textured Floor Casting with Moonlight & Ambient (Min 8%) ───────
+        floor_h = self.h - sky_height
+        if floor_h > 0:
+            for y in range(sky_height, self.h):
+                row_y = y - half_h - pitch_offset
+                if row_y <= 0:
+                    continue
+                dist = (self.h * 0.5) / row_y
+                shade = max(0.08, min(1.0, 1.0 - dist / MAX_DEPTH))
+                r = int(FLOOR_COLOR[0] * shade * 0.8 + FOG_COLOR[0] * 0.2)
+                g = int(FLOOR_COLOR[1] * shade * 0.8 + FOG_COLOR[1] * 0.2)
+                b = int(FLOOR_COLOR[2] * shade * 0.8 + FOG_COLOR[2] * 0.2)
+                pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
+
+
 
         # Draw ceiling with colored fog gradient
         pitch_offset = int(player.pitch * self.h)
@@ -547,7 +625,7 @@ class Renderer:
             shade_factor = max(0.2, 1.0 - dist / MAX_DEPTH)
             dark = pygame.Surface(scaled.get_size(), pygame.SRCALPHA)
             dark.fill((0, 0, 0, int((1 - shade_factor) * 200)))
-            scaled.blit(dark, (0, 0))
+            scaled.blit(dark, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
             draw_x = screen_x - sprite_w // 2
             draw_y = self.h // 2 - sprite_h // 2 + pitch_offset
@@ -565,22 +643,35 @@ class Renderer:
                 self.surface.blit(scaled, (draw_x, draw_y))
 
     def _draw_flashlight(self, player):
-        """Draw flashlight cone effect."""
+        """Draw flashlight cone effect with warm tint, smooth world distance falloff, no sky effect, and battery flicker."""
         flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         cx, cy = self.w // 2, self.h // 2
-        # Flashlight cone
-        cone_radius = int(self.w * 0.25)
+        pitch_offset = int(player.pitch * self.h)
+        half_h = self.h // 2
+        sky_height = max(0, half_h + pitch_offset)
+
         flicker = 0
-        if player.flashlight_battery < 20:
-            import random
-            flicker = random.randint(0, 30)
-        alpha = max(0, min(60, int(40 - flicker)))
-        pygame.draw.circle(flash, (255, 240, 200, alpha), (cx, cy), cone_radius)
-        # Outer darkening
-        for ring in range(cone_radius, max(self.w, self.h), 2):
-            a = min(100, (ring - cone_radius) // 2)
-            pygame.draw.circle(flash, (0, 0, 0, a), (cx, cy), ring, 2)
-        self.surface.blit(flash, (0, 0))
+        if player.flashlight_battery < 30:
+            flicker = random.randint(0, int((30 - player.flashlight_battery) * 2))
+
+        for y in range(sky_height, self.h):
+            row_y = y - half_h - pitch_offset
+            if row_y <= 0:
+                continue
+            dist = (self.h * 0.5) / row_y
+            if dist > 8.0:
+                continue
+            for x in range(0, self.w, 4):
+                dx = abs(x - cx)
+                max_dx = self.w * 0.35 * max(0.2, (1.0 - dist / 8.0))
+                if dx < max_dx:
+                    intensity = max(0.0, 1.0 - (dx / max(1.0, max_dx))) * max(0.0, 1.0 - dist / 8.0)
+                    intensity = max(0.0, intensity - (flicker / 100.0))
+                    if intensity > 0.01:
+                        alpha = int(intensity * 120)
+                        pygame.draw.rect(flash, (255, 235, 190, alpha), (x, y, 4, 1))
+
+        self.surface.blit(flash, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
 
     def _draw_weapon(self, player, dt):
         """Draw the current weapon sprite at bottom of screen."""

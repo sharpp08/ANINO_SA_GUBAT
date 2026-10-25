@@ -50,34 +50,46 @@ def draw_hud(surf, player, font_sm, font_tiny):
     sw, sh = surf.get_size()
     pad = 8
 
-    # ── Health & Armor ────────────────────────────────────────────────────
-    draw_bar(surf, pad, sh - 52, 120, 8, player.health, PLAYER_MAX_HEALTH, HEALTH_GREEN)
+    # ── Left Column (Faith, Items, HP, AP, STM, BATT) stacked cleanly with zero overlap ──
+    # Faith
+    draw_bar(surf, pad, sh - 146, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
+    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, (150, 180, 255))
+    surf.blit(fe_lbl, (pad, sh - 158))
+
+    # Items (Salt, Garlic, Pages)
+    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.bible_pages}", True, (200, 200, 200))
+    surf.blit(items_txt, (pad, sh - 134))
+
+    # Health
+    draw_bar(surf, pad, sh - 110, 110, 6, player.health, PLAYER_MAX_HEALTH, HEALTH_GREEN)
     hp_txt = font_tiny.render(f"HP {int(player.health)}", True, WHITE)
-    surf.blit(hp_txt, (pad, sh - 64))
+    surf.blit(hp_txt, (pad, sh - 122))
 
-    # ── Stamina ───────────────────────────────────────────────────────────
-    draw_bar(surf, pad + 130, sh - 52, 80, 8, player.stamina, STAMINA_MAX, (50, 180, 120))
-    stm_txt = font_tiny.render(f"STM {int(player.stamina)}", True, (160, 240, 180))
-    surf.blit(stm_txt, (pad + 130, sh - 64))
-
-    # ── Sanity ────────────────────────────────────────────────────────────
-    draw_bar(surf, pad + 130, sh - 22, 80, 6, player.sanity, SANITY_MAX, SANITY_PURPLE)
-    san_txt = font_tiny.render(f"SAN {int(player.sanity)}%", True, (210, 160, 255))
-    surf.blit(san_txt, (pad + 130, sh - 33))
-
+    # Armor
     if player.armor > 0:
-        draw_bar(surf, pad, sh - 38, 120, 6, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
+        draw_bar(surf, pad, sh - 86, 110, 6, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
         arm_txt = font_tiny.render(f"AP {int(player.armor)}", True, (180, 210, 255))
-        surf.blit(arm_txt, (pad, sh - 49))
+        surf.blit(arm_txt, (pad, sh - 98))
+        stm_y_offset = 62
+        batt_y_offset = 38
+        batt_bar_y = 26
+    else:
+        stm_y_offset = 74
+        batt_y_offset = 50
+        batt_bar_y = 38
 
-    # ── Flashlight ───────────────────────────────────────────────────────
+    # Stamina
+    draw_bar(surf, pad, sh - stm_y_offset, 110, 6, player.stamina, STAMINA_MAX, (50, 180, 120))
+    stm_txt = font_tiny.render(f"STM {int(player.stamina)}", True, (160, 240, 180))
+    surf.blit(stm_txt, (pad, sh - stm_y_offset - 12))
+
+    # Flashlight Battery
     batt_col = (220, 220, 50) if player.flashlight_battery > 30 else HEALTH_RED
-    draw_bar(surf, pad, sh - 22, 80, 6, player.flashlight_battery,
-             FLASHLIGHT_MAX_BATTERY, batt_col)
-    fl_lbl = font_tiny.render("BATT", True, (180, 180, 180))
-    surf.blit(fl_lbl, (pad, sh - 33))
+    draw_bar(surf, pad, sh - batt_bar_y, 110, 6, player.flashlight_battery, FLASHLIGHT_MAX_BATTERY, batt_col)
+    fl_lbl = font_tiny.render(f"BATT {int(player.flashlight_battery)}%", True, (180, 180, 180))
+    surf.blit(fl_lbl, (pad, sh - batt_y_offset))
 
-    # ── Ammo ─────────────────────────────────────────────────────────────
+    # ── Right Column (Ammo & Weapon) ───────────────────────────────────────
     weapon_names = ['BOLO', 'SHOTGUN', 'REVOLVER']
     wname = weapon_names[player.current_weapon]
     w_txt = font_sm.render(wname, True, GOLD)
@@ -96,20 +108,9 @@ def draw_hud(surf, player, font_sm, font_tiny):
         r_txt = font_tiny.render("RELOADING...", True, (255, 200, 50))
         surf.blit(r_txt, (sw - 130, sh - 30))
 
-    # ── Faith / Salt / Garlic ────────────────────────────────────────────
-    draw_bar(surf, pad, sh - 80, 100, 8, player.faith_energy,
-             FAITH_ENERGY_MAX, FAITH_BLUE)
-    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, (150, 180, 255))
-    surf.blit(fe_lbl, (pad, sh - 92))
-
-    items_txt = font_tiny.render(
-        f"SALT:{player.salt_count}  GARLIC:{player.garlic_count}  PAGES:{player.bible_pages}",
-        True, (200, 200, 200))
-    surf.blit(items_txt, (pad, sh - 108))
-
-    # ── Ward slots ───────────────────────────────────────────────────────
+    # ── Center Bottom (Ward slots - raised above bottom edge with clear margin) ──
     ward_labels = ['1:Light', '2:Shield', '3:Banish', '4:Bind', '5:Final']
-    wx = sw // 2 - 160
+    wx = sw // 2 - 165
     for i, lbl in enumerate(ward_labels):
         unlocked = player.wards_unlocked[i]
         on_cd    = player.ward_cooldowns[i] > 0
@@ -117,14 +118,14 @@ def draw_hud(surf, player, font_sm, font_tiny):
             col = (220, 180, 50) if not on_cd else (80, 80, 80)
         else:
             col = (50, 50, 50)
-        slot_bg = pygame.Surface((60, 18), pygame.SRCALPHA)
-        slot_bg.fill((0, 0, 0, 100))
-        surf.blit(slot_bg, (wx + i * 65, sh - 24))
+        slot_bg = pygame.Surface((60, 20), pygame.SRCALPHA)
+        slot_bg.fill((0, 0, 0, 160))
+        surf.blit(slot_bg, (wx + i * 66, sh - 32))
         w_lbl = font_tiny.render(lbl, True, col)
-        surf.blit(w_lbl, (wx + i * 65 + 2, sh - 22))
+        surf.blit(w_lbl, (wx + i * 66 + 2, sh - 30))
         if on_cd:
             cd_txt = font_tiny.render(f"{player.ward_cooldowns[i]:.0f}s", True, (180, 80, 80))
-            surf.blit(cd_txt, (wx + i * 65 + 2, sh - 10))
+            surf.blit(cd_txt, (wx + i * 66 + 2, sh - 18))
 
 
 # ─── Menu screens ─────────────────────────────────────────────────────────────
@@ -345,6 +346,10 @@ class Game:
                 self.toggle_fullscreen()
             elif k == pygame.K_F3:
                 self.renderer.show_debug = not self.renderer.show_debug
+            elif k == pygame.K_F4:
+                p.angle = math.pi / 4  # Snap toward moon azimuth
+                p.pitch = 0.0          # Level pitch
+                self.notify("Snapped camera toward moon azimuth (Pi/4).")
             elif k == pygame.K_r:
                 p.start_reload()
             elif k == pygame.K_f:
