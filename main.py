@@ -495,13 +495,26 @@ class Game:
                 audio_mgr.play('pickup')
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
-        # Check level exit
+        # Check level completion (all enemies defeated OR exit reached)
+        all_enemies_defeated = len(self.enemy_manager.enemies) > 0 and len(self.enemy_manager.get_alive_enemies()) == 0
+        exit_reached = False
         if self.game_map.exit_pos:
             ex, ey = self.game_map.exit_pos
-            dx = ex - p.x
-            dy = ey - p.y
-            if math.sqrt(dx*dx + dy*dy) < 1.2:
+            if math.sqrt((ex - p.x)**2 + (ey - p.y)**2) < 1.2:
+                exit_reached = True
+
+        if all_enemies_defeated or exit_reached:
+            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! (Enemies defeated: {all_enemies_defeated}, Exit reached: {exit_reached})")
+            self.notify(f"CHAPTER {self.chapter} CLEARED!", 3.0)
+            next_ch = self.chapter + 1
+            if next_ch <= 2:
+                print(f"[CHAPTER LOAD] Loading Chapter {next_ch}...")
+                self.load_chapter(next_ch)
+                self.notify(f"Entering Chapter {next_ch}...", 3.0)
+            else:
+                print(f"[VICTORY] All chapters completed! Showing win screen.")
                 self.state = STATE_WIN
+                safe_set_relative_mouse(False)
 
         # Death check
         if not p.alive:

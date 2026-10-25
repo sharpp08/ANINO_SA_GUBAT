@@ -350,6 +350,8 @@ class Renderer:
 
         # 5. Draw sprites
         self._draw_sprites(player, enemies, game_map)
+        if getattr(self, 'debug_f4', False):
+            self.debug_sprites(self.surface, enemies, player, pygame.font.SysFont('consolas', 12))
 
         # Screenshot capture for chapter comparison
         self.frame_counter += 1
@@ -853,6 +855,23 @@ class Renderer:
 
             if visible:
                 self.surface.blit(scaled, (draw_x, draw_y))
+
+    def debug_sprites(self, screen, sprites, player, font):
+        import math
+        for s in sprites:
+            dx, dy = s.x - player.x, s.y - player.y
+            dist = math.hypot(dx, dy)
+            ang = math.atan2(dy, dx) - player.angle
+            ang = (ang + math.pi) % (2 * math.pi) - math.pi
+            if abs(ang) < math.radians(40):
+                sx = int(screen.get_width() / 2 + ang * (screen.get_width() / math.radians(66)))
+                pygame.draw.circle(screen, (255, 0, 255), (sx, screen.get_height() // 2), 10)
+                try:
+                    txt = font.render(f"{type(s).__name__} {dist:.1f}", True, (255, 255, 0))
+                    screen.blit(txt, (sx, screen.get_height() // 2 - 24))
+                except Exception:
+                    pass
+
 
     def _draw_weapon(self, player, dt):
         """Draw the current weapon sprite at bottom of screen."""
