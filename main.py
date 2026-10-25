@@ -127,10 +127,31 @@ def draw_hud(surf, player, font_sm, font_tiny):
         sw_w = slot_widths[i]
         unlocked = player.wards_unlocked[i]
         on_cd    = player.ward_cooldowns[i] > 0
-        col = (220, 180, 50) if unlocked and not on_cd else ((120, 120, 120) if unlocked else (50, 50, 50))
+        is_light_on = (i == 0 and player.flashlight_on and player.flashlight_battery > 0)
+
+        if is_light_on:
+            col = (255, 230, 100)
+            border_col = (255, 215, 0)
+        elif unlocked and not on_cd:
+            col = (220, 180, 50)
+            border_col = (100, 100, 100)
+        elif unlocked:
+            col = (120, 120, 120)
+            border_col = (60, 60, 60)
+        else:
+            col = (50, 50, 50)
+            border_col = (30, 30, 30)
+
         slot_bg = pygame.Surface((sw_w, 22), pygame.SRCALPHA)
-        slot_bg.fill((0, 0, 0, 180))
+        if is_light_on:
+            slot_bg.fill((60, 50, 20, 220))
+        else:
+            slot_bg.fill((0, 0, 0, 180))
         surf.blit(slot_bg, (current_x, sh - 28))
+
+        if is_light_on:
+            pygame.draw.rect(surf, border_col, (current_x, sh - 28, sw_w, 22), 2)
+
         w_lbl = font_tiny.render(lbl, True, col)
         surf.blit(w_lbl, (current_x + 8, sh - 26))
         if on_cd:
@@ -373,15 +394,33 @@ class Game:
             elif k == pygame.K_h:
                 self._use_garlic()
             elif k == pygame.K_1:
-                p.switch_weapon(0)
+                if p.flashlight_battery > 0:
+                    p.flashlight_on = not p.flashlight_on
+                    try:
+                        audio_mgr.play('flashlight_click')
+                    except Exception:
+                        pass
+                else:
+                    self.notify("Flashlight battery is dead!")
             elif k == pygame.K_2:
-                p.switch_weapon(1)
+                p.selected_ward = 1
+                self._cast_selected_ward()
             elif k == pygame.K_3:
-                p.switch_weapon(2)
+                p.selected_ward = 2
+                self._cast_selected_ward()
             elif k == pygame.K_q:
                 self._cast_selected_ward()
             elif k == pygame.K_TAB:
                 p.selected_ward = (p.selected_ward + 1) % 5
+        if event.type == pygame.MOUSEWHEEL:
+            if event.y > 0:
+                p.current_weapon = (p.current_weapon - 1) % 3
+            elif event.y < 0:
+                p.current_weapon = (p.current_weapon + 1) % 3
+            try:
+                audio_mgr.play('click')
+            except Exception:
+                pass
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._fire()
 

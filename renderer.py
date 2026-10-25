@@ -18,76 +18,77 @@ class Flashlight:
         self.sway_y = 0.0
         self.target_sway_x = 0.0
         self.target_sway_y = 0.0
-        self.gradient_cache = {}
-        self._init_cache()
+        self.light_mask = None
+        self._init_mask()
 
-    def _init_cache(self):
-        for r in range(120, 360, 20):
-            surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-            for dist in range(r, 0, -2):
-                t = dist / r
-                alpha = int(240 * (1.0 - t * t))
-                col = (255, 242, 210, max(0, min(255, alpha)))
-                pygame.draw.circle(surf, col, (r, r), dist)
-            self.gradient_cache[r] = surf
+    def _init_mask(self):
+        """Precompute light mask surface once at startup (smooth radial gradient cone)."""
+        self.light_mask = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        cx, cy = self.w // 2, self.h // 2
+        max_r = int(self.w * 0.45)
+        for r in range(max_r, 0, -2):
+            t = r / max_r
+            alpha = int(255 * (1.0 - t * t))
+            pygame.draw.circle(self.light_mask, (255, 240, 210, alpha), (cx, cy), r)
 
     def toggle(self):
         self.on = not self.on
         from audio_synth import audio_mgr
         try:
-            audio_mgr.play('click')
+            audio_mgr.play('flashlight_click')
         except Exception:
             pass
 
     def update(self, dt, player_moving, mouse_dx, battery_pct):
         if not self.on or battery_pct <= 0:
             return
-        self.target_sway_x = -mouse_dx * 2.5
+        self.target_sway_x = -mouse_dx * 2.0
         self.target_sway_y = 0.0
         if player_moving:
-            self.target_sway_y += math.sin(pygame.time.get_ticks() * 0.01) * 8.0
+            self.target_sway_y += math.sin(pygame.time.get_ticks() * 0.01) * 6.0
         self.sway_x += (self.target_sway_x - self.sway_x) * min(1.0, dt * 10)
         self.sway_y += (self.target_sway_y - self.sway_y) * min(1.0, dt * 10)
         self.target_sway_x *= 0.9
         self.target_sway_y *= 0.9
 
     def brightness_at(self, screen_x, dist, player):
-        if not self.on or player.flashlight_battery <= 0:
-            return 0.08
-        beam_center_x = self.w // 2 + int(self.sway_x) + 30
+        if not player.flashlight_on or player.flashlight_battery <= 0:
+            return 0.15
+        beam_center_x = self.w // 2 + int(self.sway_x)
         dx = abs(screen_x - beam_center_x)
-        max_dx = self.w * 0.3 * max(0.2, (1.0 - dist / 10.0))
+        max_dx = self.w * 0.35 * max(0.3, (1.0 - dist / 12.0))
         if dx > max_dx:
-            return 0.08
+            return 0.15
         angular_falloff = max(0.0, 1.0 - (dx / max(1.0, max_dx)))
-        dist_falloff = 1.0 / (1.0 + dist * 0.3)
+        dist_falloff = 1.0 / (1.0 + dist * 0.25)
         batt_factor = player.flashlight_battery / 100.0
         flicker = 1.0
         if player.flashlight_battery < 20:
             flicker = random.uniform(0.5, 1.1) if random.random() < 0.3 else 1.0
-        else:
-            flicker = random.uniform(0.97, 1.03)
-        intensity = 0.08 + 0.92 * angular_falloff * dist_falloff * batt_factor * flicker
-        return max(0.08, min(1.0, intensity))
+        intensity = 0.15 + 0.85 * angular_falloff * dist_falloff * batt_factor * flicker
+        return max(0.15, min(1.0, intensity))
 
     def draw(self, surf, player):
-        if not self.on or player.flashlight_battery <= 0:
-            dark_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-            dark_overlay.fill((8, 10, 15, 235))
+        dark_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        if not player.flashlight_on or player.flashlight_battery <= 0:
+            dark_overlay.fill((10, 12, 18, 230))
             surf.blit(dark_overlay, (0, 0))
             return
-        dark_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        dark_overlay.fill((12, 15, 22, 220))
-        cx = self.w // 2 + int(self.sway_x) + 30
-        cy = self.h // 2 + int(player.pitch * self.h) + int(self.sway_y) + 40
-        radius = int(280 * (player.flashlight_battery / 100.0))
-        radius = max(80, radius)
-        cached_r = min(self.gradient_cache.keys(), key=lambda r: abs(r - radius))
-        grad_surf = self.gradient_cache[cached_r]
-        gx = cx - cached_r
-        gy = cy - cached_r
+
+        dark_overlay.fill((12, 15, 22, 210))
+        cx = int(self.w // 2 + self.sway_x)
+        cy = int(self.h // 2 + player.pitch * self.h + self.sway_y)
+        offsetX = cx - self.w // 2
+        offsetY = cy - self.h // 2
+
         light_spot = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        light_spot.blit(grad_surf, (gx, gy))
+        light_spot.blit(self.light_mask, (offsetX, offsetY))
+
+        if player.flashlight_battery < 20:
+            if random.random() < 0.3:
+                alpha_factor = random.uniform(0.4, 0.9)
+                light_spot.fill((255, 255, 255, int(255 * alpha_factor)), special_flags=pygame.BLEND_RGBA_MULT)
+
         dark_overlay.blit(light_spot, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
         surf.blit(dark_overlay, (0, 0))
 
@@ -307,9 +308,9 @@ class Renderer:
             pygame.image.save(self.surface, 'screenshots/chapter_1_after.png')
             self.screenshot_saved = True
 
-        # Draw flashlight cone effect
-        if player.flashlight_on and player.flashlight_battery > 0:
-            self._draw_flashlight(player)
+        # Draw flashlight and darkness overlay
+        self.flashlight.update(dt, abs(player.bob_amount) > 0.5, 0, player.flashlight_battery)
+        self.flashlight.draw(self.surface, player)
 
         # Particles (Fireflies and dust motes)
         if ENABLE_PARTICLES:
@@ -364,10 +365,11 @@ class Renderer:
             return
         font = pygame.font.SysFont('consolas', 12)
         fps = 0.0
-        try:
-            fps = pygame.time.Clock().get_fps()
-        except Exception:
-            pass
+        if self.clock:
+            try:
+                fps = self.clock.get_fps()
+            except Exception:
+                pass
         lines = [
             f"ANINO SA GUBAT - DEBUG (F3)",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
@@ -728,37 +730,6 @@ class Renderer:
 
             if visible:
                 self.surface.blit(scaled, (draw_x, draw_y))
-
-    def _draw_flashlight(self, player):
-        """Draw flashlight cone effect with warm tint, smooth world distance falloff, no sky effect, and battery flicker."""
-        flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        cx, cy = self.w // 2, self.h // 2
-        pitch_offset = int(player.pitch * self.h)
-        half_h = self.h // 2
-        sky_height = max(0, half_h + pitch_offset)
-
-        flicker = 0
-        if player.flashlight_battery < 30:
-            flicker = random.randint(0, int((30 - player.flashlight_battery) * 2))
-
-        for y in range(sky_height, self.h):
-            row_y = y - half_h - pitch_offset
-            if row_y <= 0:
-                continue
-            dist = (self.h * 0.5) / row_y
-            if dist > 8.0:
-                continue
-            for x in range(0, self.w, 4):
-                dx = abs(x - cx)
-                max_dx = self.w * 0.35 * max(0.2, (1.0 - dist / 8.0))
-                if dx < max_dx:
-                    intensity = max(0.0, 1.0 - (dx / max(1.0, max_dx))) * max(0.0, 1.0 - dist / 8.0)
-                    intensity = max(0.0, intensity - (flicker / 100.0))
-                    if intensity > 0.01:
-                        alpha = int(intensity * 120)
-                        pygame.draw.rect(flash, (255, 235, 190, alpha), (x, y, 4, 1))
-
-        self.surface.blit(flash, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
 
     def _draw_weapon(self, player, dt):
         """Draw the current weapon sprite at bottom of screen."""
