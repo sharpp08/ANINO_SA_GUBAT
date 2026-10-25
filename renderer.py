@@ -191,6 +191,37 @@ class Renderer:
             cy = self.h // 2 - self.crosshair.get_height() // 2
             self.surface.blit(self.crosshair, (cx, cy))
 
+        # F3 Debug Overlay
+        self._draw_debug_overlay(player, game_map, enemies)
+
+    def _draw_debug_overlay(self, player, game_map, enemies):
+        if not self.show_debug:
+            return
+        font = pygame.font.SysFont('consolas', 12)
+        fps = 0.0
+        try:
+            fps = pygame.time.Clock().get_fps()
+        except Exception:
+            pass
+        lines = [
+            f"ANINO SA GUBAT - DEBUG (F3)",
+            f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
+            f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
+            f"Enemy Count: {len(enemies)}",
+            f"FPS: {fps:.1f}",
+        ]
+        if hasattr(game_map, 'validation_errors') and game_map.validation_errors:
+            lines.append(f"Validation Warnings ({len(game_map.validation_errors)}):")
+            for err in game_map.validation_errors[:3]:
+                lines.append(f"  - {err}")
+        else:
+            lines.append("Map Validation: OK (Pass)")
+
+        for idx, line in enumerate(lines):
+            col = (0, 255, 100) if "OK" in line or idx==0 else (255, 100, 100) if "Warnings" in line else (220, 220, 220)
+            txt = font.render(line, True, col)
+            self.surface.blit(txt, (8, 8 + idx * 14))
+
     def _cast_rays(self, player, game_map):
         """Cast rays for wall rendering."""
         px, py = player.x, player.y
