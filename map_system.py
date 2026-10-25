@@ -39,14 +39,14 @@ class GameMap:
                 elif (x == 32 or x == 33) and y == 37:
                     self.grid[y][x] = DOOR
 
-        random.seed(42 + chapter_num)
+        rng_map = random.Random(42 + chapter_num)
         self.trees = []
         tree_types = ['balete', 'bamboo', 'mahogany', 'dead']
         count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
 
         while len(self.trees) < count:
-            tx = random.uniform(3.0, float(self.width - 3))
-            ty = random.uniform(3.0, float(self.height - 3))
+            tx = rng_map.uniform(3.0, float(self.width - 3))
+            ty = rng_map.uniform(3.0, float(self.height - 3))
             if math.hypot(tx - 4.5, ty - 4.5) < 4.0:
                 continue
             if 27 <= tx <= 38 and 27 <= ty <= 38:
@@ -58,10 +58,10 @@ class GameMap:
                     too_close = True
                     break
             if not too_close:
-                t_type = random.choice(tree_types)
+                t_type = rng_map.choice(tree_types)
                 self.trees.append({
                     'x': tx, 'y': ty, 'type': t_type,
-                    'scale': random.uniform(0.8, 1.4), 'tint': random.randint(200, 255)
+                    'scale': rng_map.uniform(0.8, 1.4), 'tint': rng_map.randint(200, 255)
                 })
 
         if chapter_num == 1:

@@ -166,6 +166,7 @@ class Renderer:
 
         # Debug overlay (F3)
         self.show_debug = True
+        self.fps_history = []
         self.timings = {'rays': 0.0, 'post': 0.0, 'total': 0.0}
 
         # Ward visual effects
@@ -209,12 +210,14 @@ class Renderer:
             pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
         if sky_height > 0:
+            # Temporary red 40x40 square at top-right of 3D view (Step 0 requirement)
+            pygame.draw.rect(self.surface, (255, 0, 0), (self.w - 45, 5, 40, 40))
             # 200 Twinkling World Stars (Fixed world azimuth/elevation, moving across screen as player turns)
-            random.seed(999)
+            rng_stars = random.Random(999)
             star_list = []
             for i in range(200):
-                s_az = random.uniform(0, math.pi * 2)
-                s_el = random.uniform(0.1, math.pi * 0.45)
+                s_az = rng_stars.uniform(0, math.pi * 2)
+                s_el = rng_stars.uniform(0.1, math.pi * 0.45)
                 star_list.append((s_az, s_el))
 
             t_ticks = pygame.time.get_ticks()
@@ -367,15 +370,20 @@ class Renderer:
         fps = 0.0
         if self.clock:
             try:
-                fps = self.clock.get_fps()
+                curr_fps = self.clock.get_fps()
+                self.fps_history.append(curr_fps)
+                if len(self.fps_history) > 30:
+                    self.fps_history.pop(0)
+                fps = sum(self.fps_history) / len(self.fps_history)
             except Exception:
                 pass
         lines = [
             f"ANINO SA GUBAT - DEBUG (F3)",
+            f"{BUILD_VERSION}",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
             f"Enemy Count: {len(enemies)}",
-            f"FPS: {fps:.1f}",
+            f"FPS (30f avg): {fps:.1f}",
         ]
         if hasattr(game_map, 'validation_errors') and game_map.validation_errors:
             lines.append(f"Validation Warnings ({len(game_map.validation_errors)}):")

@@ -278,6 +278,7 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
 class Game:
     def __init__(self):
         pygame.init()
+        print(f"[{BUILD_VERSION}] Starting ANINO SA GUBAT...")
         flags = pygame.FULLSCREEN if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         pygame.display.set_caption(TITLE)

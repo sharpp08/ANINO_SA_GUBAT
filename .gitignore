@@ -2,3 +2,6 @@ build/
 dist/
 __pycache__/
 *.pyc
+screenshots/
+saves/save_0.json
+crash.log
