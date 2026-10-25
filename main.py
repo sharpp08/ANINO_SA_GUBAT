@@ -368,7 +368,13 @@ class Game:
         if next_ch <= self.max_chapter():
             print(f"[CHAPTER LOAD] Loading Chapter {next_ch}...")
             try:
+                carried = self.player.get_state()      # keep health, ammo, items, wards
                 self.load_chapter(next_ch)
+                carried.pop('x', None); carried.pop('y', None); carried.pop('angle', None)
+                carried.pop('checkpoint_x', None); carried.pop('checkpoint_y', None)
+                self.player.load_state({**self.player.get_state(), **carried})
+                self.player.current_chapter = next_ch
+                self.player.alive = True
                 self.state = STATE_PLAYING
                 self.notify(f"Entering Chapter {next_ch}...", 3.0)
                 return
@@ -422,6 +428,20 @@ class Game:
             elif k == pygame.K_F4:
                 self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
                 self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
+            elif k == pygame.K_F6:
+                # DEBUG: teleport 4 tiles from the nearest living enemy, facing it
+                alive = self.enemy_manager.get_alive_enemies()
+                if alive:
+                    e = min(alive, key=lambda en: en.distance_to(p.x, p.y))
+                    for step in range(16):
+                        a = step * math.pi / 8
+                        nx = e.x + math.cos(a) * 4.0
+                        ny = e.y + math.sin(a) * 4.0
+                        if not self.game_map.is_solid(nx, ny):
+                            p.x, p.y = nx, ny
+                            p.angle = math.atan2(e.y - ny, e.x - nx)
+                            self.notify(f"DEBUG: teleported near {e.type}")
+                            break
             elif k == pygame.K_F7:
                 # DEBUG: defeat every enemy to test chapter progression
                 for e in self.enemy_manager.enemies:

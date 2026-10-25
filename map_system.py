@@ -19,12 +19,14 @@ class GameMap:
         self.checkpoints = []
         self.exit_pos = (58.5, 58.5)
         self.chapter_num = chapter_num
+        self.max_chapters = 2
         self.validation_errors = []
         self.load_chapter(chapter_num)
 
     def load_chapter(self, chapter_num):
         self.chapter_num = chapter_num
         self.validation_errors = []  # Count only real warnings
+        self.checkpoints = []        # was appended to on every load -> duplicates
         for y in range(self.height):
             for x in range(self.width):
                 if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
@@ -34,10 +36,13 @@ class GameMap:
 
         for y in range(28, 38):
             for x in range(28, 38):
-                if x == 28 or x == 37 or y == 28 or y == 37:
-                    self.grid[y][x] = WALL_WOOD
-                elif (x == 32 or x == 33) and y == 37:
+                # Door must be checked FIRST: it sits on the y == 37 wall row, so the old
+                # order made the door branch unreachable and sealed the cabin completely
+                # (the Bible page / checkpoint inside it could never be reached).
+                if (x == 32 or x == 33) and y == 37:
                     self.grid[y][x] = DOOR
+                elif x == 28 or x == 37 or y == 28 or y == 37:
+                    self.grid[y][x] = WALL_WOOD
 
         rng_map = random.Random(42 + chapter_num)
         self.trees = []
@@ -73,6 +78,39 @@ class GameMap:
             self.player_start_angle = 0
             self._place_chapter2_entities()
 
+        # Trees are placed randomly BEFORE entities, so some enemies, pickups and the exit
+        # ended up inside tree trunks. A trapped enemy can never be killed, which means
+        # "all enemies defeated" never fires and the next chapter never loads.
+        self._clear_trees_near_entities()
+        self._validate_entities()
+
+    def _entity_points(self):
+        pts = [(e['x'], e['y'], 'enemy ' + e['type']) for e in self.enemies]
+        pts += [(p['x'], p['y'], 'pickup ' + p['type']) for p in self.pickups]
+        pts += [(c['x'], c['y'], 'checkpoint') for c in self.checkpoints]
+        pts.append((self.exit_pos[0], self.exit_pos[1], 'exit'))
+        pts.append((self.player_start[0], self.player_start[1], 'player start'))
+        return pts
+
+    def _clear_trees_near_entities(self, clearance=1.4):
+        pts = self._entity_points()
+        before = len(self.trees)
+        self.trees = [
+            t for t in self.trees
+            if all(math.hypot(t['x'] - px, t['y'] - py) >= clearance + 0.45 * t['scale']
+                   for px, py, _ in pts)
+        ]
+        removed = before - len(self.trees)
+        if removed:
+            print(f"[MAP] chapter {self.chapter_num}: removed {removed} tree(s) blocking enemies/pickups/exit")
+
+    def _validate_entities(self):
+        for x, y, name in self._entity_points():
+            if self.is_wall(x, y) and self.get_tile(x, y) != DOOR:
+                self.validation_errors.append(f"{name} at ({x:.1f},{y:.1f}) is inside a wall")
+            elif self.is_tree_solid(x, y, radius=0.25):
+                self.validation_errors.append(f"{name} at ({x:.1f},{y:.1f}) is inside a tree")
+
 
     def _place_chapter1_entities(self):
         self.pickups = [
@@ -88,9 +126,13 @@ class GameMap:
             {'type': 'bible_page', 'x': 33.5, 'y': 33.5, 'amount': 1, 'active': True},
             {'type': 'ammo_revolver', 'x': 45.5, 'y': 45.5, 'amount': 6, 'active': True},
             {'type': 'health', 'x': 50.5, 'y': 50.5, 'amount': 25, 'active': True},
+            # a few items right in front of the start so you can see them immediately
+            {'type': 'salt', 'x': 8.5, 'y': 4.8, 'amount': 2, 'active': True},
+            {'type': 'battery', 'x': 11.5, 'y': 3.6, 'amount': 30, 'active': True},
+            {'type': 'faith', 'x': 9.5, 'y': 6.0, 'amount': 20, 'active': True},
         ]
         self.enemies = [
-            {'type': 'aswang', 'x': 32.5, 'y': 15.5},
+            {'type': 'aswang', 'x': 17.5, 'y': 6.0},   # moved from (32.5, 15.5): now in view at the start
             {'type': 'multo', 'x': 15.5, 'y': 40.5},
             {'type': 'aswang', 'x': 45.5, 'y': 25.5},
             {'type': 'sigbin', 'x': 25.5, 'y': 50.5},
