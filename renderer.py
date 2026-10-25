@@ -534,7 +534,7 @@ class Renderer:
         # Screen shake (triggered by hits / nearby enemies)
         if self.screen_shake > 0.3:
             s = int(self.screen_shake)
-            if s > 0:
+            if s > 0 and self.w > s * 2 and self.h > s * 2:
                 self.surface.scroll(random.randint(-s, s), random.randint(-s, s))
             self.screen_shake = max(0.0, self.screen_shake - dt * 20)
 
