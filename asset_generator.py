@@ -6,7 +6,12 @@ import math
 import random
 import os
 
-ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+import sys
+
+if getattr(sys, 'frozen', False):
+    ASSET_DIR = os.path.join(os.path.dirname(sys.executable), 'assets')
+else:
+    ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 
 
 def _ensure_dirs():
@@ -125,6 +130,39 @@ def generate_weapon_sprite(weapon_type='bolo', width=128, height=128):
     return surf
 
 
+RIM_COLORS = {
+    'aswang': (150, 25, 35), 'manananggal': (180, 35, 70), 'tikbalang': (210, 130, 25),
+    'kapre': (180, 95, 25), 'white_lady': (200, 220, 255), 'multo': (160, 180, 235),
+    'sigbin': (210, 70, 15),
+}
+
+
+def _horror_finish(surf, rim_color, seed=1):
+    """Give an enemy sprite a jagged glowing rim and dripping edges so its silhouette
+    reads clearly against the dark forest."""
+    w, h = surf.get_size()
+    rng = random.Random(seed)
+    mask = pygame.mask.from_surface(surf, 40)
+    # ragged rim light
+    for (x, y) in mask.outline():
+        if 0 <= x < w and 0 <= y < h and rng.random() < 0.6:
+            surf.set_at((x, y), rim_color)
+    # dark-red drips hanging from the lowest edge of the body
+    for x in range(1, w - 1):
+        if rng.random() > 0.12:
+            continue
+        low = -1
+        for y in range(h - 1, -1, -1):
+            if mask.get_at((x, y)):
+                low = y
+                break
+        if 0 <= low < h - 3:
+            for k in range(1, rng.randint(2, 6)):
+                if low + k < h:
+                    surf.set_at((x, low + k), (140, 8, 14, max(60, 220 - k * 35)))
+    return surf
+
+
 def generate_enemy_sprite(enemy_type='aswang', width=64, height=64, state='idle'):
     """Generate a simple enemy sprite."""
     surf = pygame.Surface((width, height), pygame.SRCALPHA)
@@ -137,6 +175,14 @@ def generate_enemy_sprite(enemy_type='aswang', width=64, height=64, state='idle'
         pygame.draw.circle(surf, eye_color, (28, 20), 3)
         pygame.draw.circle(surf, eye_color, (36, 20), 3)
         pygame.draw.line(surf, (60, 40, 45), (26, 30), (38, 30), 2)
+        # long arms, claws and fangs
+        pygame.draw.line(surf, body_color, (18, 28), (8, 50), 3)
+        pygame.draw.line(surf, body_color, (46, 28), (56, 50), 3)
+        for cx_, cy_ in ((8, 50), (56, 50)):
+            for off in (-3, 0, 3):
+                pygame.draw.line(surf, (200, 190, 170), (cx_, cy_), (cx_ + off, cy_ + 8), 1)
+        pygame.draw.polygon(surf, (235, 230, 215), [(29, 30), (31, 30), (30, 35)])
+        pygame.draw.polygon(surf, (235, 230, 215), [(33, 30), (35, 30), (34, 35)])
         if state == 'attack':
             pygame.draw.polygon(surf, (60, 40, 45), [(24, 28), (40, 28), (32, 36)])
             pygame.draw.circle(surf, (255, 50, 50), (28, 20), 4)
@@ -204,6 +250,7 @@ def generate_enemy_sprite(enemy_type='aswang', width=64, height=64, state='idle'
         pygame.draw.line(surf, body_color, (50, 44), (54, 58), 3)
         pygame.draw.line(surf, body_color, (50, 32), (60, 20), 2)
 
+    _horror_finish(surf, RIM_COLORS.get(enemy_type, (150, 30, 30)), seed=sum(map(ord, enemy_type)) + (7 if state == 'attack' else 0))
     return surf
 
 

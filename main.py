@@ -317,6 +317,7 @@ class Game:
 
         self.state   = STATE_MENU
         self.chapter = 1
+        self.level_enemy_total = 0
         self.effects = []
         self.notif   = ''
         self.notif_t = 0.0
@@ -340,6 +341,44 @@ class Game:
         self.player.set_checkpoint(sx, sy)
         self.enemy_manager.spawn_enemies(self.game_map.enemies)
         self.effects = []
+        self.level_enemy_total = len(self.enemy_manager.enemies)
+        self.renderer.level_enemy_total = self.level_enemy_total
+        # Spawn report: shows in the console if enemies/pickups spawn in bad places
+        print(f"[CHAPTER {chapter_num}] enemies={self.level_enemy_total} "
+              f"pickups={len(getattr(self.game_map, 'pickups', []))} "
+              f"trees={len(getattr(self.game_map, 'trees', []))} start=({sx:.1f},{sy:.1f})")
+        for e in self.enemy_manager.enemies:
+            solid = False
+            try:
+                solid = self.game_map.is_solid(e.x, e.y)
+            except Exception:
+                pass
+            d = math.hypot(e.x - sx, e.y - sy)
+            print(f"    enemy {e.type:12s} pos=({e.x:.1f},{e.y:.1f}) dist={d:.1f}"
+                  + ("  <-- INSIDE A WALL!" if solid else ""))
+        if self.level_enemy_total == 0:
+            print(f"[WARNING] Chapter {chapter_num} has NO enemies - it can only be completed by reaching the exit.")
+
+    def max_chapter(self):
+        return getattr(self.game_map, 'max_chapters', 2)
+
+    def advance_chapter(self):
+        """Go to the next chapter, or show the win screen after the last one."""
+        next_ch = self.chapter + 1
+        if next_ch <= self.max_chapter():
+            print(f"[CHAPTER LOAD] Loading Chapter {next_ch}...")
+            try:
+                self.load_chapter(next_ch)
+                self.state = STATE_PLAYING
+                self.notify(f"Entering Chapter {next_ch}...", 3.0)
+                return
+            except Exception:
+                import traceback
+                print(f"[ERROR] Could not load chapter {next_ch}:")
+                traceback.print_exc()
+        print("[VICTORY] No more chapters - showing win screen.")
+        self.state = STATE_WIN
+        safe_set_relative_mouse(False)
 
     def start_new_game(self):
         settings = load_settings()
@@ -383,6 +422,11 @@ class Game:
             elif k == pygame.K_F4:
                 self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
                 self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
+            elif k == pygame.K_F7:
+                # DEBUG: defeat every enemy to test chapter progression
+                for e in self.enemy_manager.enemies:
+                    e.take_damage(99999)
+                self.notify("DEBUG: all enemies defeated")
             elif k == pygame.K_r:
                 p.start_reload()
             elif k == pygame.K_f:
@@ -496,7 +540,9 @@ class Game:
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
         # Check level completion (all enemies defeated OR exit reached)
-        all_enemies_defeated = len(self.enemy_manager.enemies) > 0 and len(self.enemy_manager.get_alive_enemies()) == 0
+        total = getattr(self, 'level_enemy_total', 0)
+        alive_now = len(self.enemy_manager.get_alive_enemies())
+        all_enemies_defeated = total > 0 and alive_now == 0
         exit_reached = False
         if self.game_map.exit_pos:
             ex, ey = self.game_map.exit_pos
@@ -504,17 +550,11 @@ class Game:
                 exit_reached = True
 
         if all_enemies_defeated or exit_reached:
-            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! (Enemies defeated: {all_enemies_defeated}, Exit reached: {exit_reached})")
+            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! "
+                  f"(enemies defeated: {all_enemies_defeated}, exit reached: {exit_reached})")
             self.notify(f"CHAPTER {self.chapter} CLEARED!", 3.0)
-            next_ch = self.chapter + 1
-            if next_ch <= 2:
-                print(f"[CHAPTER LOAD] Loading Chapter {next_ch}...")
-                self.load_chapter(next_ch)
-                self.notify(f"Entering Chapter {next_ch}...", 3.0)
-            else:
-                print(f"[VICTORY] All chapters completed! Showing win screen.")
-                self.state = STATE_WIN
-                safe_set_relative_mouse(False)
+            self.advance_chapter()
+            return
 
         # Death check
         if not p.alive:
@@ -626,11 +666,10 @@ class Game:
                 elif self.state == STATE_WIN:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_RETURN:
-                            next_ch = self.chapter + 1
-                            if next_ch <= 2:
-                                self.load_chapter(next_ch)
-                                self.state = STATE_PLAYING
-                                safe_set_relative_mouse(True)
+                            if self.chapter + 1 <= self.max_chapter():
+                                self.advance_chapter()
+                                if self.state == STATE_PLAYING:
+                                    safe_set_relative_mouse(True)
                             else:
                                 self.state = STATE_MENU
                         elif event.key == pygame.K_m:
