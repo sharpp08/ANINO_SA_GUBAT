@@ -6,6 +6,13 @@ import random
 import pygame
 import numpy as np
 from settings import *
+# Tunable Lighting & Horror Constants
+AMBIENT = 0.35
+FOG_DISTANCE = 35.0
+BEAM_RADIUS = 0.45
+ENEMY_EYE_GLOW = True
+
+
 
 
 class Flashlight:
@@ -192,6 +199,40 @@ class Renderer:
         self.show_debug = True
         self.fps_history = []
         self.timings = {'rays': 0.0, 'post': 0.0, 'total': 0.0}
+
+        self.debug_f4 = False
+        self.last_console_print = 0.0
+
+        # Asset load failure / zero alpha / fully black warnings
+        all_assets = []
+        for name, tex in self.textures.items():
+            all_assets.append((f"texture_{name}", tex))
+        for name, spr in self.weapon_sprites.items():
+            all_assets.append((f"weapon_{name}", spr))
+        for etype, states in self.enemy_sprites.items():
+            for st, spr in states.items():
+                all_assets.append((f"enemy_{etype}_{st}", spr))
+        for ptype, spr in self.pickup_sprites.items():
+            all_assets.append((f"pickup_{ptype}", spr))
+        for ttype, spr in self.tree_sprites.items():
+            all_assets.append((f"tree_{ttype}", spr))
+        for utype, spr in self.undergrowth_sprites.items():
+            all_assets.append((f"undergrowth_{utype}", spr))
+
+        for name, surf in all_assets:
+            if surf is None:
+                print(f"[WARNING] Asset failed to load / is None: {name}")
+            else:
+                try:
+                    arr = pygame.surfarray.array3d(surf)
+                    alpha_arr = pygame.surfarray.array_alpha(surf) if (surf.get_flags() & pygame.SRCALPHA) else None
+                    if alpha_arr is not None and alpha_arr.sum() == 0:
+                        print(f"[WARNING] Asset has zero alpha (fully transparent): {name}")
+                    if arr.max() <= 5:
+                        print(f"[WARNING] Asset is fully black: {name}")
+                except Exception:
+                    pass
+
 
         # Ward visual effects
         self.ward_effect_timer = 0

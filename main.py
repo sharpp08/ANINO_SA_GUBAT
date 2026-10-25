@@ -381,9 +381,8 @@ class Game:
             elif k == pygame.K_F3:
                 self.renderer.show_debug = not self.renderer.show_debug
             elif k == pygame.K_F4:
-                p.angle = math.pi / 4  # Snap toward moon azimuth
-                p.pitch = 0.0          # Level pitch
-                self.notify("Snapped camera toward moon azimuth (Pi/4).")
+                self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
+                self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
             elif k == pygame.K_r:
                 p.start_reload()
             elif k == pygame.K_f:
