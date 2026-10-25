@@ -20,7 +20,7 @@ pip list
 # 2. Build via PyInstaller
 Write-Output "Running PyInstaller..."
 pyinstaller --noconfirm --clean --onefile --windowed --name ANINO_SA_GUBAT `
-    --hidden-import cinematic --hidden-import audio_synth --hidden-import asset_generator `
+    --hidden-import cinematic --hidden-import lore --hidden-import audio_synth --hidden-import asset_generator `
     --hidden-import settings --hidden-import player --hidden-import map_system `
     --hidden-import enemies --hidden-import renderer --collect-all pygame main.py
 

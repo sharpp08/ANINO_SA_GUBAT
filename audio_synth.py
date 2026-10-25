@@ -44,14 +44,13 @@ class SoundManager:
         return out
 
     def _apply_lowpass(self, samples, alpha=0.3):
-        out = np.copy(samples)
+        out = np.copy(samples).astype(np.float64)
         if out.ndim == 1:
             out = np.column_stack((out, out))
+        n_k = min(len(out), max(8, int(8 / alpha)))
+        kernel = alpha * (1 - alpha) ** np.arange(n_k)
         for ch in range(out.shape[1]):
-            arr = out[:, ch].astype(np.float64)
-            for i in range(1, len(arr)):
-                arr[i] = alpha * arr[i] + (1 - alpha) * arr[i - 1]
-            out[:, ch] = arr
+            out[:, ch] = np.convolve(out[:, ch], kernel, mode='full')[:len(out)]
         return out
 
     def _generate_sounds(self):

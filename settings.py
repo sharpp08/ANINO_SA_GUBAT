@@ -5,7 +5,7 @@ Game Settings and Configuration (Enhanced - Phases 1 to 5)
 import json
 import os
 
-BUILD_VERSION = "BUILD 2026.10.25-2045"
+BUILD_VERSION = "BUILD 2026.10.25-2205"
 
 # Display
 SCREEN_WIDTH = 1280
@@ -127,8 +127,8 @@ RELOAD_NOISE = 4.0
 
 # Flashlight
 FLASHLIGHT_MAX_BATTERY = 100
-FLASHLIGHT_DRAIN_RATE = 0.4
-FLASHLIGHT_RECHARGE_RATE = 0.5
+FLASHLIGHT_DRAIN_RATE = 1.0      # % per second while ON (was 0.4) -> ~100 s of light from full
+FLASHLIGHT_RECHARGE_RATE = 0.1   # % per second while OFF (was 0.5)
 
 # Sacred Wards
 FAITH_ENERGY_MAX = 100
