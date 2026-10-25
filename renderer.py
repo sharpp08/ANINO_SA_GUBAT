@@ -654,6 +654,38 @@ class Renderer:
 
     def _draw_sprites(self, player, enemies, game_map):
         """Draw enemy and pickup sprites using billboard rendering."""
+        # Diagnostic print for Part A1 (every 60 frames up to frame 300)
+        should_diag = (self.frame_counter % 60 == 0) and (self.frame_counter <= 300)
+        if should_diag:
+            print(f"\n--- A1 DIAGNOSTIC (Frame {self.frame_counter}) ---")
+            for enemy in enemies:
+                dx = enemy.x - player.x
+                dy = enemy.y - player.y
+                dist = math.sqrt(dx * dx + dy * dy)
+                angle = math.atan2(dy, dx) - player.angle
+                while angle > math.pi: angle -= 2 * math.pi
+                while angle < -math.pi: angle += 2 * math.pi
+                in_fov = abs(angle) <= self.half_fov + 0.2
+                screen_x = int((angle / self.fov_rad + 0.5) * self.w)
+                sprite_h = int(self.h * 0.6 / max(0.01, dist))
+                sprite_w = sprite_h
+                center_col = screen_x
+                z_depth = self.z_buffer[center_col] if 0 <= center_col < len(self.z_buffer) else -1.0
+                
+                reason = "drawn"
+                if not enemy.alive:
+                    reason = "skipped: enemy not alive"
+                elif dist < 0.3 or dist > MAX_DEPTH:
+                    reason = f"skipped: distance ({dist:.2f}) out of range"
+                elif not in_fov:
+                    reason = f"skipped: outside FOV (angle {angle:.2f})"
+                elif sprite_h < 2:
+                    reason = "skipped: sprite height < 2"
+                else:
+                    reason = "drawn"
+
+                print(f"Enemy [{enemy.type}] pos=({enemy.x:.2f}, {enemy.y:.2f}), dist={dist:.2f}, angle={angle:.2f}, in_fov={in_fov}, screen_x={screen_x}, w={sprite_w}, h={sprite_h}, z_depth={z_depth:.2f}, status={reason}")
+
         sprite_list = []
 
         # Add enemies
