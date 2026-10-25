@@ -22,14 +22,15 @@
 12. [Save System](#save-system)
 13. [Settings](#settings)
 14. [Architecture & Modules](#architecture--modules)
-15. [Technical Notes & Screenshots](#technical-notes--screenshots)
+15. [Technical Notes](#technical-notes)
 16. [Intro Cinematic](#intro-cinematic)
+17. [Lore](#lore)
 
 ---
 
 ## Overview
 
-**ANINO SA GUBAT** is a pseudo-3D first-person game rendered using the classic **raycasting** technique (Wolfenstein-style), reimagined in a Philippine horror setting. You play as a lone survivor navigating cursed forests and ruins, hunted by mythical creatures (*aswang*, *manananggal*, *kapre*, *multo*, *sigbin*, *tikbalang*, *tiyanak*) straight out of Filipino legend.
+**ANINO SA GUBAT** is a pseudo-3D first-person game rendered using the classic **raycasting** technique (Wolfenstein-style), reimagined in a Philippine horror setting. You play as a lone survivor navigating cursed forests and ruins, hunted by mythical creatures (*aswang*, *manananggal*, *kapre*, *multo*, *sigbin*, *tikbalang*, *white_lady*) straight out of Filipino legend.
 
 The game features:
 - 100% procedurally generated pixel-art assets and textures (no external texture files needed)
@@ -40,7 +41,6 @@ The game features:
 
 ---
 
-
 ## Features
 
 | Feature | Details |
@@ -50,12 +50,11 @@ The game features:
 | ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
 | ✝️ 5 Sacred Wards | Special faith-powered abilities to repel, shield, banish, bind, and purge |
 | 🔦 Flashlight | Battery-powered; drains over time |
-| 🗺️ 2 Chapters | Hand-crafted maps with enemies, pickups, checkpoints, and exits |
+| 🗺️ 2 Chapters | Hand-crafted outdoor forest maps with trees, debris, checkpoints, and exits |
 | 💾 Save/Load | JSON-based save files stored in a `saves/` directory |
 | 🎲 Procedural Art | All textures and sprites are generated at runtime — no asset files required |
 
 ---
-
 ## Project Structure
 
 ```
@@ -70,290 +69,154 @@ ANINO_SA_GUBAT/
 ├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis)
 ├── settings.py          # All game constants, colors, controls, save/load settings
 ├── requirements.txt     # Python dependencies
+├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
+├── settings.json        # User configuration file (auto-created/updated)
 │
 ├── saves/               # (auto-created) JSON save files
+├── dist/                # (auto-created) PyInstaller build output
 └── assets/              # (auto-created) Cached asset directories
     ├── textures/
-    ├── sprites/
-    ├── audio/
-    └── fonts/
+    └── sprites/
 ```
 
 ---
 
 ## Requirements & Installation
 
-### Prerequisites
-- **Python 3.10+**
-- **pip**
+- **Python:** 3.10 or higher (Python 3.12 recommended)
+- **Dependencies:** `pygame-ce` (Community Edition), `numpy`
 
-### Install Dependencies
+### Installation Steps
 
 ```bash
+cd ANINO_SA_GUBAT
+python -m venv .venv
+.venv\Scripts\Activate
 pip install -r requirements.txt
 ```
 
-`requirements.txt` contains:
-```
-pygame-ce>=2.4.0
-numpy>=1.24.0
-```
-
-> ⚠️ This project uses **`pygame-ce`** (Community Edition), not the standard `pygame`. Make sure you install `pygame-ce` specifically, as the APIs differ slightly and `pygame-ce` offers better performance.
+*(Note: PyInstaller is required if building the standalone executable and must be installed manually via `pip install pyinstaller`; it is not listed in `requirements.txt`).*
 
 ---
 
 ## How to Run
 
 ```bash
-cd d:\PhyGame\ANINO_SA_GUBAT
-python main.py
+python -B main.py
 ```
 
-The game opens at **1280×720** (windowed by default). It automatically sets its working directory to its own folder on startup.
+The game launches at **1280×720** (windowed by default, with an internal 640×360 raycasting buffer).
 
 ---
----
-
 ## Standalone Executable Build
 
 ANINO SA GUBAT can be packaged as a standalone Windows executable using PyInstaller.
 
-### Running the Executable
-Once built, the standalone executable is located at:
+### Building the Executable
+
 ```bash
-dist\ANINO_SA_GUBAT.exe
+pip install pyinstaller
+pyinstaller --clean ANINO_SA_GUBAT.spec
 ```
 
-### Building via PyInstaller
-To rebuild the executable from source:
-```bash
-pyinstaller ANINO_SA_GUBAT.spec
-```
-The spec file (`ANINO_SA_GUBAT.spec`) bundles all procedural asset generators, audio synthesis modules, and dependencies into a self-contained distribution folder/binary.
+The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 
 ---
 
-
 ## Controls
 
-### In-Game
-
-| Action | Key / Mouse |
+| Key / Input | Action |
 |---|---|
-| Move Forward | `W` |
-| Move Backward | `S` |
-| Strafe Left | `A` |
-| Strafe Right | `D` |
-| Look / Turn | Mouse Movement |
-| Fire / Attack | `Left Mouse Button` |
-| Alt Fire | `Right Mouse Button` |
-| Reload | `R` |
-| Toggle Flashlight | `F` |
-| Interact (doors, etc.) | `E` |
-| Sprint | `Left Shift` |
-| Crouch | `Left Ctrl` |
-| Jump | `Space` |
-| Open Ward Menu | `Q` |
-| Select Ward 1–5 | `1` `2` `3` `4` `5` |
-| Throw Salt | `G` |
-| Throw Garlic | `H` |
-| Use Rosary | `V` |
-| Use Cross | `C` |
-| Pause | `Escape` |
-
-### Menus
-
-| Screen | Action | Key |
-|---|---|---|
-| Main Menu | Start New Game | `Enter` |
-| Main Menu | Load Saved Game | `L` |
-| Main Menu | Quit | `Escape` |
-| Pause | Resume | `Escape` |
-| Pause | Save Game | `S` |
-| Pause | Main Menu | `M` |
-| Game Over | Respawn at Checkpoint | `R` |
-| Game Over | Main Menu | `M` |
+| `W`, `A`, `S`, `D` / Arrow Keys | Move Forward, Strafe Left, Move Backward, Strafe Right |
+| `Shift` (Hold) | Sprint (consumes stamina) |
+| `Space` | Jump / Skip Cinematic |
+| Left Mouse Click | Attack / Shoot active weapon |
+| Right Mouse Click | Alt Fire / Secondary Weapon Action (Unused) |
+| `R` | Reload active weapon |
+| `1`, `2`, `3` | Switch Weapon (1: Bolo, 2: Shotgun, 3: Revolver) |
+| `4`, `5`, `6`, `7`, `8` | Cast Sacred Wards (1: Light/Repel, 2: Shield, 3: Banish, 4: Bind, 5: Purge) |
+| `E` | Interact (pickups, doors, checkpoints, exits) |
+| `F` | Toggle Flashlight |
+| `Q` | Throw Salt (creates repelling/slowing zone) |
+| `C` | Place Garlic (creates barrier zone against vampires/aswang) |
+| `S` | Save Game (when paused) |
+| `L` | Load Game (from main menu) |
+| `I` | Replay Intro Cinematic (from main menu) |
+| `F3` | Toggle Debug Overlay |
+| `F4` | Snap camera toward moon azimuth |
+| `F11` | Toggle Fullscreen |
+| `Escape` | Pause Game / Return to Main Menu / Quit |
 
 ---
 
 ## Gameplay Guide
 
-### HUD Explained
-
-The HUD overlays critical information at all times during gameplay:
-
-| HUD Element | Color | Description |
-|---|---|---|
-| HP Bar | 🟢 Green | Current health (max 100) |
-| AP Bar | 🔵 Blue | Armor points — absorbs damage before HP |
-| Battery Bar | 🟡/🔴 | Flashlight charge — turns red below 30% |
-| Faith Bar | 💙 Blue | Sacred ward energy; regenerates passively |
-| Ward Slots | Bottom-center | Cooldown timers for wards 1–5 |
-| Weapon Name | 🟡 Gold | BOLO / SHOTGUN / REVOLVER |
-| Ammo Counter | Yellow | `Magazine / Reserve` (Bolo shows `---`) |
-| Items Line | Gray | SALT count · GARLIC count · PAGES count |
+- **Survival:** Navigate the dark forest, manage your flashlight battery, stamina, and sanity. Darkness and nearby enemies drain sanity.
+- **Combat:** Use your bolo for silent close-quarters melee, the shotgun for powerful spread damage, or the revolver for precise ranged shots.
+- **Sacred Wards & Items:** Cast wards using Faith energy to repel or bind creatures. Scatter Salt or place Garlic to create protective zones. Collect Bible pages for lore and strength.
+- **Progression:** Reach checkpoints and find the exit portal/door to advance through chapters.
 
 ---
-
-### Weapons
-
-| Weapon | Type | Damage | Range | Cooldown | Magazine | Reserve |
-|---|---|---|---|---|---|---|
-| **Bolo** | Melee | 25 | 1.5 tiles | 0.4 s | Unlimited | — |
-| **Shotgun** | Spread (5 pellets) | Up to 40 | 8 tiles | 0.8 s | 2 shells | 50 max |
-| **Revolver** | Precision shot | 30 | 15 tiles | 0.5 s | 6 rounds | 36 max |
-
-- **Shotgun reload time:** 1.5 s — damage falls off with distance.
-- **Revolver reload time:** 1.2 s — slight falloff at very long range.
-- **Reload:** press `R` at any time while using a ranged weapon.
-
----
-
-### Sacred Wards
-
-Open the ward menu with `Q`, select with `1`–`5`. Consumes Faith Energy and triggers a cooldown.
-
-| Ward | Key | Faith Cost | Cooldown | Effect |
-|---|---|---|---|---|
-| **Holy Light (Repel)** | `1` | 20 | 8 s | Sacred ring — repels vulnerable enemies |
-| **Spirit Shield** | `2` | 25 | 15 s | Barrier — reduces incoming damage |
-| **Banishment** | `3` | 30 | 12 s | Banishes spectral enemies |
-| **Binding Chains** | `4` | 20 | 10 s | Immobilizes nearby enemies |
-| **Final Rite** | `5` | 50 | 30 s | Ultimate purge — damages all nearby creatures |
-
-> Faith regenerates at **0.5/sec**. Ward 1 is unlocked from the start.
-
----
-
-### Sacred Items & Flashlight
-
-| Item / Tool | Key | Effect |
-|---|---|---|
-| **Salt** | `G` | Drops a salt protection zone (repels enemies, 8 s, max 10) |
-| **Garlic** | `H` | Drops a garlic zone (weakens enemies, 6 s, max 8) |
-| **Rosary** | `V` | Rosary prayer (8 s cooldown) |
-| **Cross** | `C` | Cross radiance burst (6 s cooldown) |
-| **Flashlight** | `F` | Toggle on/off — drains 2/sec, recharges 0.5/sec when off |
-
----
-
-### Pickups
-
-Walk into pickups to collect automatically.
-
-| Pickup | Effect |
-|---|---|
-| Health Pack | Restores HP |
-| Ammo (Shotgun) | Adds shells to reserve |
-| Ammo (Revolver) | Adds rounds to reserve |
-| Salt | +1 (max 10) |
-| Garlic | +1 (max 8) |
-| Battery | Restores flashlight battery |
-| Faith Orb | Restores Faith Energy |
-| Bible Page | Lore collectible; may unlock wards |
-
----
-
-
 
 ## Enemy Roster
 
-Seven mythical creatures from **Philippine folklore** stalk the forest.
-
 | Enemy | HP | Damage | Speed | Detect Range | Vulnerabilities | Resistances |
 |---|---|---|---|---|---|---|
-| **Aswang** | 80 | 15 | 2.0 | 8 tiles | Repel, Garlic | — |
+| **Aswang** | 80 | 15 | 2.0 | 8 tiles | Repel, Garlic | None |
 | **Manananggal** | 100 | 20 | 2.5 | 10 tiles | Repel, Cross | Bind |
 | **Tikbalang** | 150 | 30 | 1.8 | 7 tiles | Shield | Repel |
 | **Kapre** | 200 | 35 | 1.2 | 6 tiles | Banish | Bind, Repel |
 | **White Lady** | 60 | 10 | 1.5 | 12 tiles | Bind | Banish |
-| **Multo** | 50 | 12 | 2.0 | 8 tiles | Banish | — |
-| **Sigbin** | 70 | 18 | 3.5 | 7 tiles | Bind | — |
-
-> **Vulnerable** = 2× damage. **Resistant** = 0.5× damage.
-
-### AI State Machine
-```
-IDLE → PATROL → INVESTIGATE → STALK → ATTACK → RECOVER → RETREAT → DEFEATED
-```
-Active status effects on enemies: `Bound` (immobilized), `Repelled` (fleeing), `Shield Debuff` (takes extra damage).
+| **Multo** | 50 | 12 | 2.0 | 8 tiles | Banish | None |
+| **Sigbin** | 70 | 18 | 3.5 | 7 tiles | Bind | None |
 
 ---
-
 ## Map & Tile System
 
-Maps are 2D integer grids. Key tile values:
-
-| Range | Meaning |
-|---|---|
-| `0` | EMPTY — walkable floor |
-| `1–4` | Walls: Stone, Wood, Bamboo, Balete |
-| `5` | Door — open with `E` |
-| `10–17` | Pickups: Health, Shotgun ammo, Revolver ammo, Salt, Garlic, Battery, Faith, Bible Page |
-| `20–26` | Enemy spawns: Aswang, Manananggal, Tikbalang, Kapre, White Lady, Multo, Sigbin |
-| `30` | Player Start |
-| `31` | Checkpoint |
-| `32` | Level Exit |
-| `33` | Interactable Object |
+- **Grid Size:** 64 × 64 outdoor forest map.
+- **Tile Types:**
+  - `EMPTY`: Walkable forest ground.
+  - `WALL_STONE`: Outer boundary wall (`0` and `63` edges).
+  - `WALL_WOOD`: Cabin / ruins interior structure.
+  - `DOOR`: Cabin entryway door.
+- **Environment:** Procedurally seeded trees (`balete`, `bamboo`, `mahogany`, `dead`), undergrowth, pickups, checkpoints, and enemy spawns.
 
 ---
 
 ## Chapters
 
-| Chapter | Map Size | Enemies | Setting |
-|---|---|---|---|
-| **1 — Dark Forest Trail** | 24 × 24 | Aswang ×2, Multo ×1, Sigbin ×1 | Dense forest, bamboo/balete walls, cabin interior |
-| **2 — The Cursed Ruins** | 32 × 16 | Aswang ×2, Manananggal ×1, Multo ×1, Sigbin ×1, Tikbalang ×1 | Complex ruins, tougher encounters |
-
-After Chapter 2, the game returns to the main menu.
+| Chapter | Setting | Player Start | Exit Position | Key Enemies |
+|---|---|---|---|---|
+| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | Aswang, Multo, Sigbin |
+| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | Aswang, Manananggal, Tikbalang, Kapre, Multo, Sigbin |
 
 ---
 
 ## Save System
 
-| Action | How |
-|---|---|
-| **Save** | Pause (`Escape`) → press `S` |
-| **Load** | Main Menu → press `L` |
-
-Saves are JSON files in `saves/` and include: position, health/armor, weapons & ammo, flashlight battery, faith energy, sacred items, ward unlocks, journal, relics, chapter, and checkpoint.
+- **Storage:** JSON format saved in the `saves/` directory (`save_0.json`, etc.).
+- **Saved Data:** Current chapter, player position, health, armor, stamina, sanity, weapons, ammunition, inventory items (salt, garlic, Bible pages), faith energy, and active checkpoint.
 
 ---
 
 ## Settings
 
-`settings.json` is auto-created on first save. Edit manually or via future settings menu.
+### Constants (`settings.py`)
+- Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`25 tiles`), player movement speeds, weapon damage/cooldown/ammo stats, enemy stats, and UI colors.
 
-| Key Constant | Default | Description |
-|---|---|---|
-| `SCREEN_WIDTH/HEIGHT` | 1280 × 720 | Output display resolution |
-| `INTERNAL_WIDTH/HEIGHT` | 640 × 360 | Raycasting render resolution |
-| `FPS` | 60 | Target framerate |
-| `FOV` | 60° | Field of view |
-| `MAX_DEPTH` | 20 tiles | Max ray distance |
-| `PLAYER_SPEED` | 3.0 | Walk speed |
-| `PLAYER_SPRINT_SPEED` | 5.0 | Sprint speed |
-| `FULLSCREEN` | False | Fullscreen toggle |
+### Configuration (`settings.json`)
+- User preferences (`fullscreen`, `quality_tier`, `enable_intro`, volume levels, etc.).
+- `settings.json` is auto-created or updated upon saving game state or modifying settings.
 
 ---
 
-## Intro Cinematic
-
-ANINO SA GUBAT features an atmospheric 75-second animated **Intro Cinematic** that plays automatically when you select "New Game" from the Main Menu.
-
-- **Content:** 6 narrative scenes telling the backstory, lore, warning, living forest, awakening spirits, traveler items, Bible pages, and title slam.
-- **Skip:** Press `Space`, `Enter`, or `Escape` at any time to instantly skip the cinematic and jump straight into Chapter 1. Press `Shift` to speed up.
-- **Replay:** Press `I` on the Main Menu to replay the intro cinematic at any time.
-- **Toggle:** Controlled by the `enable_intro` setting in `settings.json` (default: `true`). Set to `false` to jump directly into gameplay on New Game.
-
----
+## Architecture & Modules
 
 | Module | Role |
 |---|---|
-| `main.py` | Game loop, state machine (MENU/PLAYING/PAUSED/GAMEOVER/WIN), HUD, audio triggers, save/load |
+| `main.py` | Game loop, state machine (`MENU` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN`), HUD, audio triggers, save/load |
 | `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, serialization |
-| `enemies.py` | AI state machine (Idle/Patrol/Investigate/Chase/Attack), noise perception, proximity sanity drain |
+| `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, proximity sanity drain |
 | `map_system.py` | Map grids, tile queries, doors, pickups, checkpoints |
 | `renderer.py` | Raycasting engine, colored fog, parallax sky, particles, post-fx (vignette, blood), F3 debug overlay |
 | `asset_generator.py` | 100% procedural pixel art & fBm noise textures with ambient occlusion |
@@ -370,6 +233,17 @@ ANINO SA GUBAT features an atmospheric 75-second animated **Intro Cinematic** th
 - **Delta Time Cap:** `dt` capped at 50ms per frame to prevent physics tunneling on lag spikes.
 - **Upscaling:** Internal 640×360 upscaled to 1280×720 via `pygame.transform.scale` for a retro CRT aesthetic.
 - **Platform:** Built and tested on Windows with Python 3.10+. Compatible with Linux/macOS given same dependencies.
+
+---
+
+## Intro Cinematic
+
+ANINO SA GUBAT features an atmospheric 75-second animated **Intro Cinematic** that plays automatically when you select "New Game" from the Main Menu.
+
+- **Content:** 6 narrative scenes (`WARNING`, `FOREST`, `AWAKENING`, `TRAVELER`, `PAGES`, `CLOSING`/`TITLE`) telling the backstory, lore, warning, living forest, awakening spirits, traveler items, Bible pages, and title slam.
+- **Skip:** Press `Space`, `Enter`, or `Escape` at any time to instantly skip the cinematic and jump straight into Chapter 1.
+- **Replay:** Press `I` on the Main Menu to replay the intro cinematic at any time.
+- **Toggle:** Controlled by the `enable_intro` setting in `settings.json` (default: `true`). Set to `false` to jump directly into gameplay on New Game.
 
 ---
 
