@@ -8,6 +8,91 @@ import numpy as np
 from settings import *
 
 
+class Flashlight:
+    """Immersive volumetric flashlight cone with smooth sway, soft falloff, and battery flicker."""
+    def __init__(self, screen_w, screen_h):
+        self.w = screen_w
+        self.h = screen_h
+        self.on = True
+        self.sway_x = 0.0
+        self.sway_y = 0.0
+        self.target_sway_x = 0.0
+        self.target_sway_y = 0.0
+        self.gradient_cache = {}
+        self._init_cache()
+
+    def _init_cache(self):
+        for r in range(120, 360, 20):
+            surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            for dist in range(r, 0, -2):
+                t = dist / r
+                alpha = int(240 * (1.0 - t * t))
+                col = (255, 242, 210, max(0, min(255, alpha)))
+                pygame.draw.circle(surf, col, (r, r), dist)
+            self.gradient_cache[r] = surf
+
+    def toggle(self):
+        self.on = not self.on
+        from audio_synth import audio_mgr
+        try:
+            audio_mgr.play('click')
+        except Exception:
+            pass
+
+    def update(self, dt, player_moving, mouse_dx, battery_pct):
+        if not self.on or battery_pct <= 0:
+            return
+        self.target_sway_x = -mouse_dx * 2.5
+        self.target_sway_y = 0.0
+        if player_moving:
+            self.target_sway_y += math.sin(pygame.time.get_ticks() * 0.01) * 8.0
+        self.sway_x += (self.target_sway_x - self.sway_x) * min(1.0, dt * 10)
+        self.sway_y += (self.target_sway_y - self.sway_y) * min(1.0, dt * 10)
+        self.target_sway_x *= 0.9
+        self.target_sway_y *= 0.9
+
+    def brightness_at(self, screen_x, dist, player):
+        if not self.on or player.flashlight_battery <= 0:
+            return 0.08
+        beam_center_x = self.w // 2 + int(self.sway_x) + 30
+        dx = abs(screen_x - beam_center_x)
+        max_dx = self.w * 0.3 * max(0.2, (1.0 - dist / 10.0))
+        if dx > max_dx:
+            return 0.08
+        angular_falloff = max(0.0, 1.0 - (dx / max(1.0, max_dx)))
+        dist_falloff = 1.0 / (1.0 + dist * 0.3)
+        batt_factor = player.flashlight_battery / 100.0
+        flicker = 1.0
+        if player.flashlight_battery < 20:
+            flicker = random.uniform(0.5, 1.1) if random.random() < 0.3 else 1.0
+        else:
+            flicker = random.uniform(0.97, 1.03)
+        intensity = 0.08 + 0.92 * angular_falloff * dist_falloff * batt_factor * flicker
+        return max(0.08, min(1.0, intensity))
+
+    def draw(self, surf, player):
+        if not self.on or player.flashlight_battery <= 0:
+            dark_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            dark_overlay.fill((8, 10, 15, 235))
+            surf.blit(dark_overlay, (0, 0))
+            return
+        dark_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        dark_overlay.fill((12, 15, 22, 220))
+        cx = self.w // 2 + int(self.sway_x) + 30
+        cy = self.h // 2 + int(player.pitch * self.h) + int(self.sway_y) + 40
+        radius = int(280 * (player.flashlight_battery / 100.0))
+        radius = max(80, radius)
+        cached_r = min(self.gradient_cache.keys(), key=lambda r: abs(r - radius))
+        grad_surf = self.gradient_cache[cached_r]
+        gx = cx - cached_r
+        gy = cy - cached_r
+        light_spot = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        light_spot.blit(grad_surf, (gx, gy))
+        dark_overlay.blit(light_spot, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+        surf.blit(dark_overlay, (0, 0))
+
+
+
 class Renderer:
     """Raycasting-based pseudo-3D renderer."""
 
@@ -20,6 +105,8 @@ class Renderer:
         self.enemy_sprites = enemy_sprites
         self.pickup_sprites = pickup_sprites
         self.crosshair = None
+        self.clock = None
+        self.flashlight = Flashlight(self.w, self.h)
 
         # Precompute ray angles
         self.fov_rad = math.radians(FOV)
