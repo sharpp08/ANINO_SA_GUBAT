@@ -1066,39 +1066,52 @@ class Renderer:
         is_atk = (anim_state in ('attack', 'lunge'))
         is_dead = (anim_state == 'death')
         is_hov = (anim_state in ('hover', 'float')) or (float_mul > 0 and anim_state == 'idle')
+        is_run = (anim_state in ('run', 'sprint'))
 
-        breathe = 1.0 + 0.03 * math.sin(t_ticks * 0.004 + phase)
-        if is_atk:
-            breathe *= 1.12
+        # ─── Extreme Procedural Horror Animation & Weight Physics ─────────────────────
+        breath_freq = 0.003 if etype in ('kapre', 'tikbalang') else (0.006 if etype in ('sigbin', 'aswang') else 0.004)
+        breathe = 1.0 + 0.035 * math.sin(t_ticks * breath_freq + phase)
+        
+        if is_dead:
+            breathe = 0.28
+        elif is_atk:
+            attack_pulse = math.sin(t_ticks * 0.02 + phase)
+            breathe *= (1.18 + 0.08 * attack_pulse)
+        elif is_run:
+            gait = abs(math.sin(t_ticks * 0.015 + phase))
+            breathe *= (1.0 + 0.06 * gait)
         elif is_crawl:
-            breathe *= 0.75
-        elif is_dead:
-            breathe = 0.3
+            breathe *= 0.72 + 0.04 * math.sin(t_ticks * 0.008 + phase)
+        elif is_hov:
+            breathe *= 1.0 + 0.04 * math.sin(t_ticks * 0.0035 + phase)
 
-        sh = unit * (0.3 if is_dead else (0.55 if is_crawl else 0.85)) * size_mul * breathe
+        sh = unit * (0.28 if is_dead else (0.52 if is_crawl else 0.85)) * size_mul * breathe
         sw = sh * img.get_width() / img.get_height()
 
-        # Motion sway / bob / attack lunge
-        sway = math.sin(t_ticks * 0.003 + phase) * sw * 0.03
+        sway_amp = 0.05 if is_run else (0.025 if is_crawl else 0.035)
+        sway = math.sin(t_ticks * 0.004 + phase) * sw * sway_amp
         if is_atk:
-            sway += random.uniform(-1.5, 1.5)
+            sway += math.sin(t_ticks * 0.03) * 3.0 + random.uniform(-1.0, 1.0)
+        elif is_run:
+            sway += math.sin(t_ticks * 0.02) * 2.0
 
         hover = 0.0
         if is_hov or float_mul > 0:
-            hover = unit * (float_mul + 0.05 * math.sin(t_ticks * 0.004 + phase))
+            hover = unit * (float_mul + 0.07 * math.sin(t_ticks * 0.0035 + phase))
         elif is_crawl:
-            hover = -unit * 0.15  # lower to ground
+            hover = -unit * 0.18
+        elif is_dead:
+            hover = -unit * 0.25
 
         bottom = floor_y - hover
 
-        # Status tints (alpha-safe)
         if enemy.hit_flash > 0 or enemy.bound or anim_state == 'stagger':
             img = img.copy()
             if enemy.hit_flash > 0 or anim_state == 'stagger':
-                v = max(0, min(200, int(max(enemy.hit_flash, 0.5) * 180)))
-                img.fill((v, v, v), special_flags=pygame.BLEND_RGB_ADD)
+                v = max(0, min(220, int(max(enemy.hit_flash, 0.5) * 200)))
+                img.fill((v, v // 2, v // 2), special_flags=pygame.BLEND_RGB_ADD)
             if enemy.bound:
-                img.fill((50, 20, 100), special_flags=pygame.BLEND_RGB_ADD)
+                img.fill((60, 20, 120), special_flags=pygame.BLEND_RGB_ADD)
 
         n = self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
 
@@ -1106,20 +1119,21 @@ class Renderer:
         top = bottom - sh
         left = cx - sw / 2.0
 
-        # Aura + glowing eyes (visible even in the dark)
         if ENEMY_EYE_GLOW and n > 0 and not is_dead:
-            pulse = 0.75 + 0.25 * math.sin(t_ticks * 0.006 + phase)
+            pulse = 0.7 + 0.3 * math.sin(t_ticks * 0.007 + phase)
+            if is_atk:
+                pulse = 0.9 + 0.3 * math.sin(t_ticks * 0.02)
             aura = ENEMY_AURA.get(etype)
             if aura is not None:
                 ac = (int(aura[0] * pulse), int(aura[1] * pulse), int(aura[2] * pulse))
-                self._emissive.append(('aura', cx, top + sh * 0.5, max(8, int(sh * 0.75)), ac))
+                self._emissive.append(('aura', cx, top + sh * 0.45, max(8, int(sh * 0.8)), ac))
             eyes = ENEMY_EYES.get(etype)
             if eyes is not None:
                 (e1, e2), ecol = eyes
                 iw, ih = img.get_size()
-                er = max(3, int(sh * (0.13 if is_atk else 0.10)))
-                if random.random() < 0.015:
-                    er = max(2, er // 2)
+                er = max(3, int(sh * (0.14 if is_atk else 0.10)))
+                if random.random() < 0.02:
+                    er = max(1, er // 2)
                 for ex, ey in (e1, e2):
                     px = left + ex / float(iw) * sw
                     py = top + ey / float(ih) * sh
