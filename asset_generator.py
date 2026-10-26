@@ -164,93 +164,110 @@ def _horror_finish(surf, rim_color, seed=1):
 
 
 def generate_enemy_sprite(enemy_type='aswang', width=64, height=64, state='idle'):
-    """Generate a simple enemy sprite."""
+    """Generate enemy sprite supporting all animation states."""
     surf = pygame.Surface((width, height), pygame.SRCALPHA)
+    is_atk = (state in ('attack', 'lunge'))
+    is_crawl = (state in ('crawl', 'crouch', 'stalk'))
+    is_move = (state in ('walk', 'run', 'sprint'))
+    is_dead = (state == 'death')
+    is_hov = (state in ('hover', 'float'))
 
     if enemy_type == 'aswang':
-        body_color = (40, 30, 35)
-        eye_color = (220, 30, 30)
-        pygame.draw.ellipse(surf, body_color, (16, 8, 32, 48))
-        pygame.draw.ellipse(surf, (50, 35, 40), (20, 12, 24, 20))
-        pygame.draw.circle(surf, eye_color, (28, 20), 3)
-        pygame.draw.circle(surf, eye_color, (36, 20), 3)
-        pygame.draw.line(surf, (60, 40, 45), (26, 30), (38, 30), 2)
-        # long arms, claws and fangs
-        pygame.draw.line(surf, body_color, (18, 28), (8, 50), 3)
-        pygame.draw.line(surf, body_color, (46, 28), (56, 50), 3)
-        for cx_, cy_ in ((8, 50), (56, 50)):
-            for off in (-3, 0, 3):
-                pygame.draw.line(surf, (200, 190, 170), (cx_, cy_), (cx_ + off, cy_ + 8), 1)
-        pygame.draw.polygon(surf, (235, 230, 215), [(29, 30), (31, 30), (30, 35)])
-        pygame.draw.polygon(surf, (235, 230, 215), [(33, 30), (35, 30), (34, 35)])
-        if state == 'attack':
-            pygame.draw.polygon(surf, (60, 40, 45), [(24, 28), (40, 28), (32, 36)])
-            pygame.draw.circle(surf, (255, 50, 50), (28, 20), 4)
-            pygame.draw.circle(surf, (255, 50, 50), (36, 20), 4)
-        pygame.draw.line(surf, body_color, (22, 50), (18, 62), 3)
-        pygame.draw.line(surf, body_color, (42, 50), (46, 62), 3)
+        bc, ec = (40, 30, 35), (255, 30, 30) if is_atk else (220, 30, 30)
+        if is_dead:
+            pygame.draw.ellipse(surf, (25, 18, 22), (10, 46, 44, 16))
+        elif is_crawl:
+            pygame.draw.ellipse(surf, bc, (12, 24, 40, 26))
+            pygame.draw.circle(surf, ec, (22, 32), 3)
+            pygame.draw.circle(surf, ec, (30, 32), 3)
+            pygame.draw.line(surf, bc, (16, 36), (8, 52), 3)
+            pygame.draw.line(surf, bc, (44, 36), (52, 52), 3)
+        else:
+            y_o = 4 if is_move else 0
+            pygame.draw.ellipse(surf, bc, (16, 8 + y_o, 32, 48))
+            pygame.draw.ellipse(surf, (50, 35, 40), (20, 12 + y_o, 24, 20))
+            pygame.draw.circle(surf, ec, (28, 20 + y_o), 4 if is_atk else 3)
+            pygame.draw.circle(surf, ec, (36, 20 + y_o), 4 if is_atk else 3)
+            pygame.draw.line(surf, bc, (18, 28 + y_o), (6 if is_atk else 10, 50), 3)
+            pygame.draw.line(surf, bc, (46, 28 + y_o), (58 if is_atk else 54, 50), 3)
+            pygame.draw.polygon(surf, (235, 230, 215), [(29, 30), (31, 30), (30, 35)])
+            pygame.draw.polygon(surf, (235, 230, 215), [(33, 30), (35, 30), (34, 35)])
 
     elif enemy_type == 'manananggal':
-        body_color = (50, 25, 35)
-        wing_color = (70, 20, 30)
-        pygame.draw.ellipse(surf, body_color, (20, 16, 24, 32))
-        pygame.draw.ellipse(surf, (65, 35, 45), (24, 18, 16, 14))
-        pygame.draw.circle(surf, (255, 40, 40), (30, 24), 2)
-        pygame.draw.circle(surf, (255, 40, 40), (34, 24), 2)
-        pygame.draw.polygon(surf, wing_color, [(20, 20), (2, 8), (8, 36)])
-        pygame.draw.polygon(surf, wing_color, [(44, 20), (62, 8), (56, 36)])
-        pygame.draw.line(surf, (180, 30, 30), (24, 48), (20, 60), 2)
-        pygame.draw.line(surf, (180, 30, 30), (40, 48), (44, 60), 2)
+        bc, wc = (50, 25, 35), (70, 20, 30)
+        h_o = 8 if is_hov or is_atk else 0
+        if is_dead:
+            pygame.draw.ellipse(surf, (30, 15, 20), (18, 46, 28, 16))
+        else:
+            pygame.draw.ellipse(surf, bc, (20, 16 - h_o, 24, 32))
+            pygame.draw.ellipse(surf, (65, 35, 45), (24, 18 - h_o, 16, 14))
+            pygame.draw.circle(surf, (255, 40, 40), (30, 24 - h_o), 2)
+            pygame.draw.circle(surf, (255, 40, 40), (34, 24 - h_o), 2)
+            pygame.draw.polygon(surf, wc, [(20, 20 - h_o), (0, 8), (8, 36)])
+            pygame.draw.polygon(surf, wc, [(44, 20 - h_o), (64, 8), (56, 36)])
+            pygame.draw.line(surf, (180, 30, 30), (24, 48 - h_o), (20, 60), 2)
+            pygame.draw.line(surf, (180, 30, 30), (40, 48 - h_o), (44, 60), 2)
 
     elif enemy_type == 'tikbalang':
-        body_color = (80, 60, 40)
-        pygame.draw.ellipse(surf, body_color, (18, 4, 28, 20))
-        pygame.draw.polygon(surf, (90, 70, 45), [(26, 2), (32, 0), (38, 2), (36, 8), (28, 8)])
-        pygame.draw.circle(surf, (255, 180, 0), (28, 12), 2)
-        pygame.draw.circle(surf, (255, 180, 0), (36, 12), 2)
-        pygame.draw.ellipse(surf, body_color, (16, 22, 32, 28))
-        pygame.draw.line(surf, body_color, (22, 48), (18, 64), 4)
-        pygame.draw.line(surf, body_color, (42, 48), (46, 64), 4)
+        bc = (80, 60, 40)
+        if is_dead:
+            pygame.draw.rect(surf, (40, 30, 20), (12, 44, 40, 18))
+        else:
+            pygame.draw.ellipse(surf, bc, (18, 4, 28, 20))
+            pygame.draw.polygon(surf, (90, 70, 45), [(26, 2), (32, 0), (38, 2), (36, 8), (28, 8)])
+            pygame.draw.circle(surf, (255, 180, 0), (28, 12), 2)
+            pygame.draw.circle(surf, (255, 180, 0), (36, 12), 2)
+            pygame.draw.ellipse(surf, bc, (16, 22, 32, 28))
+            pygame.draw.line(surf, bc, (22, 48), (14, 64), 4)
+            pygame.draw.line(surf, bc, (42, 48), (50, 64), 4)
 
     elif enemy_type == 'kapre':
-        body_color = (45, 35, 25)
-        pygame.draw.ellipse(surf, body_color, (10, 4, 44, 56))
-        pygame.draw.ellipse(surf, (55, 42, 30), (18, 8, 28, 18))
-        pygame.draw.circle(surf, (200, 100, 0), (28, 16), 3)
-        pygame.draw.circle(surf, (200, 100, 0), (36, 16), 3)
-        pygame.draw.rect(surf, (120, 80, 40), (40, 24, 18, 4))
-        pygame.draw.ellipse(surf, (100, 60, 30), (42, 20, 8, 12))
+        bc = (45, 35, 25)
+        if is_dead:
+            pygame.draw.ellipse(surf, (25, 20, 15), (8, 48, 48, 14))
+        else:
+            pygame.draw.ellipse(surf, bc, (10, 4, 44, 56))
+            pygame.draw.ellipse(surf, (55, 42, 30), (18, 8, 28, 18))
+            pygame.draw.circle(surf, (200, 100, 0), (28, 16), 3)
+            pygame.draw.circle(surf, (200, 100, 0), (36, 16), 3)
+            pygame.draw.rect(surf, (120, 80, 40), (40, 24, 18, 4))
 
     elif enemy_type == 'white_lady':
-        pygame.draw.ellipse(surf, (220, 220, 230, 160), (16, 4, 32, 56))
-        pygame.draw.ellipse(surf, (240, 240, 250, 180), (20, 6, 24, 18))
-        pygame.draw.circle(surf, (0, 0, 0), (28, 14), 2)
-        pygame.draw.circle(surf, (0, 0, 0), (36, 14), 2)
-        for i in range(3):
-            alpha = 100 - i * 30
-            s = pygame.Surface((width, height), pygame.SRCALPHA)
-            pygame.draw.ellipse(s, (220, 220, 230, alpha), (14 - i * 2, 2, 36 + i * 4, 60 + i * 2))
-            surf.blit(s, (0, 0))
+        h_o = 6 if is_hov or is_crawl else 0
+        if is_dead:
+            pygame.draw.ellipse(surf, (150, 150, 160, 100), (16, 48, 32, 14))
+        else:
+            pygame.draw.ellipse(surf, (220, 220, 230, 160), (16, 4 - h_o, 32, 56))
+            pygame.draw.ellipse(surf, (240, 240, 250, 180), (20, 6 - h_o, 24, 18))
+            pygame.draw.circle(surf, (0, 0, 0), (28, 14 - h_o), 2)
+            pygame.draw.circle(surf, (0, 0, 0), (36, 14 - h_o), 2)
 
     elif enemy_type == 'multo':
-        for i in range(3):
-            alpha = 80 - i * 20
-            pygame.draw.ellipse(surf, (180, 180, 200, alpha),
-                                (14 - i * 3, 8 - i * 2, 36 + i * 6, 48 + i * 4))
-        pygame.draw.circle(surf, (100, 100, 120, 150), (28, 20), 2)
-        pygame.draw.circle(surf, (100, 100, 120, 150), (36, 20), 2)
+        h_o = 10 if is_hov or is_atk else 0
+        if is_dead:
+            pygame.draw.ellipse(surf, (120, 120, 140, 80), (16, 50, 32, 12))
+        else:
+            for i in range(3):
+                alpha = 80 - i * 20
+                pygame.draw.ellipse(surf, (180, 180, 200, alpha),
+                                    (14 - i * 3, 8 - h_o - i * 2, 36 + i * 6, 48 + i * 4))
+            pygame.draw.circle(surf, (100, 100, 120, 150), (28, 20 - h_o), 2)
+            pygame.draw.circle(surf, (100, 100, 120, 150), (36, 20 - h_o), 2)
 
     elif enemy_type == 'sigbin':
-        body_color = (50, 40, 45)
-        pygame.draw.ellipse(surf, body_color, (8, 24, 48, 24))
-        pygame.draw.ellipse(surf, (60, 45, 50), (12, 16, 20, 14))
-        pygame.draw.circle(surf, (255, 60, 0), (20, 22), 2)
-        pygame.draw.circle(surf, (255, 60, 0), (26, 22), 2)
-        pygame.draw.line(surf, body_color, (14, 44), (10, 58), 3)
-        pygame.draw.line(surf, body_color, (50, 44), (54, 58), 3)
-        pygame.draw.line(surf, body_color, (50, 32), (60, 20), 2)
+        bc = (50, 40, 45)
+        if is_dead:
+            pygame.draw.ellipse(surf, (30, 25, 25), (10, 46, 44, 16))
+        else:
+            pygame.draw.ellipse(surf, bc, (8, 24, 48, 24))
+            pygame.draw.ellipse(surf, (60, 45, 50), (12, 16, 20, 14))
+            ec = (255, 100, 0) if is_atk else (255, 60, 0)
+            pygame.draw.circle(surf, ec, (20, 22), 2)
+            pygame.draw.circle(surf, ec, (26, 22), 2)
+            pygame.draw.line(surf, bc, (14, 44), (8, 60), 3)
+            pygame.draw.line(surf, bc, (50, 44), (56, 60), 3)
 
-    _horror_finish(surf, RIM_COLORS.get(enemy_type, (150, 30, 30)), seed=sum(map(ord, enemy_type)) + (7 if state == 'attack' else 0))
+    _horror_finish(surf, RIM_COLORS.get(enemy_type, (150, 30, 30)), seed=sum(map(ord, enemy_type)) + (7 if is_atk else 0))
     return surf
 
 
@@ -483,14 +500,14 @@ def generate_all_weapons():
 
 
 def generate_all_enemies():
-    """Generate all enemy sprites in different states."""
+    """Generate all enemy sprites in different animation states."""
     enemies = {}
     types = ['aswang', 'manananggal', 'tikbalang', 'kapre', 'white_lady', 'multo', 'sigbin']
+    states = ['idle', 'walk', 'run', 'sprint', 'crawl', 'stalk', 'crouch', 'lunge', 'attack', 'stagger', 'death', 'hover']
     for t in types:
-        enemies[t] = {
-            'idle': generate_enemy_sprite(t, 64, 64, 'idle'),
-            'attack': generate_enemy_sprite(t, 64, 64, 'attack'),
-        }
+        enemies[t] = {}
+        for s in states:
+            enemies[t][s] = generate_enemy_sprite(t, 64, 64, s)
     return enemies
 
 

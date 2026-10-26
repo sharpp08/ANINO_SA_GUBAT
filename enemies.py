@@ -108,6 +108,8 @@ class Enemy:
         # Spawn position for respawning logic
         self.spawn_x = x
         self.spawn_y = y
+        self.animation_state = 'idle'
+        self.anim_time = random.random() * 10.0
         
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
@@ -170,6 +172,33 @@ class Enemy:
 
         dist = self.distance_to(player_x, player_y)
         self.state_timer -= dt
+
+        self.anim_time += dt
+        if not self.alive:
+            self.animation_state = 'death'
+        elif self.hit_flash > 0:
+            self.animation_state = 'stagger'
+        elif self.bound:
+            self.animation_state = 'crouch'
+        elif self.state == EnemyState.IDLE:
+            self.animation_state = 'hover' if self.type in ('manananggal', 'multo', 'white_lady') else 'idle'
+        elif self.state == EnemyState.PATROL:
+            self.animation_state = 'crawl' if self.type in ('sigbin',) else 'walk'
+        elif self.state == EnemyState.INVESTIGATE:
+            self.animation_state = 'crawl' if self.type in ('sigbin',) else ('stalk' if self.type == 'aswang' else 'walk')
+        elif self.state == EnemyState.STALK:
+            self.animation_state = 'stalk'
+        elif self.state == EnemyState.ATTACK:
+            if dist <= self.attack_range * 1.2:
+                self.animation_state = 'attack'
+            else:
+                self.animation_state = 'lunge' if self.type in ('aswang', 'tikbalang', 'sigbin') else ('sprint' if self.speed > 2.0 else 'run')
+        elif self.state == EnemyState.RETREAT:
+            self.animation_state = 'run'
+        elif self.state == EnemyState.RECOVER:
+            self.animation_state = 'crouch'
+        else:
+            self.animation_state = 'idle'
 
         if self.state == EnemyState.IDLE:
             if dist < self.detect_range:

@@ -1048,39 +1048,52 @@ class Renderer:
 
     def _draw_enemy(self, enemy, screen_x, floor_y, unit, dist, t_ticks, stats):
         etype = enemy.type
-        state = 'attack' if enemy.state == 'attack' else 'idle'
+        anim_state = getattr(enemy, 'animation_state', 'idle')
         frames = self.enemy_sprites.get(etype)
         img = None
         if frames:
-            img = frames.get(state, frames.get('idle'))
+            img = frames.get(anim_state, frames.get('idle', frames.get('attack')))
         if img is None:
             img = pygame.Surface((32, 32), pygame.SRCALPHA)
             pygame.draw.rect(img, (200, 50, 50), (4, 4, 24, 24))
 
         size_mul, float_mul = ENEMY_SIZE.get(etype, (1.0, 0.0))
         phase = (id(enemy) % 628) / 100.0
-        breathe = 1.0 + 0.03 * math.sin(t_ticks * 0.004 + phase)
-        attacking = (state == 'attack')
-        if attacking:
-            breathe *= 1.08
 
-        sh = unit * 0.85 * size_mul * breathe
+        is_crawl = (anim_state in ('crawl', 'crouch', 'stalk'))
+        is_atk = (anim_state in ('attack', 'lunge'))
+        is_dead = (anim_state == 'death')
+        is_hov = (anim_state in ('hover', 'float')) or (float_mul > 0 and anim_state == 'idle')
+
+        breathe = 1.0 + 0.03 * math.sin(t_ticks * 0.004 + phase)
+        if is_atk:
+            breathe *= 1.12
+        elif is_crawl:
+            breathe *= 0.75
+        elif is_dead:
+            breathe = 0.3
+
+        sh = unit * (0.3 if is_dead else (0.55 if is_crawl else 0.85)) * size_mul * breathe
         sw = sh * img.get_width() / img.get_height()
 
-        # stalking sway / attack jitter
+        # Motion sway / bob / attack lunge
         sway = math.sin(t_ticks * 0.003 + phase) * sw * 0.03
-        if attacking:
-            sway += random.uniform(-2.0, 2.0)
+        if is_atk:
+            sway += random.uniform(-1.5, 1.5)
+
         hover = 0.0
-        if float_mul > 0:
-            hover = unit * (float_mul + 0.04 * math.sin(t_ticks * 0.003 + phase))
+        if is_hov or float_mul > 0:
+            hover = unit * (float_mul + 0.05 * math.sin(t_ticks * 0.004 + phase))
+        elif is_crawl:
+            hover = -unit * 0.15  # lower to ground
+
         bottom = floor_y - hover
 
-        # status tints (alpha-safe)
-        if enemy.hit_flash > 0 or enemy.bound:
+        # Status tints (alpha-safe)
+        if enemy.hit_flash > 0 or enemy.bound or anim_state == 'stagger':
             img = img.copy()
-            if enemy.hit_flash > 0:
-                v = max(0, min(200, int(enemy.hit_flash * 180)))
+            if enemy.hit_flash > 0 or anim_state == 'stagger':
+                v = max(0, min(200, int(max(enemy.hit_flash, 0.5) * 180)))
                 img.fill((v, v, v), special_flags=pygame.BLEND_RGB_ADD)
             if enemy.bound:
                 img.fill((50, 20, 100), special_flags=pygame.BLEND_RGB_ADD)
@@ -1092,7 +1105,7 @@ class Renderer:
         left = cx - sw / 2.0
 
         # Aura + glowing eyes (visible even in the dark)
-        if ENEMY_EYE_GLOW and n > 0:
+        if ENEMY_EYE_GLOW and n > 0 and not is_dead:
             pulse = 0.75 + 0.25 * math.sin(t_ticks * 0.006 + phase)
             aura = ENEMY_AURA.get(etype)
             if aura is not None:
@@ -1102,8 +1115,8 @@ class Renderer:
             if eyes is not None:
                 (e1, e2), ecol = eyes
                 iw, ih = img.get_size()
-                er = max(3, int(sh * (0.13 if attacking else 0.10)))
-                if random.random() < 0.015:      # occasional flicker
+                er = max(3, int(sh * (0.13 if is_atk else 0.10)))
+                if random.random() < 0.015:
                     er = max(2, er // 2)
                 for ex, ey in (e1, e2):
                     px = left + ex / float(iw) * sw
@@ -1112,7 +1125,7 @@ class Renderer:
                         self._emissive.append(('eye', px, py, er, ecol))
 
         if self.debug_f4:
-            self._debug_marker(cx, top + sh * 0.5, (255, 0, 255), f"{etype} {dist:.1f}")
+            self._debug_marker(cx, top + sh * 0.5, (255, 0, 255), f"{etype}:{anim_state} {dist:.1f}")
 
     def _debug_marker(self, x, y, color, label):
         x = int(x)
