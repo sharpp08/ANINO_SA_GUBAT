@@ -53,7 +53,12 @@ The game features:
 | Feature | Details |
 |---|---|
 | 🎮 Raycasting 3D | Pseudo-3D first-person view at 640×360 internal resolution, scaled to 1280×720 |
-| 🌲 Outdoor Forest | 64×64 map with 220 (Ch. 1) / 300 (Ch. 2) procedurally placed trees, a stone boundary wall and an abandoned cabin |
+| 🌲 Outdoor Forest | 64×64 map with 220 (Ch. 1) / 300 (Ch. 2) procedurally placed trees, dense undergrowth, stone boundary wall and an abandoned cabin |
+| 🌿 Legit Forest | 350+ procedural plants (ferns, mushrooms, rocks, bushes) with wind physics and player proximity reactions |
+| 🌀 Physics Animation | Spring-driven systems for camera, weapon sway, head bob; NumPy particle physics for casings/smoke/sparks |
+| 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
+| ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
+| 🌌 Atmospheric Sky | Layered clouds with parallax, subtle aurora borealis effect, twinkling stars, dynamic moon |
 | 👹 7 Enemy Types | Each with unique stats and AI (5 spawn in the current chapters, see [Chapters](#chapters)) |
 | ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
 | ✝️ 5 Sacred Wards | Light, Shield, Banish, Bind and Final, powered by Faith energy with per-ward cooldowns |
@@ -63,6 +68,7 @@ The game features:
 | 💾 Save/Load | JSON save file in the `saves/` directory |
 | 🎲 Procedural Art | All textures and sprites are generated at runtime; the large ground texture is cached on disk |
 | ⏳ Loading Screen | Step-by-step progress bar while assets are generated at startup |
+| 🎛️ Animation Controls | Toggle physics, particles, camera shake, enemy animations, environment effects via settings |
 
 ---
 
@@ -270,14 +276,33 @@ After the final chapter, the win screen is shown. Completing Chapter 1 loads Cha
 
 The renderer draws each frame in this order:
 
-1. **Sky:** Vertical gradient, 260 twinkling stars, a moon at a fixed world direction, and drifting clouds.
-2. **Floor:** Per-row gradient with exponential-squared fog and a minimum brightness.
+1. **Sky:** Vertical gradient, 260 twinkling stars, layered clouds with parallax, and a moon at a fixed world direction. An atmospheric aurora borealis effect subtly drifts along the horizon.
+
+2. **Floor:** Per-row gradient with exponential-squared fog and a minimum brightness. Dynamic color variation based on distance and time creates a living, breathing forest floor.
+
 3. **Walls:** DDA raycasting with a texture column per ray, distance shading, darker side faces, and a per-column z-buffer. Rays that hit nothing draw no wall.
-4. **World sprites:** Trees, enemies and pickups are collected, sorted far to near, and drawn together so they overlap correctly. They stand on the floor using the same projection as the walls. Each column is hidden only by a closer wall. At most 120 of the nearest trees are drawn per frame.
+
+4. **World sprites:** Trees, enemies, undergrowth and pickups are collected, sorted far to near, and drawn together so they overlap correctly.
+   - **Trees:** Billboard sprites with wind-based sway. Tree stiffness varies by type (balete trees sway more than rigid mahogany).
+   - **Undergrowth:** Procedural ferns, mushrooms, rocks, and bushes react to wind and player proximity. Plants gently push away when the player walks through them.
+   - **Enemy animation:** All enemy sprites have spring-based hover, sway, and breathing animations for organic movement.
+   - **Particles:** Physics-driven particles including ejected shell casings, muzzle smoke, bullet sparks, and blood splatters with gravity and bounce.
+
 5. **Darkness and flashlight:** One cached overlay with a soft hole and a warm additive glow. It sways with movement and flickers when the battery is below 20%. With the light off or the battery dead, a flat darker overlay is used.
+
 6. **Emissive pass:** Enemy eyes, auras and pickup halos are drawn after the darkness so they remain visible.
-7. **Particles:** Fireflies and dust motes.
+
+7. **Particles:** Fireflies and dust motes with smooth movement patterns. Physics particles (casings, smoke, sparks, blood) rendered after environmental particles.
+
 8. **Post effects:** Vignette, low-health/low-sanity blood border, danger vignette with heartbeat, ward effects, damage flash, muzzle flash, weapon with bob/recoil/reload animation, crosshair, then screen shake.
+
+### Wind & Environment Physics
+
+The game features a comprehensive wind system that brings the forest to life:
+- **Time-varying wind strength:** Wind strength cycles between 0.2 and 0.6, creating natural gusts
+- **Gust intervals:** Random gusts every 3-8 seconds add variety
+- **Tree-specific stiffness:** Different tree types sway at different rates (balete trees are more flexible)
+- **Plant movement:** Undergrowth gently sways in the wind and reacts to player movement
 
 Sprite distance shading only changes colour, never transparency, so sprites no longer appear see-through or surrounded by dark boxes.
 
@@ -298,6 +323,27 @@ Sprite distance shading only changes colour, never transparency, so sprites no l
 - Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
 - Effect toggles such as `ENABLE_BLOOM`, `ENABLE_FOG`, `ENABLE_PARTICLES`, `ENABLE_SANITY` and `ENABLE_INTRO`.
 - `QUALITY_PRESETS` (`low`, `medium`, `high`) are defined, with `QUALITY_TIER = 'medium'`, but they are not applied yet (see [Known Limitations](#known-limitations)).
+
+### Animation & Physics System
+The game includes a comprehensive physics and animation system built entirely in Python:
+
+| Setting | Description |
+|---|---|
+| `ENABLE_ANIMATIONS` | Master toggle for all animation systems |
+| `ENABLE_SPRING_PHYSICS` | Spring-based systems for camera, weapon, head bob |
+| `ENABLE_PARTICLE_PHYSICS` | NumPy-accelerated particles (casings, smoke, sparks, blood) |
+| `ENABLE_VERLET_ROPES` | Verlet chain dynamics for trailing elements |
+| `ENABLE_CAMERA_SHAKE` | Coherent noise-based screen shake |
+| `ENABLE_WEAPON_INERTIA` | Weapon sway with inertia and spring damping |
+| `ENABLE_ENEMIES_ANIM` | Enemy animation springs (hover, sway, breathing) |
+| `ENABLE_ENV_ANIM` | Environment animations (wind, undergrowth, aurora) |
+| `ENABLE_UI_ANIM` | UI animation effects |
+| `ENABLE_GAME_FEEL` | Hit-stop, time scale, impact effects |
+
+The F3 debug overlay displays:
+- Animation timing (ms)
+- Active particle count
+- All standard debug information
 
 ### Configuration (`settings.json`)
 `load_settings()` merges the file over these defaults:
