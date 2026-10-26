@@ -15,6 +15,7 @@ dist/
 release/
 *.spec
 *.exe
+!ANINO_SA_GUBAT.exe
 *.ps1
 saves/
 screenshots/
