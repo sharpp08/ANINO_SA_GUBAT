@@ -66,6 +66,15 @@ class Player:
         self.checkpoint_y = y
         self.checkpoint_angle = angle
 
+        # Animation & Physics Springs
+        if ENABLE_ANIMATIONS and ENABLE_SPRING_PHYSICS:
+            from animation_core import SpringScalar, Spring2D
+            self.spring_bob = SpringScalar(0.0, 150.0, 12.0)
+            self.spring_sway = Spring2D(0.0, 0.0, 100.0, 10.0)
+        else:
+            self.spring_bob = None
+            self.spring_sway = None
+
     def update(self, dt, keys, mouse_dx, mouse_dy, game_map):
         """Update player state each frame."""
         if not self.alive:
@@ -189,6 +198,11 @@ class Player:
         # Damage flash decay
         if self.damage_flash > 0:
             self.damage_flash -= dt * 3
+
+        if ENABLE_ANIMATIONS and ENABLE_SPRING_PHYSICS and self.spring_bob:
+            moving = 1.0 if (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]) else 0.0
+            self.spring_bob.update(dt, moving * (5.0 if self.is_sprinting else 3.0))
+            self.spring_sway.update(dt, mouse_dx * 0.1, mouse_dy * 0.1)
 
     def fire_weapon(self):
         """Attempt to fire the current weapon. Cancel reload if active. Returns hit info."""

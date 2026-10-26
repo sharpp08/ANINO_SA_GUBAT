@@ -499,9 +499,15 @@ class Game:
             self.renderer.trigger_muzzle_flash()
             if wi['type'] in ('shotgun', 'revolver', 'bolo'):
                 audio_mgr.play(wi['type'])
+                if wi['type'] in ('shotgun', 'revolver'):
+                    self.renderer.emit_casing(self.renderer.w // 2 + 60, self.renderer.h - 30, random.uniform(40, 90), random.uniform(-110, -60))
+                    self.renderer.emit_smoke(self.renderer.w // 2, self.renderer.h // 2, random.uniform(-10, 10), random.uniform(-30, -10))
+                    self.renderer.camera_shake.add(0.3, 0.25)
             hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi)
             if hits:
                 self.renderer.trigger_screen_shake(4)
+                for h in hits:
+                    self.renderer.emit_blood(self.renderer.w // 2, self.renderer.h // 2, 10)
 
     def _use_salt(self):
         if self.player.use_salt():

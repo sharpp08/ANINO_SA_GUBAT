@@ -78,7 +78,7 @@ ANINO_SA_GUBAT/
 ├── renderer.py          # Raycasting renderer, sprite pass, flashlight, fog, sky, post-fx, debug overlay
 ├── asset_generator.py   # Procedural pixel-art generator (textures, sprites, trees, ground)
 ├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis)
-├── cinematic.py         # Intro cinematic
+├── animation_core.py    # Physics & Animation core: springs, easing, NumPy particle system, Verlet ropes, camera shake
 ├── settings.py          # All game constants, colors, controls, settings load/save
 ├── requirements.txt     # Python dependencies
 ├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
