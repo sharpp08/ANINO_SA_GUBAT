@@ -282,13 +282,17 @@ class Renderer:
         # Debug overlay (F3)
         self.show_debug = True
         self.fps_history = []
-        self.timings = {'rays': 0.0, 'post': 0.0, 'total': 0.0}
+        self.frame_times = []  # For percentile tracking
+        self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
         self.dbg_font = pygame.font.SysFont('consolas', 12)
 
         self.debug_f4 = False          # raw scene: no darkness + markers on every entity
         self.last_console_print = 0.0
         self.level_enemy_total = 0     # set by main.py for the F3 panel
 
+        # Performance tracking
+        self._last_frame_time = pygame.time.get_ticks()
+        
         # Per-frame sprite stats (shown on the F3 panel)
         self.stats = {'trees': 0, 'enemies_view': 0, 'pickups_view': 0, 'drawn': 0}
 

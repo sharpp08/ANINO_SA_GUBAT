@@ -55,26 +55,52 @@ ENABLE_CHROMATIC_ABERRATION = True
 
 
 # Quality Tier Presets
+QUALITY_TIER = 'medium'  # 'low', 'medium', 'high' - set at runtime via quality_settings
+
+# Performance-optimized quality presets with measurable differences
 QUALITY_PRESETS = {
     'low': {
         'internal_width': 320, 'internal_height': 180,
         'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
         'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
         'enable_particles': False, 'enable_dynamic_lights': False,
+        'enable_aurora': False, 'enable_enhanced_floor': False,
+        'max_render_trees': 60, 'max_particles': 50, 'max_enemies': 4,
     },
     'medium': {
         'internal_width': 640, 'internal_height': 360,
-        'enable_hdr': True, 'enable_pbr': True, 'enable_normal_mapping': True,
-        'enable_ssao': True, 'enable_bloom': True, 'enable_god_rays': True,
-        'enable_particles': True, 'enable_dynamic_lights': True,
+        'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
+        'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
+        'enable_particles': True, 'enable_dynamic_lights': False,
+        'enable_aurora': True, 'enable_enhanced_floor': True,
+        'max_render_trees': 100, 'max_particles': 150, 'max_enemies': 6,
     },
     'high': {
-        'internal_width': 960, 'internal_height': 540,
-        'enable_hdr': True, 'enable_pbr': True, 'enable_normal_mapping': True,
-        'enable_ssao': True, 'enable_bloom': True, 'enable_god_rays': True,
+        'internal_width': 640, 'internal_height': 360,  # Keep same resolution for performance
+        'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
+        'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
         'enable_particles': True, 'enable_dynamic_lights': True,
+        'enable_aurora': True, 'enable_enhanced_floor': True,
+        'max_render_trees': 120, 'max_particles': 300, 'max_enemies': 8,
     }
 }
+
+# Active quality settings (applied from presets)
+ACTIVE_QUALITY = QUALITY_PRESETS['medium'].copy()
+
+
+def apply_quality_preset(tier):
+    """Apply a quality preset and return the settings dict."""
+    global ACTIVE_QUALITY, INTERNAL_WIDTH, INTERNAL_HEIGHT, NUM_RAYS, WALL_HEIGHT_SCALE
+    if tier not in QUALITY_PRESETS:
+        tier = 'medium'
+    ACTIVE_QUALITY = QUALITY_PRESETS[tier].copy()
+    # Update render settings that depend on resolution
+    INTERNAL_WIDTH = ACTIVE_QUALITY['internal_width']
+    INTERNAL_HEIGHT = ACTIVE_QUALITY['internal_height']
+    NUM_RAYS = INTERNAL_WIDTH
+    WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
+    return ACTIVE_QUALITY
 
 
 # Raycasting
