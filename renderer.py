@@ -191,6 +191,9 @@ class Renderer:
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
 
+        from shader_renderer import ShaderRenderer
+        self.shader_renderer = ShaderRenderer(self.w, self.h)
+
         from animation_core import ParticleSystem, CameraShake
         self.physics_particles = ParticleSystem(400)
         self.camera_shake = CameraShake()
@@ -451,6 +454,7 @@ class Renderer:
         self.surface.fill(SKY_COLOR)
         self.frame_counter += 1
         self._emissive = []
+        t_ticks = pygame.time.get_ticks()
 
         pitch_offset = int(player.pitch * self.h)
         half_h = self.h // 2
@@ -465,8 +469,6 @@ class Renderer:
             pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
         if horizon_y > 0:
-            t_ticks = pygame.time.get_ticks()
-
             # Stars (260 stars, local Random(999))
             for s_az, s_el, phase, big in self.stars:
                 az_diff = s_az - player.angle
