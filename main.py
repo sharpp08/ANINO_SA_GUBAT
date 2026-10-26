@@ -14,6 +14,7 @@ from player import Player
 from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
+from radar import Radar
 from audio_synth import audio_mgr
 from cinematic import Cinematic
 from asset_generator import (
@@ -314,6 +315,7 @@ class Game:
         self.renderer.crosshair = crosshair_spr
         self.renderer.clock = self.clock
         self.cinematic     = Cinematic(self.internal)
+        self.radar         = Radar()
 
         self.state   = STATE_MENU
         self.chapter = 1
@@ -428,6 +430,8 @@ class Game:
             elif k == pygame.K_F4:
                 self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
                 self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
+            elif k == pygame.K_m:
+                self.notify("Radar: ON" if self.radar.toggle() else "Radar: OFF")
             elif k == pygame.K_F6:
                 # DEBUG: teleport 4 tiles from the nearest living enemy, facing it
                 alive = self.enemy_manager.get_alive_enemies()
@@ -593,6 +597,8 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                            self.font_tiny, pygame.time.get_ticks())
 
             # Notification
             if self.notif_t > 0:
@@ -603,6 +609,8 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                            self.font_tiny, pygame.time.get_ticks())
             draw_paused(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:
