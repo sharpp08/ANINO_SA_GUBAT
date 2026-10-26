@@ -14,6 +14,7 @@ class GameMap:
         self.height = MAP_SIZE  # 64
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
         self.trees = []
+        self.undergrowth = []
         self.pickups = []
         self.enemies = []
         self.checkpoints = []
@@ -68,6 +69,30 @@ class GameMap:
                     'x': tx, 'y': ty, 'type': t_type,
                     'scale': rng_map.uniform(0.8, 1.4), 'tint': rng_map.randint(200, 255)
                 })
+
+        # Generate dense legitimate forest undergrowth (ferns, mushrooms, rocks, bushes)
+        self.undergrowth = []
+        plant_types = ['fern', 'mushroom', 'rock', 'bush']
+        p_count = UNDERGROWTH_DENSITY
+        while len(self.undergrowth) < p_count:
+            px = rng_map.uniform(2.0, float(self.width - 2))
+            py = rng_map.uniform(2.0, float(self.height - 2))
+            if math.hypot(px - 4.5, py - 4.5) < 3.0:
+                continue
+            if 27 <= px <= 38 and 27 <= py <= 38:
+                continue
+            in_tree = False
+            for t in self.trees:
+                if math.hypot(t['x'] - px, t['y'] - py) < 0.9 * t['scale']:
+                    in_tree = True
+                    break
+            if in_tree:
+                continue
+            p_type = rng_map.choice(plant_types)
+            self.undergrowth.append({
+                'x': px, 'y': py, 'type': p_type,
+                'scale': rng_map.uniform(0.7, 1.3)
+            })
 
         if chapter_num == 1:
             self.player_start = (4.5, 4.5)
