@@ -195,6 +195,11 @@ class Renderer:
         self.physics_particles = ParticleSystem(400)
         self.camera_shake = CameraShake()
 
+        # Wind system for tree/plant animation
+        self.wind_time = 0.0
+        self.wind_strength = 0.3
+        self.wind_gust_timer = 0.0
+
         # Precompute ray angles
         self.fov_rad = math.radians(FOV)
         self.half_fov = self.fov_rad / 2
@@ -420,12 +425,23 @@ class Renderer:
     def render_frame(self, player, game_map, enemies, effects, dt):
         """Render a complete frame with correct pipeline order."""
         t_anim_start = pygame.time.get_ticks()
+        
+        # Update animation systems
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
             self.physics_particles.update(dt)
         if ENABLE_ANIMATIONS and ENABLE_CAMERA_SHAKE:
             shx, shy = self.camera_shake.update(dt)
             if shx != 0 or shy != 0:
                 self.screen_shake = max(self.screen_shake, max(abs(shx), abs(shy)))
+        
+        # Update wind system for natural tree/plant movement
+        if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
+            self.wind_time += dt
+            self.wind_gust_timer -= dt
+            if self.wind_gust_timer <= 0:
+                self.wind_gust_timer = random.uniform(3.0, 8.0)
+                self.wind_strength = random.uniform(0.2, 0.6)
+        
         self.timings['animation'] = pygame.time.get_ticks() - t_anim_start
 
         self.surface.fill(SKY_COLOR)
@@ -475,15 +491,27 @@ class Renderer:
             if -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= horizon_y + 40:
                 self.surface.blit(self.moon_surf, (moon_screen_x - self.moon_size // 2, moon_screen_y - self.moon_size // 2))
 
-            # Clouds
+            # Enhanced atmospheric clouds with layered depth
             cloud_t = t_ticks * 0.0008
-            for c_idx in range(4):
-                cx = int((c_idx * 180 + cloud_t * 25) % (self.w + 300) - 150)
-                cy = int(horizon_y * (0.2 + c_idx * 0.18))
+            for c_idx in range(6):
+                cx = int((c_idx * 180 + cloud_t * (25 if c_idx < 4 else 15)) % (self.w + 300) - 150)
+                cy = int(horizon_y * (0.15 + c_idx * 0.12))
+                alpha = max(30, 80 - c_idx * 15)
                 if 0 <= cy < horizon_y:
                     cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
-                    pygame.draw.ellipse(cloud_surf, (30, 35, 50, 110), (0, 0, 180, 40))
+                    pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
                     self.surface.blit(cloud_surf, (cx, cy))
+
+            # Subtle aurora borealis effect at horizon
+            if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
+                aurora_t = t_ticks * 0.0003
+                for a_idx in range(3):
+                    aurora_x = int((a_idx * 250 + aurora_t * 50) % (self.w + 200) - 100)
+                    aurora_w = 60 + a_idx * 20
+                    aurora_alpha = max(5, 25 - a_idx * 5)
+                    aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
+                    pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+                    self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
         # 2. Floor with exp-squared fog & min 8% ambient
         floor_h = self.h - horizon_y
@@ -495,9 +523,19 @@ class Renderer:
                 dist = (self.h * 0.5) / row_y
                 fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
                 shade = max(0.08, 1.0 - fog)
+                
+                # Enhanced atmospheric coloring with depth-based tinting
                 r = int(FLOOR_COLOR[0] * shade + 24 * (1 - shade))
                 g = int(FLOOR_COLOR[1] * shade + 34 * (1 - shade))
                 b = int(FLOOR_COLOR[2] * shade + 42 * (1 - shade))
+                
+                # Add subtle color variation based on distance
+                if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
+                    color_var = int(math.sin(t_ticks * 0.001 + y * 0.01) * 5)
+                    r = max(0, min(255, r + color_var))
+                    g = max(0, min(255, g + color_var // 2))
+                    b = max(0, min(255, b - color_var // 3))
+                
                 pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
@@ -933,7 +971,16 @@ class Renderer:
                 img = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
                 sh = unit * 1.6 * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
-                sway = math.sin(t_ticks * 0.0012 + obj['x'] * 1.7) * sw * 0.015
+                
+                # Enhanced wind animation with gusts
+                if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
+                    base_wind = math.sin(self.wind_time * 0.8 + obj['x'] * 1.7) * self.wind_strength
+                    gust = math.sin(self.wind_time * 2.5 + obj['y'] * 0.3) * 0.15
+                    tree_stiffness = 0.7 if obj.get('type') == 'balete' else 1.0
+                    sway = (base_wind + gust) * sw * 0.025 / tree_stiffness
+                else:
+                    sway = math.sin(t_ticks * 0.0012 + obj['x'] * 1.7) * sw * 0.015
+                
                 bottom = floor_y
                 self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
 
@@ -941,6 +988,17 @@ class Renderer:
                 img = self.undergrowth_sprites.get(obj.get('type'), self.undergrowth_sprites['bush'])
                 sh = unit * 0.35 * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
+                
+                # React to player proximity
+                if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
+                    dx_plant = obj['x'] - player.x
+                    dy_plant = obj['y'] - player.y
+                    dist_to_player = math.hypot(dx_plant, dy_plant)
+                    if dist_to_player < 2.0:
+                        push_dir = math.atan2(dy_plant, dx_plant) - player.angle
+                        push_amount = (2.0 - dist_to_player) * 3.0
+                        screen_x += math.cos(push_dir) * push_amount
+                
                 self._draw_one(img, screen_x, floor_y, sw, sh, dist, stats)
 
             elif kind == 'pickup':

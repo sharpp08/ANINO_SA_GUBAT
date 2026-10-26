@@ -108,6 +108,19 @@ class Enemy:
         # Spawn position for respawning logic
         self.spawn_x = x
         self.spawn_y = y
+        
+        # Animation springs for organic movement
+        if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
+            from animation_core import SpringScalar
+            self.spring_y = SpringScalar(0.0, 180.0, 18.0)  # Hover/float spring
+            self.spring_x = SpringScalar(0.0, 100.0, 12.0)  # Sway spring
+            self.spring_scale = SpringScalar(1.0, 80.0, 10.0)  # Breathing spring
+            self.stalk_spring = SpringScalar(0.0, 60.0, 8.0)  # Stalking sway
+        else:
+            self.spring_y = None
+            self.spring_x = None
+            self.spring_scale = None
+            self.stalk_spring = None
 
     def distance_to(self, px, py):
         dx = self.x - px
