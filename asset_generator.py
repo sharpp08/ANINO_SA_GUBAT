@@ -357,13 +357,23 @@ def generate_tree_billboard(tree_type='balete', width=64, height=128, seed=42):
             pygame.draw.line(surf, (70, 140, 50), (cx + (fx - cx)//2, fy + (f_end_y - fy)//2), (fx + 5, f_end_y - 8), 2)
 
     elif tree_type == 'pine':
+        # Enhanced pine with layered needles and texture
         pygame.draw.rect(surf, (60, 45, 30), (cx - 5, height - 40, 10, 40))
+        # Textured trunk
+        pygame.draw.line(surf, (45, 35, 25), (cx - 2, height - 35), (cx - 2, height - 5), 2)
+        pygame.draw.line(surf, (45, 35, 25), (cx + 2, height - 35), (cx + 2, height - 5), 2)
         for layer in range(5):
             ly = height - 40 - layer * 20
-            lw = 32 - layer * 5
+            lw = 32 - layer * 6
+            # Main needle polygon
             pts = [(cx, ly - 22), (cx - lw, ly), (cx + lw, ly)]
-            pygame.draw.polygon(surf, (20 + layer * 5, 55 + layer * 10, 30), pts)
-            pygame.draw.polygon(surf, (10, 35, 15), [(cx, ly - 22), (cx - lw, ly), (cx, ly)])
+            base_color = 20 + layer * 4
+            light_color = 55 + layer * 8
+            dark_color = 15 + layer * 3
+            pygame.draw.polygon(surf, (base_color, light_color, dark_color), pts)
+            # Inner highlight for depth
+            highlight_pts = [(cx, ly - 18), (cx - lw // 2, ly - 4), (cx + lw // 2, ly - 4)]
+            pygame.draw.polygon(surf, (base_color + 15, light_color + 20, dark_color + 10), highlight_pts)
 
     else:
         pygame.draw.rect(surf, (60, 55, 50), (cx - 8, height - 80, 16, 75))
@@ -379,20 +389,59 @@ def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42)
     cx, cy = width // 2, height // 2
 
     if plant_type == 'fern':
-        for i in range(5):
-            fx = cx + (i - 2) * 5
-            fy = height - 4
-            pygame.draw.line(surf, (40, 110, 40), (cx, fy), (fx, fy - 18), 2)
-            pygame.draw.line(surf, (60, 150, 50), (fx, fy - 18), (fx - 4, fy - 22), 1)
-            pygame.draw.line(surf, (60, 150, 50), (fx, fy - 18), (fx + 4, fy - 22), 1)
+        # Enhanced fern with more natural branching
+        main_stem = height - 8
+        for branch in range(4):
+            branch_y = main_stem - branch * 6
+            direction = 1 if branch % 2 == 0 else -1
+            pygame.draw.line(surf, (35, 95, 35), (cx, branch_y), (cx + direction * 8, branch_y - 8), 2)
+            for leaf in range(3):
+                leaf_y = branch_y - 2 - leaf * 3
+                pygame.draw.line(surf, (55, 140, 50), 
+                                (cx + direction * 8, branch_y - 8),
+                                (cx + direction * 12, leaf_y), 1)
     elif plant_type == 'mushroom':
-        pygame.draw.rect(surf, (200, 180, 150), (cx - 4, cy, 8, 12))
+        # Enhanced mushroom with gills and texturing
+        pygame.draw.rect(surf, (200, 180, 150), (cx - 5, cy + 2, 10, 14))
+        # Stem details
+        pygame.draw.line(surf, (170, 150, 130), (cx - 2, cy + 2), (cx - 2, cy + 16), 1)
+        pygame.draw.line(surf, (170, 150, 130), (cx + 2, cy + 2), (cx + 2, cy + 16), 1)
+        # Cap texture
+        cap_surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        for i in range(8):
+            angle = math.pi + i * math.pi / 6
+            dx = cx + math.cos(angle) * 12
+            dy = cy + 6 + math.sin(angle) * 12
+            pygame.draw.circle(cap_surf, (190, 60, 60, 40), (int(dx), int(dy)), 3)
+        surf.blit(cap_surf, (0, 0))
         pygame.draw.arc(surf, (220, 40, 40), (cx - 10, cy - 8, 20, 12), 0, math.pi, 6)
     elif plant_type == 'rock':
-        pygame.draw.ellipse(surf, (90, 95, 100), (4, height - 16, 24, 14))
-    else:
-        pygame.draw.circle(surf, (30, 80, 35), (cx - 6, cy + 4), 10)
-        pygame.draw.circle(surf, (40, 100, 45), (cx + 6, cy + 2), 11)
+        # Enhanced rock with depth and texture
+        base = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(base, (90, 95, 100), (2, height - 18, 28, 16))
+        # Add shadow
+        shadow = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (50, 55, 60, 60), (4, height - 14, 24, 12))
+        surf.blit(shadow, (0, 0))
+        surf.blit(base, (0, 0))
+        # Texture details
+        for i in range(5):
+            tx = random.randint(8, 24)
+            ty = random.randint(height - 14, height - 6)
+            pygame.draw.circle(surf, (70, 75, 80), (tx, ty), random.randint(1, 2))
+    else:  # bush
+        # Enhanced bush with layered foliage
+        layers = 3
+        for layer in range(layers):
+            size = 14 - layer * 3
+            offset = layer * 4
+            base_color = (30 + layer * 15, 75 + layer * 15, 35 + layer * 10)
+            top_color = (40 + layer * 15, 95 + layer * 15, 45 + layer * 10)
+            cx_layer = cx + (layer - 1) * 4
+            pygame.draw.circle(surf, base_color, (cx_layer - 5, cy + 4 + offset), size)
+            pygame.draw.circle(surf, top_color, (cx_layer + 5, cy + 2 + offset), size)
+            # Highlight
+            pygame.draw.circle(surf, (80, 130, 70, 80), (cx_layer - 3, cy + offset), size // 2)
 
     return surf
 
