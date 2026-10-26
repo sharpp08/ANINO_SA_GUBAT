@@ -599,8 +599,8 @@ class Renderer:
             self._draw_muzzle_flash()
             self.muzzle_flash -= dt * 8
 
-        # Draw weapon
-        self._draw_weapon(player, dt)
+        # Draw player viewmodel (hands, sleeves, weapon)
+        self._draw_player_viewmodel(player, dt)
 
         # Draw crosshair
         if self.crosshair:
@@ -1136,45 +1136,109 @@ class Renderer:
         except Exception:
             pass
 
-    def _draw_weapon(self, player, dt):
-        """Draw the current weapon sprite at bottom of screen."""
+    def _draw_player_viewmodel(self, player, dt):
+        """Draw immersive first-person procedural hands, forearms, sleeves, and weapon viewmodel."""
         weapon_names = ['bolo', 'shotgun', 'revolver']
-        wname = weapon_names[player.current_weapon]
+        wname = weapon_names[player.current_weapon] if 0 <= player.current_weapon < len(weapon_names) else 'bolo'
 
-        if wname in self.weapon_sprites:
-            sprite = self.weapon_sprites[wname]
-        else:
+        sprite = self.weapon_sprites.get(wname)
+        if sprite is None:
             return
 
-        # Scale weapon sprite
         scale = 3
         sw = sprite.get_width() * scale
         sh = sprite.get_height() * scale
         scaled = pygame.transform.scale(sprite, (sw, sh))
 
-        # Position (shifted to right arm perspective)
-        base_x = self.w // 2 - sw // 3 + 45
-        base_y = self.h - sh + 25
+        # Base screen position (shifted to right arm perspective)
+        base_x = self.w // 2 - sw // 3 + 50
+        base_y = self.h - sh + 30
 
-        # Bob
-        bob_x = int(math.sin(self.weapon_bob) * 3)
-        bob_y = int(abs(math.cos(self.weapon_bob)) * 4)
-        self.weapon_bob += dt * 4 if (abs(player.bob_amount) > 0.5) else 0
+        # Animation calculations
+        t_ticks = pygame.time.get_ticks()
+        is_moving = abs(getattr(player, 'bob_amount', 0)) > 0.1
+        is_sprinting = getattr(player, 'is_sprinting', False)
+
+        # Idle breathing
+        breathe = math.sin(t_ticks * 0.003) * 2.0
+
+        # Walking bob
+        bob_x = int(math.sin(self.weapon_bob) * 4) if is_moving else 0
+        bob_y = int(abs(math.cos(self.weapon_bob)) * 5) if is_moving else int(breathe)
+        if is_moving:
+            self.weapon_bob += dt * 6
+
+        # Sprinting posture
+        sprint_tilt = 0
+        sprint_off_x = 0
+        if is_sprinting:
+            sprint_tilt = -15
+            sprint_off_x = 25
+            bob_y += int(math.sin(t_ticks * 0.015) * 8)
 
         # Recoil
-        recoil_y = int(self.weapon_recoil * 15)
+        recoil_y = int(self.weapon_recoil * 18)
         if self.weapon_recoil > 0:
-            self.weapon_recoil -= dt * 5
+            self.weapon_recoil -= dt * 6
 
         # Reload animation
         reload_offset = 0
+        reload_rot = 0
         if player.reloading:
-            reload_offset = int(math.sin(player.reload_timer * 3) * 30)
+            reload_offset = int(math.sin(player.reload_timer * 4) * 35)
+            reload_rot = -10
 
-        final_x = base_x + bob_x
+        # Damage / Death
+        if not player.alive:
+            reload_offset += 80
+            reload_rot += 30
+        elif player.damage_flash > 0:
+            recoil_y += 10
+
+        final_x = base_x + bob_x + sprint_off_x
         final_y = base_y + bob_y + recoil_y + reload_offset
 
-        self.surface.blit(scaled, (final_x, final_y))
+        # Rotate viewmodel if sprinting, reloading, or dying
+        total_rot = sprint_tilt + reload_rot
+        if total_rot != 0:
+            draw_surf = pygame.transform.rotate(scaled, total_rot)
+        else:
+            draw_surf = scaled
+
+        # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
+        skin_color = (210, 175, 150)
+        sleeve_color = (45, 52, 62)
+        glove_color = (35, 38, 45)
+
+        # Right Hand (main grip)
+        rh_x = final_x + sw // 2
+        rh_y = final_y + sh // 2
+        # Left Hand (support grip)
+        lh_x = final_x + 15
+        lh_y = final_y + sh // 3
+
+        # Draw sleeves extending from bottom corners
+        pygame.draw.polygon(self.surface, sleeve_color, [
+            (self.w + 10, self.h + 10), (self.w - 120, self.h - 40), (self.w - 80, self.h + 10)
+        ])
+        pygame.draw.polygon(self.surface, sleeve_color, [
+            (-10, self.h + 10), (80, self.h - 30), (40, self.h + 10)
+        ])
+
+        # Draw weapon viewmodel surface
+        self.surface.blit(draw_surf, (final_x, final_y))
+
+        # Draw visible gripping hands / knuckles
+        if player.alive:
+            # Right hand knuckles / fingers on grip
+            pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)
+            pygame.draw.circle(self.surface, glove_color, (int(rh_x - 18), int(rh_y + 12)), 6)
+            # Left hand support grip (especially for shotgun / rifle)
+            if wname == 'shotgun':
+                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 10), int(lh_y + 20)), 7)
+                pygame.draw.circle(self.surface, glove_color, (int(lh_x + 8), int(lh_y + 22)), 5)
+            elif wname == 'revolver':
+                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 20), int(lh_y + 25)), 6)
 
     def _draw_muzzle_flash(self):
         """Draw muzzle flash effect."""
