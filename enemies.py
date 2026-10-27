@@ -132,6 +132,29 @@ class Enemy:
     def angle_to(self, px, py):
         return math.atan2(py - self.y, px - self.x)
 
+    def _try_move(self, game_map, new_x, new_y, angle, speed):
+        if not game_map.is_solid(new_x, new_y):
+            self.x = new_x
+            self.y = new_y
+            return True
+        slide_x = self.x + math.cos(angle) * speed
+        if not game_map.is_solid(slide_x, self.y):
+            self.x = slide_x
+            return True
+        slide_y = self.y + math.sin(angle) * speed
+        if not game_map.is_solid(self.x, slide_y):
+            self.y = slide_y
+            return True
+        for offset in (0.6, -0.6, 1.2, -1.2):
+            deflected = angle + offset
+            dx = math.cos(deflected) * speed
+            dy = math.sin(deflected) * speed
+            if not game_map.is_solid(self.x + dx, self.y + dy):
+                self.x += dx
+                self.y += dy
+                return True
+        return False
+
     def update(self, dt, player_x, player_y, game_map):
         """Update enemy AI state machine."""
         if not self.alive:
@@ -154,9 +177,7 @@ class Enemy:
                 move_speed = self.speed * 1.5 * dt
                 new_x = self.x + math.cos(angle) * move_speed
                 new_y = self.y + math.sin(angle) * move_speed
-                if not game_map.is_solid(new_x, new_y):
-                    self.x = new_x
-                    self.y = new_y
+                self._try_move(game_map, new_x, new_y, angle, move_speed)
                 return
 
         if self.shield_debuff:
@@ -217,10 +238,7 @@ class Enemy:
             move_speed = self.speed * 0.3 * dt
             new_x = self.x + math.cos(self.patrol_angle) * move_speed
             new_y = self.y + math.sin(self.patrol_angle) * move_speed
-            if not game_map.is_solid(new_x, new_y):
-                self.x = new_x
-                self.y = new_y
-            else:
+            if not self._try_move(game_map, new_x, new_y, self.patrol_angle, move_speed):
                 self.patrol_angle = random.uniform(0, math.pi * 2)
 
             if dist < self.detect_range:
@@ -236,9 +254,7 @@ class Enemy:
             move_speed = self.speed * 0.6 * dt
             new_x = self.x + math.cos(angle) * move_speed
             new_y = self.y + math.sin(angle) * move_speed
-            if not game_map.is_solid(new_x, new_y):
-                self.x = new_x
-                self.y = new_y
+            self._try_move(game_map, new_x, new_y, angle, move_speed)
 
             if dist < self.attack_range:
                 self.state = EnemyState.ATTACK
@@ -256,25 +272,19 @@ class Enemy:
                 move_speed = self.speed * 0.4 * dt
                 new_x = self.x + math.cos(angle) * move_speed
                 new_y = self.y + math.sin(angle) * move_speed
-                if not game_map.is_solid(new_x, new_y):
-                    self.x = new_x
-                    self.y = new_y
+                self._try_move(game_map, new_x, new_y, angle, move_speed)
             elif dist < desired_dist - 1:
                 move_speed = self.speed * 0.3 * dt
                 new_x = self.x - math.cos(angle) * move_speed
                 new_y = self.y - math.sin(angle) * move_speed
-                if not game_map.is_solid(new_x, new_y):
-                    self.x = new_x
-                    self.y = new_y
+                self._try_move(game_map, new_x, new_y, angle, move_speed)
             else:
                 # Strafe around player
                 strafe_angle = angle + math.pi / 2
                 move_speed = self.speed * 0.3 * dt
                 new_x = self.x + math.cos(strafe_angle) * move_speed
                 new_y = self.y + math.sin(strafe_angle) * move_speed
-                if not game_map.is_solid(new_x, new_y):
-                    self.x = new_x
-                    self.y = new_y
+                self._try_move(game_map, new_x, new_y, angle, move_speed)
 
             self.stalk_timer += dt
             if self.stalk_timer > 5.0 or dist < self.attack_range * 1.5:
@@ -291,9 +301,7 @@ class Enemy:
                 move_speed = self.speed * dt
                 new_x = self.x + math.cos(angle) * move_speed
                 new_y = self.y + math.sin(angle) * move_speed
-                if not game_map.is_solid(new_x, new_y):
-                    self.x = new_x
-                    self.y = new_y
+                self._try_move(game_map, new_x, new_y, angle, move_speed)
 
             if dist > self.detect_range * 2:
                 self.state = EnemyState.IDLE
@@ -314,9 +322,7 @@ class Enemy:
             move_speed = self.speed * dt
             new_x = self.x + math.cos(angle) * move_speed
             new_y = self.y + math.sin(angle) * move_speed
-            if not game_map.is_solid(new_x, new_y):
-                self.x = new_x
-                self.y = new_y
+            self._try_move(game_map, new_x, new_y, angle, move_speed)
 
             if self.state_timer <= 0 or dist > self.detect_range * 2:
                 if self.type == 'aswang':

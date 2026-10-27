@@ -5,7 +5,7 @@ Game Settings and Configuration (Enhanced - Phases 1 to 5)
 import json
 import os
 
-BUILD_VERSION = "BUILD 2026.10.25-2205"
+BUILD_VERSION = "BUILD 2026.10.27-FOREST"
 
 # Display
 SCREEN_WIDTH = 1280
@@ -254,6 +254,7 @@ WALL_WOOD = 2
 WALL_BAMBOO = 3
 WALL_BALETE = 4
 DOOR = 5
+WATER = 6
 PICKUP_HEALTH = 10
 PICKUP_AMMO_SHOTGUN = 11
 PICKUP_AMMO_REVOLVER = 12

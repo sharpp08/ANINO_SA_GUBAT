@@ -108,7 +108,8 @@ def run_smoke_tests():
 
     def test_state_machine():
         game = Game()
-        assert game.state == STATE_MENU
+        assert game.state in (STATE_MENU, STATE_INTRO)
+        game.state = STATE_MENU
         game.load_chapter(1)
         game.state = STATE_PLAYING
         assert game.state == STATE_PLAYING

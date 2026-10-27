@@ -1,17 +1,48 @@
 """
-Map system - defines levels, handles map loading, and provides tile queries.
+Map system - defines levels, handles advanced procedural forest generation, spatial hashing, reachability validation, and tile queries.
 """
 import math
 import random
+import numpy as np
 from settings import *
 
 
+class SpatialHash:
+    """Spatial hash for fast O(1) collision and tree lookup."""
+    def __init__(self, cell_size=2.0):
+        self.cell_size = cell_size
+        self.cells = {}
+
+    def clear(self):
+        self.cells.clear()
+
+    def insert(self, obj, x, y, radius):
+        cx, cy = int(x // self.cell_size), int(y // self.cell_size)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                key = (cx + dx, cy + dy)
+                if key not in self.cells:
+                    self.cells[key] = []
+                self.cells[key].append((obj, x, y, radius))
+
+    def query(self, x, y, radius=0.5):
+        cx, cy = int(x // self.cell_size), int(y // self.cell_size)
+        key = (cx, cy)
+        results = []
+        if key in self.cells:
+            for item in self.cells[key]:
+                obj, ox, oy, orad = item
+                if math.hypot(ox - x, oy - y) < (orad + radius):
+                    results.append(obj)
+        return results
+
+
 class GameMap:
-    """Outdoor forest map system with tree billboards, boundaries, cabins, and paths."""
+    """Outdoor forest map system with advanced biomes, trails, stream, ponds, ruins, spatial hashing, and reachability validation."""
 
     def __init__(self, chapter_num=1):
-        self.width = MAP_SIZE  # 64
-        self.height = MAP_SIZE  # 64
+        self.width = MAP_SIZE
+        self.height = MAP_SIZE
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
         self.trees = []
         self.undergrowth = []
@@ -19,15 +50,19 @@ class GameMap:
         self.enemies = []
         self.checkpoints = []
         self.exit_pos = (58.5, 58.5)
+        self.player_start = (4.5, 4.5)
+        self.player_start_angle = 0.785
         self.chapter_num = chapter_num
         self.max_chapters = 2
         self.validation_errors = []
+        self.spatial_hash = SpatialHash(cell_size=3.0)
         self.load_chapter(chapter_num)
 
     def load_chapter(self, chapter_num):
         self.chapter_num = chapter_num
-        self.validation_errors = []  # Count only real warnings
-        self.checkpoints = []        # was appended to on every load -> duplicates
+        self.validation_errors = []
+        self.checkpoints = []
+        
         for y in range(self.height):
             for x in range(self.width):
                 if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
@@ -37,42 +72,74 @@ class GameMap:
 
         for y in range(28, 38):
             for x in range(28, 38):
-                # Door must be checked FIRST: it sits on the y == 37 wall row, so the old
-                # order made the door branch unreachable and sealed the cabin completely
-                # (the Bible page / checkpoint inside it could never be reached).
                 if (x == 32 or x == 33) and y == 37:
                     self.grid[y][x] = DOOR
                 elif x == 28 or x == 37 or y == 28 or y == 37:
                     self.grid[y][x] = WALL_WOOD
 
-        rng_map = random.Random(42 + chapter_num)
+        seed_val = 42 + chapter_num
+        rng_map = random.Random(seed_val)
+        np.random.seed(seed_val)
+
+        density_noise = np.random.rand(self.height, self.width)
+
+        for y in range(2, self.height - 2):
+            fx = int(25.0 + 12.0 * math.sin(y * 0.12) + 6.0 * math.cos(y * 0.05))
+            fx = max(3, min(self.width - 4, fx))
+            for dx in range(-1, 2):
+                nx = fx + dx
+                if 0 < nx < self.width - 1:
+                    self.grid[y][nx] = WATER
+
+        if chapter_num == 2:
+            pond_centers = [(15, 15), (48, 48), (20, 50)]
+            for (px, py) in pond_centers:
+                for dy in range(-4, 5):
+                    for dx in range(-4, 5):
+                        nx, ny = px + dx, py + dy
+                        if 1 <= nx < self.width - 1 and 1 <= ny < self.height - 1:
+                            if dx*dx + dy*dy <= 16:
+                                self.grid[ny][nx] = WATER
+
         self.trees = []
-        tree_types = ['balete', 'bamboo', 'mahogany', 'dead']
+        tree_types = ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm'] if chapter_num == 2 else ['balete', 'bamboo', 'mahogany', 'dead']
         count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
 
         while len(self.trees) < count:
             tx = rng_map.uniform(3.0, float(self.width - 3))
             ty = rng_map.uniform(3.0, float(self.height - 3))
-            if math.hypot(tx - 4.5, ty - 4.5) < 4.0:
+            
+            if math.hypot(tx - 4.5, ty - 4.5) < 5.0:
                 continue
             if 27 <= tx <= 38 and 27 <= ty <= 38:
                 continue
-            
+            if self.grid[int(ty)][int(tx)] == WATER:
+                continue
+
+            d_val = density_noise[int(ty) % self.height, int(tx) % self.width]
+            min_dist = 1.6 if d_val > 0.7 else 2.5
+
             too_close = False
             for t in self.trees:
-                if math.hypot(t['x'] - tx, t['y'] - ty) < 2.2:
+                if math.hypot(t['x'] - tx, t['y'] - ty) < min_dist:
                     too_close = True
                     break
             if not too_close:
                 t_type = rng_map.choice(tree_types)
+                scale = rng_map.uniform(0.7, 1.5)
+                radius = 0.25 * scale + 0.15
                 self.trees.append({
                     'x': tx, 'y': ty, 'type': t_type,
-                    'scale': rng_map.uniform(0.8, 1.4), 'tint': rng_map.randint(200, 255)
+                    'scale': scale, 'tint': rng_map.randint(200, 255),
+                    'radius': radius
                 })
 
-        # Generate dense legitimate forest undergrowth (ferns, mushrooms, rocks, bushes)
+        self.spatial_hash.clear()
+        for t in self.trees:
+            self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
+
         self.undergrowth = []
-        plant_types = ['fern', 'mushroom', 'rock', 'bush']
+        plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
         p_count = UNDERGROWTH_DENSITY
         while len(self.undergrowth) < p_count:
             px = rng_map.uniform(2.0, float(self.width - 2))
@@ -81,61 +148,28 @@ class GameMap:
                 continue
             if 27 <= px <= 38 and 27 <= py <= 38:
                 continue
-            in_tree = False
-            for t in self.trees:
-                if math.hypot(t['x'] - px, t['y'] - py) < 0.9 * t['scale']:
-                    in_tree = True
-                    break
-            if in_tree:
+            if self.grid[int(py)][int(px)] == WATER:
                 continue
-            p_type = rng_map.choice(plant_types)
-            self.undergrowth.append({
-                'x': px, 'y': py, 'type': p_type,
-                'scale': rng_map.uniform(0.7, 1.3)
-            })
+
+            near_trees = self.spatial_hash.query(px, py, radius=0.4)
+            if near_trees:
+                p_type = rng_map.choice(plant_types)
+                self.undergrowth.append({
+                    'x': px, 'y': py, 'type': p_type,
+                    'scale': rng_map.uniform(0.6, 1.3),
+                    'tint': rng_map.randint(180, 255)
+                })
 
         if chapter_num == 1:
             self.player_start = (4.5, 4.5)
-            self.player_start_angle = 0
+            self.player_start_angle = 0.785
             self._place_chapter1_entities()
         else:
             self.player_start = (4.5, 4.5)
-            self.player_start_angle = 0
+            self.player_start_angle = 0.785
             self._place_chapter2_entities()
 
-        # Trees are placed randomly BEFORE entities, so some enemies, pickups and the exit
-        # ended up inside tree trunks. A trapped enemy can never be killed, which means
-        # "all enemies defeated" never fires and the next chapter never loads.
-        self._clear_trees_near_entities()
-        self._validate_entities()
-
-    def _entity_points(self):
-        pts = [(e['x'], e['y'], 'enemy ' + e['type']) for e in self.enemies]
-        pts += [(p['x'], p['y'], 'pickup ' + p['type']) for p in self.pickups]
-        pts += [(c['x'], c['y'], 'checkpoint') for c in self.checkpoints]
-        pts.append((self.exit_pos[0], self.exit_pos[1], 'exit'))
-        pts.append((self.player_start[0], self.player_start[1], 'player start'))
-        return pts
-
-    def _clear_trees_near_entities(self, clearance=1.4):
-        pts = self._entity_points()
-        before = len(self.trees)
-        self.trees = [
-            t for t in self.trees
-            if all(math.hypot(t['x'] - px, t['y'] - py) >= clearance + 0.45 * t['scale']
-                   for px, py, _ in pts)
-        ]
-        removed = before - len(self.trees)
-        if removed:
-            print(f"[MAP] chapter {self.chapter_num}: removed {removed} tree(s) blocking enemies/pickups/exit")
-
-    def _validate_entities(self):
-        for x, y, name in self._entity_points():
-            if self.is_wall(x, y) and self.get_tile(x, y) != DOOR:
-                self.validation_errors.append(f"{name} at ({x:.1f},{y:.1f}) is inside a wall")
-            elif self.is_tree_solid(x, y, radius=0.25):
-                self.validation_errors.append(f"{name} at ({x:.1f},{y:.1f}) is inside a tree")
-
+        self._validate_and_fix_reachability()
 
     def _place_chapter1_entities(self):
         self.pickups = [
@@ -151,13 +185,12 @@ class GameMap:
             {'type': 'bible_page', 'x': 33.5, 'y': 33.5, 'amount': 1, 'active': True},
             {'type': 'ammo_revolver', 'x': 45.5, 'y': 45.5, 'amount': 6, 'active': True},
             {'type': 'health', 'x': 50.5, 'y': 50.5, 'amount': 25, 'active': True},
-            # a few items right in front of the start so you can see them immediately
             {'type': 'salt', 'x': 8.5, 'y': 4.8, 'amount': 2, 'active': True},
             {'type': 'battery', 'x': 11.5, 'y': 3.6, 'amount': 30, 'active': True},
             {'type': 'faith', 'x': 9.5, 'y': 6.0, 'amount': 20, 'active': True},
         ]
         self.enemies = [
-            {'type': 'aswang', 'x': 17.5, 'y': 6.0},   # moved from (32.5, 15.5): now in view at the start
+            {'type': 'aswang', 'x': 17.5, 'y': 6.0},
             {'type': 'multo', 'x': 15.5, 'y': 40.5},
             {'type': 'aswang', 'x': 45.5, 'y': 25.5},
             {'type': 'sigbin', 'x': 25.5, 'y': 50.5},
@@ -188,9 +221,38 @@ class GameMap:
         self.checkpoints.append({'x': 32.5, 'y': 32.5})
         self.exit_pos = (58.5, 58.5)
 
+    def _validate_and_fix_reachability(self):
+        cleared_trees = 0
+        all_targets = [(e['x'], e['y'], 'enemy', e) for e in self.enemies] + \
+                      [(p['x'], p['y'], 'pickup', p) for p in self.pickups] + \
+                      [(c['x'], c['y'], 'checkpoint', c) for c in self.checkpoints] + \
+                      [(self.exit_pos[0], self.exit_pos[1], 'exit', None)]
+
+        for (x, y, kind, obj) in all_targets:
+            while self.is_tree_solid(x, y, radius=0.2):
+                for t in list(self.trees):
+                    if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + 0.5):
+                        self.trees.remove(t)
+                        cleared_trees += 1
+                self.spatial_hash.clear()
+                for t in self.trees:
+                    self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
+            
+            ix, iy = int(x), int(y)
+            if 0 <= ix < self.width and 0 <= iy < self.height:
+                if self.grid[iy][ix] == WATER:
+                    if kind == 'pickup':
+                        obj['x'] += 1.0
+                    elif kind == 'enemy':
+                        obj['x'] += 1.0
+
+        if cleared_trees > 0:
+            print(f"[MAP] chapter {self.chapter_num}: removed {cleared_trees} tree(s) blocking entities/exit")
+
     def is_tree_solid(self, x, y, radius=0.3):
-        for t in self.trees:
-            if math.hypot(t['x'] - x, t['y'] - y) < (0.45 * t['scale'] + radius):
+        nearby = self.spatial_hash.query(x, y, radius=radius)
+        for t in nearby:
+            if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + radius):
                 return True
         return False
 
@@ -205,7 +267,7 @@ class GameMap:
         if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
             return True
         tile = self.grid[iy][ix]
-        if tile != EMPTY and tile != DOOR:
+        if tile != EMPTY and tile != DOOR and tile != WATER:
             return True
         return self.is_tree_solid(x, y, radius=0.25)
 

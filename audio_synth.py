@@ -103,6 +103,20 @@ class SoundManager:
         sting_mono = (np.sin(2 * np.pi * 40 * ts) * 0.6 + np.sin(2 * np.pi * 80 * ts) * 0.3) * np.exp(-ts * 2.5) + (np.random.randn(len(ts)) * 0.25 * np.exp(-ts * 4))
         self.sounds['title_sting'] = self._generate_sound(self._apply_reverb(sting_mono, delay_samples=8820, decay=0.4))
 
+        # Procedural forest ambience (crickets, owl, rustle)
+        tcrik = np.linspace(0, 1.5, int(rate * 1.5), endpoint=False)
+        cricket_mono = (np.sin(2 * np.pi * 4800 * tcrik) * 0.2 * (np.sin(2 * np.pi * 25 * tcrik) > 0)) * np.exp(-tcrik * 0.5)
+        self.sounds['crickets'] = self._generate_sound(cricket_mono)
+
+        towl = np.linspace(0, 1.2, int(rate * 1.2), endpoint=False)
+        owl_mono = (np.sin(2 * np.pi * 380 * towl) * 0.3 + np.sin(2 * np.pi * 300 * towl) * 0.2) * np.sin(towl * math.pi / 1.2)
+        self.sounds['owl'] = self._generate_sound(self._apply_reverb(owl_mono, delay_samples=4410, decay=0.4))
+
+        trustle = np.linspace(0, 1.0, int(rate * 1.0), endpoint=False)
+        rustle_mono = np.random.randn(len(trustle)) * 0.2 * np.exp(-trustle * 3.0)
+        self.sounds['rustle'] = self._generate_sound(self._apply_lowpass(rustle_mono, alpha=0.5))
+
+
     def start_intro_ambience(self):
         self.play('intro_wind', 0.5)
 
