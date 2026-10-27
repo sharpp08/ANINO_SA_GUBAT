@@ -280,7 +280,7 @@ class Game:
     def __init__(self):
         pygame.init()
         print(f"[{BUILD_VERSION}] Starting ANINO SA GUBAT...")
-        flags = (pygame.FULLSCREEN | pygame.SCALED) if FULLSCREEN else 0
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
@@ -331,7 +331,7 @@ class Game:
     def toggle_fullscreen(self):
         global FULLSCREEN
         FULLSCREEN = not FULLSCREEN
-        flags = (pygame.FULLSCREEN | pygame.SCALED) if FULLSCREEN else 0
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         self.notify("Fullscreen: ON" if FULLSCREEN else "Fullscreen: OFF")
 
