@@ -577,8 +577,17 @@ class Game:
                 try:
                     from jumpscare import get_jumpscare_manager
                     jumpscare_mgr = get_jumpscare_manager()
-                    stun_duration = jumpscare_mgr.trigger()
-                    # Stun player for the duration (if still alive or just died)
+                    attack_enemy = None
+                    min_d = 999.0
+                    for e in self.enemy_manager.enemies:
+                        if e.alive and e.can_attack(p.x, p.y):
+                            d = e.distance_to(p.x, p.y)
+                            if d < min_d:
+                                min_d = d
+                                attack_enemy = e
+                    etype = attack_enemy.type if attack_enemy else 'aswang'
+                    dist = min_d if min_d < 999.0 else 0.0
+                    stun_duration = jumpscare_mgr.trigger(enemy_type=etype, distance=dist)
                     if stun_duration:
                         p.stunned = True
                         p.stun_timer = stun_duration

@@ -191,6 +191,12 @@ class Renderer:
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
 
+        try:
+            from anim_integration import get_enemy_animator
+            self.enemy_animator = get_enemy_animator()
+        except Exception:
+            self.enemy_animator = None
+
         from shader_renderer import ShaderRenderer
         self.shader_renderer = ShaderRenderer(self.w, self.h)
 
@@ -448,6 +454,8 @@ class Renderer:
             shx, shy = self.camera_shake.update(dt)
             if shx != 0 or shy != 0:
                 self.screen_shake = max(self.screen_shake, max(abs(shx), abs(shy)))
+        if ENABLE_ANIMATIONS and getattr(self, 'enemy_animator', None) is not None:
+            self.enemy_animator.update_all(enemies, dt)
         
         # Update wind system for natural tree/plant movement
         if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
@@ -1082,50 +1090,59 @@ class Renderer:
             img = pygame.Surface((32, 32), pygame.SRCALPHA)
             pygame.draw.rect(img, (200, 50, 50), (4, 4, 24, 24))
 
+        # ─── Extreme Procedural Horror Animation & Weight Physics ─────────────────────
         size_mul, float_mul = ENEMY_SIZE.get(etype, (1.0, 0.0))
         phase = (id(enemy) % 628) / 100.0
-
         is_crawl = (anim_state in ('crawl', 'crouch', 'stalk'))
         is_atk = (anim_state in ('attack', 'lunge'))
         is_dead = (anim_state == 'death')
         is_hov = (anim_state in ('hover', 'float')) or (float_mul > 0 and anim_state == 'idle')
         is_run = (anim_state in ('run', 'sprint'))
 
-        # ─── Extreme Procedural Horror Animation & Weight Physics ─────────────────────
-        breath_freq = 0.003 if etype in ('kapre', 'tikbalang') else (0.006 if etype in ('sigbin', 'aswang') else 0.004)
-        breathe = 1.0 + 0.035 * math.sin(t_ticks * breath_freq + phase)
-        
-        if is_dead:
-            breathe = 0.28
-        elif is_atk:
-            attack_pulse = math.sin(t_ticks * 0.02 + phase)
-            breathe *= (1.18 + 0.08 * attack_pulse)
-        elif is_run:
-            gait = abs(math.sin(t_ticks * 0.015 + phase))
-            breathe *= (1.0 + 0.06 * gait)
-        elif is_crawl:
-            breathe *= 0.72 + 0.04 * math.sin(t_ticks * 0.008 + phase)
-        elif is_hov:
-            breathe *= 1.0 + 0.04 * math.sin(t_ticks * 0.0035 + phase)
+        breathe = 1.0
+        sway = 0.0
+        hover = 0.0
+        jitter = 0.0
+
+        if getattr(self, 'enemy_animator', None) is not None and not is_dead:
+            tr = self.enemy_animator.transform(enemy, t_ticks * 0.001)
+            breathe = tr['breathe']
+            sway = tr['sway'] * unit * 0.05
+            hover = tr['hover'] * unit
+            jitter = tr['jitter']
+        else:
+            breath_freq = 0.003 if etype in ('kapre', 'tikbalang') else (0.006 if etype in ('sigbin', 'aswang') else 0.004)
+            phase = (id(enemy) % 628) / 100.0
+            breathe = 1.0 + 0.035 * math.sin(t_ticks * breath_freq + phase)
+            if is_dead:
+                breathe = 0.28
+            elif is_atk:
+                attack_pulse = math.sin(t_ticks * 0.02 + phase)
+                breathe *= (1.18 + 0.08 * attack_pulse)
+            elif is_run:
+                gait = abs(math.sin(t_ticks * 0.015 + phase))
+                breathe *= (1.0 + 0.06 * gait)
+            elif is_crawl:
+                breathe *= 0.72 + 0.04 * math.sin(t_ticks * 0.008 + phase)
+            elif is_hov:
+                breathe *= 1.0 + 0.04 * math.sin(t_ticks * 0.0035 + phase)
+
+            sway_amp = 0.05 if is_run else (0.025 if is_crawl else 0.035)
+            sway = math.sin(t_ticks * 0.004 + phase) * sw * sway_amp
+            if is_atk:
+                sway += math.sin(t_ticks * 0.03) * 3.0 + random.uniform(-1.0, 1.0)
+            elif is_run:
+                sway += math.sin(t_ticks * 0.02) * 2.0
+
+            if is_hov or float_mul > 0:
+                hover = unit * (float_mul + 0.07 * math.sin(t_ticks * 0.0035 + phase))
+            elif is_crawl:
+                hover = -unit * 0.18
+            elif is_dead:
+                hover = -unit * 0.25
 
         sh = unit * (0.28 if is_dead else (0.52 if is_crawl else 0.85)) * size_mul * breathe
         sw = sh * img.get_width() / img.get_height()
-
-        sway_amp = 0.05 if is_run else (0.025 if is_crawl else 0.035)
-        sway = math.sin(t_ticks * 0.004 + phase) * sw * sway_amp
-        if is_atk:
-            sway += math.sin(t_ticks * 0.03) * 3.0 + random.uniform(-1.0, 1.0)
-        elif is_run:
-            sway += math.sin(t_ticks * 0.02) * 2.0
-
-        hover = 0.0
-        if is_hov or float_mul > 0:
-            hover = unit * (float_mul + 0.07 * math.sin(t_ticks * 0.0035 + phase))
-        elif is_crawl:
-            hover = -unit * 0.18
-        elif is_dead:
-            hover = -unit * 0.25
-
         bottom = floor_y - hover
 
         if enemy.hit_flash > 0 or enemy.bound or anim_state == 'stagger':
