@@ -551,6 +551,21 @@ class Game:
 
         # Enemy AI with stealth sensing and sanity proximity
         self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)
+        
+        # Chase scream audio: trigger scream for enemies that entered chase state
+        for enemy in self.enemy_manager.enemies:
+            if enemy.alive and enemy.just_entered_chase:
+                enemy.just_entered_chase = False
+                try:
+                    audio_mgr.play_spatial(
+                        'creature_call',
+                        p.x, p.y, p.angle,
+                        enemy.x, enemy.y,
+                        base_volume=0.8,
+                        max_dist=enemy.detect_range * 1.5
+                    )
+                except Exception:
+                    pass
 
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
@@ -562,18 +577,25 @@ class Game:
                 try:
                     from jumpscare import get_jumpscare_manager
                     jumpscare_mgr = get_jumpscare_manager()
-                    jumpscare_mgr.trigger()
+                    stun_duration = jumpscare_mgr.trigger()
+                    # Stun player for the duration (if still alive or just died)
+                    if stun_duration:
+                        p.stunned = True
+                        p.stun_timer = stun_duration
                 except Exception:
                     pass
         
-        # Jumpscare sequence update (runs ~2.6s after trigger)
+        # Jumpscare sequence update (runs ~1.2s after trigger)
         try:
             from jumpscare import get_jumpscare_manager
             jumpscare_mgr = get_jumpscare_manager()
             jumpscare_mgr.update(dt)
+            # Keep player stunned during jumpscare playback
+            if jumpscare_mgr.is_playing():
+                p.stunned = True
+                p.stun_timer = 0.8
         except Exception:
             pass
-            self.renderer.trigger_screen_shake(6)
 
         # Auto-collect pickups
         for pickup in self.game_map.get_nearby_pickups(p.x, p.y):

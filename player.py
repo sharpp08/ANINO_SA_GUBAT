@@ -23,6 +23,8 @@ class Player:
         self.sanity = SANITY_MAX
         self.stamina = STAMINA_MAX
         self.noise_level = 0.0
+        self.stunned = False
+        self.stun_timer = 0.0
 
         # Weapons: 0=bolo, 1=shotgun, 2=revolver
         self.current_weapon = 0
@@ -78,6 +80,13 @@ class Player:
     def update(self, dt, keys, mouse_dx, mouse_dy, game_map):
         """Update player state each frame."""
         if not self.alive:
+            return
+
+        # Stunned - cannot act
+        if self.stunned:
+            self.stun_timer -= dt
+            if self.stun_timer <= 0:
+                self.stunned = False
             return
 
         # Mouse look

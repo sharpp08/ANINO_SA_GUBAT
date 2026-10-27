@@ -112,6 +112,9 @@ class Enemy:
         self.anim_time = random.random() * 10.0
         self.anim_frame = random.randint(0, 5)  # Current frame in 6-frame animation
         
+        # Chase scream: set True on passive→chase transition, consumed by main loop
+        self.just_entered_chase = False
+        
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
             from animation_core import SpringScalar
@@ -194,6 +197,8 @@ class Enemy:
 
         dist = self.distance_to(player_x, player_y)
         self.state_timer -= dt
+        # Reset flag at start of each frame so it's only set on actual transition
+        prev_state = self.state
 
         self.anim_time += dt
         
@@ -233,9 +238,11 @@ class Enemy:
                 if self.type == 'aswang':
                     self.state = EnemyState.STALK
                     self.state_timer = 3.0 + random.random() * 2
+                    self.just_entered_chase = True
                 else:
                     self.state = EnemyState.INVESTIGATE
                     self.state_timer = 2.0
+                    self.just_entered_chase = True
             elif self.state_timer <= 0:
                 self.state = EnemyState.PATROL
                 self.patrol_angle = random.uniform(0, math.pi * 2)
@@ -251,6 +258,7 @@ class Enemy:
             if dist < self.detect_range:
                 self.state = EnemyState.INVESTIGATE
                 self.state_timer = 1.5
+                self.just_entered_chase = True
             elif self.state_timer <= 0:
                 self.state = EnemyState.IDLE
                 self.state_timer = 2.0 + random.random() * 3
@@ -266,6 +274,7 @@ class Enemy:
             if dist < self.attack_range:
                 self.state = EnemyState.ATTACK
                 self.state_timer = 0.5
+                self.just_entered_chase = True
             elif dist > self.detect_range * 1.5:
                 self.state = EnemyState.IDLE
                 self.state_timer = 3.0
@@ -298,6 +307,7 @@ class Enemy:
                 self.state = EnemyState.ATTACK if dist < self.attack_range * 2 else EnemyState.INVESTIGATE
                 self.stalk_timer = 0
                 self.state_timer = 0.5
+                self.just_entered_chase = True
 
         elif self.state == EnemyState.ATTACK:
             angle = self.angle_to(player_x, player_y)
@@ -318,11 +328,13 @@ class Enemy:
             if self.health < self.max_health * 0.25 and self.type in ('aswang', 'sigbin'):
                 self.state = EnemyState.RETREAT
                 self.state_timer = 3.0
-
         elif self.state == EnemyState.RECOVER:
             if self.state_timer <= 0:
+                prev_state = self.state
                 self.state = EnemyState.ATTACK if dist < self.detect_range else EnemyState.IDLE
                 self.state_timer = 1.0
+                if prev_state != self.state:
+                    self.just_entered_chase = True
 
         elif self.state == EnemyState.RETREAT:
             angle = self.angle_to(player_x, player_y) + math.pi
