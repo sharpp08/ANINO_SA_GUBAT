@@ -246,6 +246,9 @@ FOG_DISTANCE = 35.0
 BEAM_RADIUS = 0.45
 ENEMY_EYE_GLOW = True
 
+# Custom Enemy Sprites
+USE_CUSTOM_ENEMY_SPRITES = True
+
 
 # Map tiles
 EMPTY = 0

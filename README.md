@@ -384,6 +384,35 @@ The debug overlay is on by default (`DEBUG_OVERLAY = True`). The console also pr
 
 ---
 
+## Asset System
+
+The game generates all textures and sprites procedurally at runtime using Python and NumPy, so no external asset files are required to run the game. However, you can provide custom PNG sprites for enemies if you want to use AI-generated artwork.
+
+### Enemy Sprites
+
+Custom enemy sprites go in `assets/sprites/enemies/` as 64×64 or larger PNGs with transparency:
+
+| Enemy Type | File Name Pattern | States Mapped |
+|---|---|---|
+| aswang, manananggal, tikbalang, kapre, white_lady, multo, sigbin | `<type>_idle.png` | idle, walk, stalk, crawl, crouch, hover, stagger, death |
+| aswang, manananggal, tikbalang, kapre, white_lady, multo, sigbin | `<type>_attack.png` | attack, lunge, run, sprint |
+
+- If a PNG file exists, it will be loaded, scaled to 64×64 (nearest-neighbor for crisp pixel art), and passed through the same horror rim effect as procedural sprites.
+- The `death` state uses the idle image flattened (squeezed to ~30% height) and tinted darker.
+- If no PNG is found, the game falls back to the procedural generator.
+- Toggle with `USE_CUSTOM_ENEMY_SPRITES = True/False` in `settings.py`.
+- Custom sprites are cached after first load to avoid repeated I/O.
+
+### Other Assets
+
+All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) remain procedurally generated:
+
+- `assets/textures/` — wall and floor textures (generated per session)
+- `assets/sprites/` — weapons and pickups (generated per session)
+- `assets/cache/` — cached world ground texture (`world_ground.npy`)
+
+---
+
 ## Technical Notes
 
 - **Raycasting:** DDA (Digital Differential Analyzer) algorithm for wall columns, with fish-eye correction.
