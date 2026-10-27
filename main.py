@@ -319,10 +319,6 @@ class Game:
 
         self.state   = STATE_MENU
         self.intro_to_menu = False      # True: after the intro, go back to the menu
-        if load_settings().get('enable_intro', True):
-            self.state = STATE_INTRO    # play the cinematic automatically at launch
-            self.intro_to_menu = True
-            self.cinematic.reset()
         self.chapter = 1
         self.level_enemy_total = 0
         self.effects = []
