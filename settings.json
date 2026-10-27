@@ -16,7 +16,7 @@
   "debug_overlay": true,
   "enable_animations": true,
   "enable_spring_physics": true,
-  "enable_particle_physics": true,
+  "enable_particle_physics": false,
   "enable_verlet_ropes": true,
   "enable_camera_shake": true,
   "enable_weapon_inertia": true,
