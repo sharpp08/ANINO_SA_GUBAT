@@ -14,7 +14,7 @@ INTERNAL_WIDTH = 640
 INTERNAL_HEIGHT = 360
 FPS = 60
 TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
-FULLSCREEN = False
+FULLSCREEN = True
 
 # Quality Tiers & Graphics Pipeline
 QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'

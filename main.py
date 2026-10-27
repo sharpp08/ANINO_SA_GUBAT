@@ -280,7 +280,7 @@ class Game:
     def __init__(self):
         pygame.init()
         print(f"[{BUILD_VERSION}] Starting ANINO SA GUBAT...")
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        flags = (pygame.FULLSCREEN | pygame.SCALED) if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
@@ -318,6 +318,11 @@ class Game:
         self.radar         = Radar()
 
         self.state   = STATE_MENU
+        self.intro_to_menu = False      # True: after the intro, go back to the menu
+        if load_settings().get('enable_intro', True):
+            self.state = STATE_INTRO    # play the cinematic automatically at launch
+            self.intro_to_menu = True
+            self.cinematic.reset()
         self.chapter = 1
         self.level_enemy_total = 0
         self.effects = []
@@ -326,7 +331,7 @@ class Game:
     def toggle_fullscreen(self):
         global FULLSCREEN
         FULLSCREEN = not FULLSCREEN
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        flags = (pygame.FULLSCREEN | pygame.SCALED) if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         self.notify("Fullscreen: ON" if FULLSCREEN else "Fullscreen: OFF")
 
@@ -632,13 +637,20 @@ class Game:
             draw_win(self.internal, self.font_lg, self.font_sm, self.chapter)
 
         # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
-        if hasattr(self.renderer, 'shader_renderer') and self.renderer.shader_renderer.enabled:
+        # Only during gameplay, and the result is copied back into the SAME surface:
+        # the renderer and cinematic hold a reference to self.internal, so it must
+        # never be rebound to a new Surface object.
+        if (self.state in (STATE_PLAYING, STATE_PAUSED)
+                and hasattr(self.renderer, 'shader_renderer')
+                and self.renderer.shader_renderer.enabled):
             time_sec = pygame.time.get_ticks() / 1000.0
             fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
             sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
-            self.internal = self.renderer.shader_renderer.render(
+            shaded = self.renderer.shader_renderer.render(
                 self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
             )
+            if shaded is not self.internal:
+                self.internal.blit(shaded, (0, 0))
 
         # Scale to screen
         pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
@@ -655,6 +667,7 @@ class Game:
             mouse_dx = 0
             mouse_dy = 0
 
+            prev_state = self.state
             events = pygame.event.get()
             for event in events:
                 if event.type == pygame.QUIT:
@@ -666,6 +679,7 @@ class Game:
                             self.start_new_game()
                         elif event.key == pygame.K_i:
                             self.state = STATE_INTRO
+                            self.intro_to_menu = True
                             self.cinematic.reset()
                             safe_set_relative_mouse(False)
                         elif event.key == pygame.K_l:
@@ -718,12 +732,20 @@ class Game:
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
 
+            entered_intro = (prev_state != STATE_INTRO and self.state == STATE_INTRO)
+
             if self.state == STATE_INTRO:
-                finished = self.cinematic.update(dt, events)
+                # The key that STARTED the intro (Enter / I) must not also skip it.
+                intro_events = [] if entered_intro else events
+                finished = self.cinematic.update(dt, intro_events)
                 if finished:
-                    self.load_chapter(1)
-                    self.state = STATE_PLAYING
-                    safe_set_relative_mouse(True)
+                    if self.intro_to_menu:
+                        self.intro_to_menu = False
+                        self.state = STATE_MENU
+                    else:
+                        self.load_chapter(1)
+                        self.state = STATE_PLAYING
+                        safe_set_relative_mouse(True)
 
             elif self.state == STATE_PLAYING:
                 self.update_playing(dt, mouse_dx, mouse_dy)
