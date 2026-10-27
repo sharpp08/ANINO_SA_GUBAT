@@ -197,6 +197,14 @@ class Renderer:
         from animation_core import ParticleSystem, CameraShake
         self.physics_particles = ParticleSystem(400)
         self.camera_shake = CameraShake()
+        
+        # ─── Advanced Visual Enhancements ─────────────────────────────────────
+        from visual_enhancements import DynamicLights, Fog, Grain, Grader, Particles
+        self.dynamic_lights = DynamicLights()
+        self.volumetric_fog = Fog()
+        self.film_grain = Grain()
+        self.color_grader = Grader()
+        self.atmosphere_particles = Particles(max_p=150)
 
         # Wind system for tree/plant animation
         self.wind_time = 0.0
