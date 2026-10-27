@@ -17,6 +17,8 @@ class SoundManager:
                 pygame.mixer.init(frequency=22050, size=-16, channels=2)
             except Exception:
                 pass
+        mixer_init = pygame.mixer.get_init()
+        self.sample_rate = mixer_init[0] if mixer_init else 44100
         self.sounds = {}
         self._generate_sounds()
 
@@ -54,7 +56,7 @@ class SoundManager:
         return out
 
     def _generate_sounds(self):
-        rate = 44100
+        rate = self.sample_rate
         t = np.linspace(0, 0.4, int(rate * 0.4), endpoint=False)
         shotgun_mono = (np.sin(2 * np.pi * 90 * t) * 0.5 + np.sin(2 * np.pi * 180 * t) * 0.2) * np.exp(-t * 8) + (np.random.randn(len(t)) * 0.6 * np.exp(-t * 12))
         self.sounds['shotgun'] = self._generate_sound(self._apply_reverb(shotgun_mono, delay_samples=4410, decay=0.3))
@@ -137,11 +139,9 @@ class SoundManager:
                 pan = max(-1.0, min(1.0, pan))
                 left_vol = vol * (1.0 - max(0.0, pan))
                 right_vol = vol * (1.0 - max(0.0, -pan))
-                try:
-                    snd.set_volume(left_vol, right_vol)
-                except TypeError:
-                    snd.set_volume(vol)
-                snd.play()
+                channel = snd.play()
+                if channel is not None:
+                    channel.set_volume(left_vol, right_vol)
             except Exception:
                 pass
 

@@ -459,6 +459,7 @@ class EnemyManager:
     def __init__(self):
         self.enemies = []
         self.active_effects = []  # Salt/garlic zones
+        self.last_attackers = []
 
     def spawn_enemies(self, enemy_list):
         """Spawn enemies from map data."""
@@ -483,6 +484,7 @@ class EnemyManager:
                         enemy.investigate_x = player_x
                         enemy.investigate_y = player_y
                         enemy.state_timer = 4.0
+                        enemy.just_entered_chase = True
 
             # Proximity sanity drain (Phase 4)
             if player and hasattr(player, 'sanity'):

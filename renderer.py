@@ -357,25 +357,37 @@ class Renderer:
 
     def emit_casing(self, x, y, vx, vy):
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            self.physics_particles.emit(x, y, vx, vy, life=1.5, size=2, color=(220, 200, 100))
+            try:
+                self.physics_particles.emit(x, y, vx, vy, life=1.5, size=2, color=(220, 200, 100))
+            except Exception:
+                pass
 
     def emit_smoke(self, x, y, vx, vy):
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            self.physics_particles.emit(x, y, vx, vy, life=0.8, size=4, color=(150, 150, 150))
+            try:
+                self.physics_particles.emit(x, y, vx, vy, life=0.8, size=4, color=(150, 150, 150))
+            except Exception:
+                pass
 
     def emit_sparks(self, x, y, count=10):
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            for _ in range(count):
-                angle = random.uniform(0, math.pi * 2)
-                speed = random.uniform(50, 150)
-                self.physics_particles.emit(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life=0.5, size=1, color=(255, 230, 100))
+            try:
+                for _ in range(count):
+                    angle = random.uniform(0, math.pi * 2)
+                    speed = random.uniform(50, 150)
+                    self.physics_particles.emit(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life=0.5, size=1, color=(255, 230, 100))
+            except Exception:
+                pass
 
     def emit_blood(self, x, y, count=15):
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            for _ in range(count):
-                angle = random.uniform(-math.pi, 0)
-                speed = random.uniform(30, 120)
-                self.physics_particles.emit(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life=1.2, size=2, color=(180, 20, 20))
+            try:
+                for _ in range(count):
+                    angle = random.uniform(-math.pi, 0)
+                    speed = random.uniform(30, 120)
+                    self.physics_particles.emit(x, y, math.cos(angle)*speed, math.sin(angle)*speed, life=1.2, size=2, color=(180, 20, 20))
+            except Exception:
+                pass
 
     # ─── Cached surfaces ──────────────────────────────────────────────────
     def _generate_floor_gradient(self):
@@ -449,7 +461,10 @@ class Renderer:
         
         # Update animation systems
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            self.physics_particles.update(dt)
+            try:
+                self.physics_particles.update(dt)
+            except Exception:
+                pass
         if ENABLE_ANIMATIONS and ENABLE_CAMERA_SHAKE:
             shx, shy = self.camera_shake.update(dt)
             if shx != 0 or shy != 0:
@@ -588,7 +603,10 @@ class Renderer:
                 self.surface.blit(psurf, (int(p['x']), int(p['y'])))
 
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
-            self.physics_particles.draw(self.surface)
+            try:
+                self.physics_particles.draw(self.surface)
+            except Exception:
+                pass
 
         # 8. Vignette, low-HP / sanity blood vignette, enemy-proximity horror
         self.surface.blit(self.vignette, (0, 0))

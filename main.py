@@ -16,6 +16,7 @@ from enemies import EnemyManager
 from renderer import Renderer
 from radar import Radar
 from audio_synth import audio_mgr
+from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
@@ -502,8 +503,20 @@ class Game:
             hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi)
             if hits:
                 self.renderer.trigger_screen_shake(4)
-                for h in hits:
+                for enemy in hits:
                     self.renderer.emit_blood(self.renderer.w // 2, self.renderer.h // 2, 10)
+                    event = 'death' if not enemy.alive else 'hurt'
+                    enemy_audio_mgr.play_spatial(
+                        enemy.type,
+                        event,
+                        p.x,
+                        p.y,
+                        p.angle,
+                        enemy.x,
+                        enemy.y,
+                        base_volume=0.9,
+                        max_dist=20.0,
+                    )
 
     def _use_salt(self):
         if self.player.use_salt():
@@ -557,18 +570,37 @@ class Game:
             if enemy.alive and enemy.just_entered_chase:
                 enemy.just_entered_chase = False
                 try:
-                    audio_mgr.play_spatial(
-                        'creature_call',
-                        p.x, p.y, p.angle,
-                        enemy.x, enemy.y,
+                    enemy_audio_mgr.play_spatial(
+                        enemy.type,
+                        'alert',
+                        p.x,
+                        p.y,
+                        p.angle,
+                        enemy.x,
+                        enemy.y,
                         base_volume=0.8,
-                        max_dist=enemy.detect_range * 1.5
+                        max_dist=enemy.detect_range * 1.5,
                     )
                 except Exception:
                     pass
 
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
+        attackers = self.enemy_manager.last_attackers
+
+        for enemy in attackers:
+            enemy_audio_mgr.play_spatial(
+                enemy.type,
+                'attack',
+                p.x,
+                p.y,
+                p.angle,
+                enemy.x,
+                enemy.y,
+                base_volume=1.0,
+                max_dist=20.0,
+            )
+
         if dmg > 0:
             p.take_damage(dmg)
             
@@ -577,16 +609,16 @@ class Game:
                 try:
                     from jumpscare import get_jumpscare_manager
                     jumpscare_mgr = get_jumpscare_manager()
-                    attack_enemy = None
-                    min_d = 999.0
-                    for e in self.enemy_manager.enemies:
-                        if e.alive and e.can_attack(p.x, p.y):
-                            d = e.distance_to(p.x, p.y)
-                            if d < min_d:
-                                min_d = d
-                                attack_enemy = e
+                    attack_enemy = (
+                        min(
+                            attackers,
+                            key=lambda enemy: enemy.distance_to(p.x, p.y),
+                        )
+                        if attackers
+                        else None
+                    )
                     etype = attack_enemy.type if attack_enemy else 'aswang'
-                    dist = min_d if min_d < 999.0 else 0.0
+                    dist = attack_enemy.distance_to(p.x, p.y) if attack_enemy else 0.0
                     stun_duration = jumpscare_mgr.trigger(enemy_type=etype, distance=dist)
                     if stun_duration:
                         p.stunned = True
@@ -594,18 +626,6 @@ class Game:
                 except Exception:
                     pass
         
-        # Jumpscare sequence update (runs ~1.2s after trigger)
-        try:
-            from jumpscare import get_jumpscare_manager
-            jumpscare_mgr = get_jumpscare_manager()
-            jumpscare_mgr.update(dt)
-            # Keep player stunned during jumpscare playback
-            if jumpscare_mgr.is_playing():
-                p.stunned = True
-                p.stun_timer = 0.8
-        except Exception:
-            pass
-
         # Auto-collect pickups
         for pickup in self.game_map.get_nearby_pickups(p.x, p.y):
             if p.pickup_item(pickup):
@@ -714,6 +734,13 @@ class Game:
             dt = min(self.clock.tick(FPS) / 1000.0, 0.05)
             mouse_dx = 0
             mouse_dy = 0
+
+            try:
+                from jumpscare import get_jumpscare_manager
+                jumpscare_mgr = get_jumpscare_manager()
+                jumpscare_mgr.update(dt)
+            except Exception:
+                pass
 
             prev_state = self.state
             events = pygame.event.get()
