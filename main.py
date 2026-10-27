@@ -556,6 +556,23 @@ class Game:
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
         if dmg > 0:
             p.take_damage(dmg)
+            
+            # Trigger jumpscare if player dies from enemy attack
+            if not p.alive:
+                try:
+                    from jumpscare import get_jumpscare_manager
+                    jumpscare_mgr = get_jumpscare_manager()
+                    jumpscare_mgr.trigger()
+                except Exception:
+                    pass
+        
+        # Jumpscare sequence update (runs ~2.6s after trigger)
+        try:
+            from jumpscare import get_jumpscare_manager
+            jumpscare_mgr = get_jumpscare_manager()
+            jumpscare_mgr.update(dt)
+        except Exception:
+            pass
             self.renderer.trigger_screen_shake(6)
 
         # Auto-collect pickups
@@ -626,6 +643,15 @@ class Game:
 
         elif self.state == STATE_WIN:
             draw_win(self.internal, self.font_lg, self.font_sm, self.chapter)
+        
+        # Jumpscare rendering (plays on top of scene during death sequence)
+        try:
+            from jumpscare import get_jumpscare_manager
+            jumpscare_mgr = get_jumpscare_manager()
+            if jumpscare_mgr.is_playing():
+                jumpscare_mgr.render(self.internal)
+        except Exception:
+            pass
 
         # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
         # Only during gameplay, and the result is copied back into the SAME surface:

@@ -541,9 +541,40 @@ def _load_custom_sprite(enemy_type: str, state: str) -> Optional[pygame.Surface]
 
 
 def generate_all_enemies():
-    """Generate all enemy sprites in different animation states, preferring custom PNGs."""
-    from settings import USE_CUSTOM_ENEMY_SPRITES
+    """Generate all enemy sprites, preferring animated packs over static PNGs."""
+    import os
+    from settings import USE_CUSTOM_ENEMY_SPRITES, BASE_PATH
+    from animation_core import get_enemy_animation_system
     
+    # Try to load the animation pack first
+    anim_sys = get_enemy_animation_system()
+    pack_dir = os.path.join(BASE_PATH, 'enemy_animations_pack')
+    
+    if USE_CUSTOM_ENEMY_SPRITES and os.path.exists(pack_dir):
+        print(f'[ASSETS] Attempting to load enemy animation pack from: {pack_dir}')
+        if anim_sys.load_from_pack(pack_dir, target_size=64):
+            print('[ASSETS] ✓ Loaded animated enemy sprite sheets successfully!')
+            # Return a compatible dict structure using the first frame of each animation
+            enemies = {}
+            for etype in anim_sys.frames:
+                enemies[etype] = {}
+                for sheet_name, frame_list in anim_sys.frames[etype].items():
+                    if frame_list:
+                        # Map sheet names back to game states
+                        if sheet_name == 'run':
+                            for state in ['idle', 'walk', 'run', 'sprint', 'hover']:
+                                enemies[etype][state] = frame_list[0]
+                        elif sheet_name == 'crawl':
+                            for state in ['crawl', 'stalk', 'crouch']:
+                                enemies[etype][state] = frame_list[0]
+                        elif sheet_name == 'attack':
+                            for state in ['attack', 'lunge', 'stagger', 'death']:
+                                enemies[etype][state] = frame_list[0]
+                        # Unique moves
+                        enemies[etype][sheet_name] = frame_list[0]
+            return enemies
+    
+    # Fallback to static PNGs or procedural generation
     enemies = {}
     types = ['aswang', 'manananggal', 'tikbalang', 'kapre', 'white_lady', 'multo', 'sigbin']
     states = ['idle', 'walk', 'run', 'sprint', 'crawl', 'stalk', 'crouch', 'lunge', 'attack', 'stagger', 'death', 'hover']
@@ -552,21 +583,16 @@ def generate_all_enemies():
         enemies[t] = {}
         used_custom = False
         for s in states:
-            # Try custom PNG first if enabled
             if USE_CUSTOM_ENEMY_SPRITES:
                 custom_surf = _load_custom_sprite(t, s)
                 if custom_surf is not None:
-                    # Apply horror rim effect
                     rim = RIM_COLORS.get(t, (255, 255, 255))
                     _horror_finish(custom_surf, rim, seed=abs(hash(f'{t}_{s}')) % 10000)
                     enemies[t][s] = custom_surf
                     used_custom = True
                     continue
-            
-            # Fall back to procedural generation
             enemies[t][s] = generate_enemy_sprite(t, 64, 64, s)
         
-        # Print one line per type
         status = 'custom PNGs' if used_custom else 'procedural fallback'
         print(f'[ASSETS] Enemy "{t}": using {status}')
     

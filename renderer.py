@@ -1059,10 +1059,25 @@ class Renderer:
     def _draw_enemy(self, enemy, screen_x, floor_y, unit, dist, t_ticks, stats):
         etype = enemy.type
         anim_state = getattr(enemy, 'animation_state', 'idle')
-        frames = self.enemy_sprites.get(etype)
+        frame_index = getattr(enemy, 'anim_frame', 0)
+        
+        # Try to get animated frame first
         img = None
-        if frames:
-            img = frames.get(anim_state, frames.get('idle', frames.get('attack')))
+        try:
+            from animation_core import get_enemy_animation_system
+            anim_sys = get_enemy_animation_system()
+            if anim_sys.loaded:
+                img = anim_sys.get_frame(etype, anim_state, frame_index)
+        except Exception:
+            pass
+        
+        # Fallback to static sprite dict
+        if img is None:
+            frames = self.enemy_sprites.get(etype)
+            if frames:
+                img = frames.get(anim_state, frames.get('idle', frames.get('attack')))
+        
+        # Ultimate fallback: red square
         if img is None:
             img = pygame.Surface((32, 32), pygame.SRCALPHA)
             pygame.draw.rect(img, (200, 50, 50), (4, 4, 24, 24))

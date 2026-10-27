@@ -110,6 +110,7 @@ class Enemy:
         self.spawn_y = y
         self.animation_state = 'idle'
         self.anim_time = random.random() * 10.0
+        self.anim_frame = random.randint(0, 5)  # Current frame in 6-frame animation
         
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
@@ -195,6 +196,12 @@ class Enemy:
         self.state_timer -= dt
 
         self.anim_time += dt
+        
+        # Update animation frame (14 FPS cycle)
+        frame_time = 1.0 / 14.0
+        if self.anim_time >= frame_time:
+            self.anim_time -= frame_time
+            self.anim_frame = (self.anim_frame + 1) % 6
         if not self.alive:
             self.animation_state = 'death'
         elif self.hit_flash > 0:

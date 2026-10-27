@@ -224,3 +224,125 @@ class CameraShake:
             return ox, oy
         return 0, 0
 
+
+class SpriteAnimation:
+    """Handles multi-frame sprite sheet animation for enemies.
+    
+    Loads horizontal sprite strips (6 frames) and cycles through them at a target FPS.
+    Each frame is stored as a separate surface for efficient blitting.
+    """
+    
+    # Animation state to sheet name mapping
+    STATE_TO_SHEET = {
+        'idle': 'run', 'walk': 'run', 'run': 'run', 'sprint': 'run',
+        'crawl': 'crawl', 'stalk': 'crawl', 'crouch': 'crawl',
+        'attack': 'attack', 'lunge': 'attack', 'stagger': 'attack', 'death': 'attack',
+        'hover': 'run', 'float': 'run',
+        'transform': 'transform', 'fly': 'fly', 'rear': 'rear',
+        'smash': 'smash', 'vanish': 'vanish', 'phase': 'phase', 'pounce': 'pounce',
+    }
+    
+    UNIQUE_MOVES = {
+        'aswang': 'transform', 'manananggal': 'fly', 'tikbalang': 'rear',
+        'kapre': 'smash', 'white_lady': 'vanish', 'multo': 'phase', 'sigbin': 'pounce',
+    }
+    
+    def __init__(self, fps=14.0):
+        self.fps = fps
+        self.frame_time = 1.0 / fps
+        self.frames = {}  # {enemy_type: {state: [surf, surf, ...]}}
+        self.loaded = False
+    
+    def get_state_sheet_name(self, enemy_type: str, state: str) -> str:
+        """Get the sheet filename for a given enemy type and animation state."""
+        if state == 'special' and enemy_type in self.UNIQUE_MOVES:
+            state = self.UNIQUE_MOVES[enemy_type]
+        return self.STATE_TO_SHEET.get(state, 'run')
+    
+    def load_from_pack(self, pack_dir: str, target_size: int = 64):
+        """Load all sprite sheets from the animation pack directory."""
+        import os
+        import pygame
+        
+        sheets_dir = os.path.join(pack_dir, 'sheets')
+        if not os.path.exists(sheets_dir):
+            print(f"[SpriteAnimation] Sheets directory not found: {sheets_dir}")
+            return False
+        
+        enemy_types = ['aswang', 'manananggal', 'tikbalang', 'kapre', 'white_lady', 'multo', 'sigbin']
+        
+        for etype in enemy_types:
+            self.frames[etype] = {}
+            for sheet_file in os.listdir(sheets_dir):
+                if not sheet_file.startswith(f'{etype}_') or not sheet_file.endswith('.png'):
+                    continue
+                
+                sheet_name = sheet_file[len(etype)+1:-4]
+                sheet_path = os.path.join(sheets_dir, sheet_file)
+                
+                try:
+                    # Load without convert_alpha first, then convert after if needed
+                    sheet_surf = pygame.image.load(sheet_path)
+                    try:
+                        sheet_surf = sheet_surf.convert_alpha()
+                    except Exception:
+                        # Display might not be set up, use as-is
+                        if sheet_surf.get_colorkey() is None:
+                            sheet_surf = sheet_surf.convert()
+                    
+                    sheet_w, sheet_h = sheet_surf.get_size()
+                    num_frames = 6
+                    frame_w = sheet_w // num_frames
+                    
+                    frame_list = []
+                    for i in range(num_frames):
+                        frame_rect = pygame.Rect(i * frame_w, 0, frame_w, sheet_h)
+                        frame = sheet_surf.subsurface(frame_rect).copy()
+                        scaled = pygame.transform.scale(frame, (target_size, target_size))
+                        frame_list.append(scaled)
+                    
+                    self.frames[etype][sheet_name] = frame_list
+                    print(f"[SpriteAnimation] Loaded {etype}_{sheet_name}: {num_frames} frames")
+                except Exception as e:
+                    print(f"[SpriteAnimation] Failed to load {sheet_path}: {e}")
+        
+        self.loaded = len(self.frames) > 0
+        return self.loaded
+    
+    def get_frame(self, enemy_type: str, state: str, frame_index: int):
+        """Get a specific frame for an enemy animation state."""
+        if enemy_type not in self.frames:
+            return None
+        
+        sheet_name = self.get_state_sheet_name(enemy_type, state)
+        frame_list = self.frames[enemy_type].get(sheet_name)
+        if frame_list is None:
+            frame_list = self.frames[enemy_type].get('run')
+        if frame_list is None:
+            for name in ['attack', 'crawl', 'run']:
+                if name in self.frames[enemy_type]:
+                    frame_list = self.frames[enemy_type][name]
+                    break
+        
+        if not frame_list:
+            return None
+        
+        return frame_list[frame_index % len(frame_list)]
+    
+    def get_frames_for_state(self, enemy_type: str, state: str) -> list:
+        """Get all frames for an animation state."""
+        if enemy_type not in self.frames:
+            return []
+        sheet_name = self.get_state_sheet_name(enemy_type, state)
+        return self.frames[enemy_type].get(sheet_name, [])
+
+
+_enemy_animation_system = None
+
+def get_enemy_animation_system():
+    """Get or create the global enemy animation system."""
+    global _enemy_animation_system
+    if _enemy_animation_system is None:
+        _enemy_animation_system = SpriteAnimation(fps=14.0)
+    return _enemy_animation_system
+
