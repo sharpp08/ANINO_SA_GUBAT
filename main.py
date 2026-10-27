@@ -390,15 +390,10 @@ class Game:
         safe_set_relative_mouse(False)
 
     def start_new_game(self):
-        settings = load_settings()
-        if settings.get('enable_intro', True):
-            self.state = STATE_INTRO
-            self.cinematic.reset()
-            safe_set_relative_mouse(False)
-        else:
-            self.load_chapter(1)
-            self.state = STATE_PLAYING
-            safe_set_relative_mouse(True)
+        self.state = STATE_INTRO
+        self.intro_to_menu = False
+        self.cinematic.reset()
+        safe_set_relative_mouse(False)
 
     def load_saved_game(self):
         data = load_game()
