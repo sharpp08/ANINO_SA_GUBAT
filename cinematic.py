@@ -2,13 +2,15 @@
 ANINO SA GUBAT: Intro Cinematic
 """
 import random
+import math
 import pygame
-from settings import INTERNAL_WIDTH, INTERNAL_HEIGHT, GOLD, WHITE, BLACK
+from settings import INTERNAL_WIDTH, INTERNAL_HEIGHT, GOLD, WHITE, BLACK, HEALTH_RED
 from lore import (
-    TITLE_FILIPINO, TITLE_ENGLISH, WARNING_FILIPINO, WARNING_ENGLISH,
-    SCENE2_CAPTION, FOREST_NARRATION, SCENE3_CAPTION, AWAKENING_NARRATION,
-    SCENE4_CAPTION, TRAVELER_NARRATION, PAGES_NARRATION,
-    CLOSING_FILIPINO, CLOSING_ENGLISH
+    TITLE_FILIPINO, TITLE_ENGLISH, SUBTITLE_FIL, BUILD_STAMP,
+    WARNING_FILIPINO, WARNING_ENGLISH,
+    SCENE2_FIL, SCENE2_ENG, SCENE3_CAPTION,
+    SCENE4_CAPTION, SCENE5_FIL, SCENE5_ENG,
+    CLOSING_FILIPINO, CLOSING_ENGLISH, PRESS_SPACE
 )
 from audio_synth import audio_mgr
 
@@ -102,42 +104,58 @@ class Cinematic:
         self.surface.blit(txt, rect)
 
     def _render_scene_1(self, st):
-        self.surface.fill((2, 2, 5))
-        self._draw_txt(WARNING_FILIPINO, self.font_md, (240, 240, 245), (self.w // 2, self.h // 2 - 20))
-        if st > 3.5: self._draw_txt(WARNING_ENGLISH, self.font_sm, (180, 160, 140), (self.w // 2, self.h // 2 + 25))
+        self.surface.fill((1, 1, 3))
+        pulse = (math.sin(st * 3.0) + 1.0) * 0.5
+        vig_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        pygame.draw.rect(vig_surf, (180, 20, 20, int(30 + pulse * 45)), (0, 0, self.w, self.h), 18)
+        self.surface.blit(vig_surf, (0, 0))
+        self._draw_txt(WARNING_FILIPINO, self.font_md, (245, 245, 250), (self.w // 2, self.h // 2 - 20))
+        if st > 3.0:
+            self._draw_txt(WARNING_ENGLISH, self.font_sm, (180, 160, 150), (self.w // 2, self.h // 2 + 25))
+        stamp = self.font_tiny.render(BUILD_STAMP, True, (90, 90, 100))
+        self.surface.blit(stamp, (12, self.h - 22))
 
     def _render_scene_2(self, st):
         self.surface.fill((8, 12, 22))
-        pygame.draw.circle(self.surface, (230, 240, 255), (self.w - 100, 70), 30)
-        if st > 2.0: self._draw_txt(SCENE2_CAPTION, self.font_sm, (180, 200, 180), (self.w // 2, 60))
-        if st > 8.0: self._draw_txt(FOREST_NARRATION, self.font_md, (240, 240, 245), (self.w // 2, self.h - 70))
+        moon_x = self.w - 120 + int(st * 0.5)
+        moon_y = 60 + int(math.sin(st * 0.2) * 5)
+        pygame.draw.circle(self.surface, (220, 230, 245), (moon_x, moon_y), 28)
+        if st > 2.0:
+            self._draw_txt(SCENE2_FIL, self.font_lg, (240, 240, 245), (self.w // 2, self.h // 2 - 10))
+        if st > 7.0:
+            self._draw_txt(SCENE2_ENG, self.font_sm, (180, 190, 200), (self.w // 2, self.h // 2 + 30))
 
     def _render_scene_3(self, st):
-        self.surface.fill((15, 8, 25))
+        self.surface.fill((12, 6, 20))
         pygame.draw.circle(self.surface, (220, 100, 80), (120, 80), 35)
-        if st > 1.0: self._draw_txt(SCENE3_CAPTION, self.font_sm, (220, 180, 180), (self.w // 2, 40))
-        if st > 7.0: self._draw_txt(AWAKENING_NARRATION, self.font_md, (250, 220, 220), (self.w // 2, self.h - 60))
+        if st > 1.0:
+            self._draw_txt(SCENE3_CAPTION, self.font_sm, (230, 180, 170), (self.w // 2, 45))
 
     def _render_scene_4(self, st):
-        self.surface.fill((12, 12, 18))
-        idx = int(st / 5.0) % 3
-        items = ["Grandfather's Bolo", "Flickering Flashlight", "Faith & Sacred Relics"]
-        self._draw_txt(items[idx], self.font_md, GOLD, (self.w // 2, self.h // 2 + 30))
-        if st > 1.0: self._draw_txt(SCENE4_CAPTION, self.font_sm, (180, 200, 180), (self.w // 2, 40))
-        if st > 7.0: self._draw_txt(TRAVELER_NARRATION, self.font_sm, (240, 240, 245), (self.w // 2, self.h - 60))
+        self.surface.fill((10, 12, 16))
+        if st > 1.0:
+            self._draw_txt(SCENE4_CAPTION, self.font_sm, (180, 200, 190), (self.w // 2, 40))
 
     def _render_scene_5(self, st):
-        self.surface.fill((10, 12, 15))
-        if st > 1.0: self._draw_txt(PAGES_NARRATION, self.font_sm, (240, 230, 200), (self.w // 2, self.h - 70))
+        self.surface.fill((12, 14, 18))
+        if st > 1.0:
+            self._draw_txt(SCENE5_FIL, self.font_md, (255, 240, 200), (self.w // 2, self.h - 75))
+            self._draw_txt(SCENE5_ENG, self.font_sm, (200, 180, 150), (self.w // 2, self.h - 45))
 
     def _render_scene_6(self, st):
         self.surface.fill((2, 2, 5))
-        if st < 5.0:
-            self._draw_txt(CLOSING_FILIPINO, self.font_md, (250, 240, 220), (self.w // 2, self.h // 2 - 30))
-            if st > 2.0: self._draw_txt(CLOSING_ENGLISH, self.font_sm, (180, 160, 140), (self.w // 2, self.h // 2 + 25))
-        else:
-            self._draw_txt(TITLE_FILIPINO, self.font_lg, GOLD, (self.w // 2, self.h // 2 - 20))
-            self._draw_txt(TITLE_ENGLISH, self.font_sm, WHITE, (self.w // 2, self.h // 2 + 35))
+        if st < 0.8:
+            fl = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            fl.fill((255, 255, 255, int(255 * (1.0 - st / 0.8))))
+            self.surface.blit(fl, (0, 0))
+        shake_x = random.randint(-3, 3) if st < 0.8 else 0
+        shake_y = random.randint(-3, 3) if st < 0.8 else 0
+        self._draw_txt(TITLE_FILIPINO, self.font_lg, GOLD, (self.w // 2 + shake_x, self.h // 2 - 30 + shake_y))
+        if st > 1.5:
+            self._draw_txt(SUBTITLE_FIL, self.font_md, HEALTH_RED, (self.w // 2, self.h // 2 + 15))
+        if st > 3.5:
+            if int(st * 2) % 2 == 0:
+                self._draw_txt(PRESS_SPACE, self.font_sm, WHITE, (self.w // 2, self.h - 60))
 
     def _draw_overlays(self):
         v = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
