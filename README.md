@@ -52,9 +52,9 @@ The game features:
 
 | Feature | Details |
 |---|---|
-| 🎮 Raycasting 3D | Pseudo-3D first-person view at 640×360 internal resolution, scaled to 1280×720 |
+| 🎮 Raycasting 3D | Pseudo-3D first-person view; internal resolution scales with the quality preset (320×180 on low, 640×360 on medium/high), upscaled to 1280×720 |
 | 🌲 Outdoor Forest | 64×64 map with 220 (Ch. 1) / 300 (Ch. 2) procedurally placed trees, dense undergrowth, stone boundary wall and an abandoned cabin |
-| 🌿 Legit Forest | 350+ procedural plants (ferns, mushrooms, rocks, bushes) with wind physics and player proximity reactions |
+| 🌿 Legit Forest | 350 procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
 | 🌀 Physics Animation | Spring-driven systems for camera, weapon sway, head bob; NumPy particle physics for casings/smoke/sparks |
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
 | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
@@ -127,7 +127,7 @@ pip install -r requirements.txt
 python -B main.py
 ```
 
-The game launches at **1280×720** (windowed by default, with an internal 640×360 raycasting buffer). On first launch the large ground texture is generated and cached in `assets/cache/world_ground.npy`, so the first start takes longer than later ones.
+The game launches at **1280×720** (fullscreen by default). The internal raycasting buffer size depends on the quality tier set in `settings.json`: 320×180 on `low`, 640×360 on `medium` and `high` (the default). On first launch the large ground texture is generated and cached in `assets/cache/world_ground.npy`, so the first start takes longer than later ones.
 
 ---
 
@@ -225,7 +225,7 @@ Reloading makes noise (`4.0`). Shotgun reload takes 1.5 s, revolver reload 1.2 s
 | Stamina | 100 (drains 35/s while sprinting, regenerates 25/s) |
 | Sanity | 100 |
 | Walk / Sprint speed | 3.0 / 5.0 |
-| Flashlight battery | 100% (drains 0.4/s) |
+| Flashlight battery | 100% (drains 1.0/s, recharges 0.1/s when off) |
 | Salt / Garlic capacity | 10 / 8 |
 
 ---
@@ -255,9 +255,9 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
   - `WALL_WOOD`: Cabin walls (tiles 28–37 on both axes).
   - `DOOR`: Cabin entryway, two tiles wide at `(32, 37)` and `(33, 37)`. Opened with `E`.
   - `WALL_BAMBOO`, `WALL_BALETE`: Defined with textures but not used by the current maps.
-- **Trees:** Not grid tiles. They are billboard objects (`balete`, `bamboo`, `mahogany`, `dead`) placed from a fixed seed (`42 + chapter`), so each chapter has the same layout every run. Trees keep a minimum spacing of 2.2 tiles, stay out of the cabin area and the start area, and act as circular obstacles for movement.
-- **Entity Clearance:** After enemies, pickups, checkpoints, the exit and the player start are placed, any tree within about 1.4 tiles of them is removed so nothing spawns inside a trunk. The console reports how many trees were removed.
-- **Validation:** Each chapter load checks that entities are not inside walls or trees. Problems appear as warnings in the F3 overlay and are counted per chapter load.
+- **Trees:** Not grid tiles. They are billboard objects placed from a fixed seed (`42 + chapter`), so each chapter has the same layout every run. Chapter 1 uses `balete`, `bamboo`, `mahogany`, and `dead` trees; Chapter 2 adds `banana` and `palm`. Trees keep a minimum spacing of 1.6–2.5 tiles (density-dependent), stay out of the cabin area and the start area, and act as circular obstacles for movement.
+- **Entity Clearance:** After enemies, pickups, checkpoints, the exit and the player start are placed, any tree overlapping them is removed so nothing spawns inside a trunk. The console reports how many trees were removed.
+- **Validation:** Each chapter load checks that entities are not inside walls or trees, then runs a flood-fill from the player start to confirm every entity is reachable. Unreachable entities are relocated to the nearest reachable empty cell, or flagged as unreachable in the F3 overlay if no spot is found.
 
 ---
 
@@ -322,7 +322,7 @@ Sprite distance shading only changes colour, never transparency, so sprites no l
 ## Settings
 
 ### Constants (`settings.py`)
-- Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
+- Display resolution (`1280×720`), internal raycasting resolution (preset-dependent: 320×180 on low, 640×360 on medium/high), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
 - Effect toggles such as `ENABLE_BLOOM`, `ENABLE_FOG`, `ENABLE_PARTICLES`, `ENABLE_SANITY` and `ENABLE_INTRO`.
 - `QUALITY_PRESETS` (`low`, `medium`, `high`): chosen with `"quality_tier"` in `settings.json` (default `medium`) and applied at startup by `main.py` before any module imports resolution-dependent values. See [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations).
 - Lighting constants (`AMBIENT`, `AMBIENT_LIGHT_OFF`, `BEAM_RADIUS`, `BEAM_GLOW`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW`, ...) are defined only in `settings.py`.
@@ -422,7 +422,7 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 - **Z-Buffer:** One entry per ray. Sprites are depth-sorted every frame and drawn in column runs so only closer walls hide them.
 - **Procedural Art:** No external asset files. Everything is generated from Python code at startup, and the 1024×1024 ground texture is saved to `assets/cache/world_ground.npy` after the first run.
 - **Delta Time Cap:** `dt` is capped at 50 ms per frame to prevent physics tunneling on lag spikes.
-- **Upscaling:** Internal 640×360 upscaled to 1280×720 via `pygame.transform.scale`.
+- **Upscaling:** Internal buffer (preset-dependent: 320×180 on low, 640×360 on medium/high) upscaled to 1280×720 via `pygame.transform.scale`.
 - **Deterministic maps:** Tree layouts use a seeded random generator per chapter.
 - **Error handling:** An unhandled exception is written to `crash.log` next to the game (with a message box on Windows).
 - **Platform:** Built and tested on Windows with Python 3.10+. Compatible with Linux/macOS given the same dependencies (the crash message box is Windows-only and is skipped elsewhere).
