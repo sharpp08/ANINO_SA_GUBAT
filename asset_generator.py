@@ -324,82 +324,138 @@ def generate_pickup_sprite(pickup_type='health', size=32):
 
 
 
-def generate_tree_billboard(tree_type='balete', width=64, height=128, seed=42):
-    """Generate detailed procedural tree billboards with bark shading, roots, moss, and canopy."""
+def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
+    """Generate tall procedural tree billboards with bark, roots, branches, canopies."""
     import numpy as np
-    random.seed(seed)
+    rng = random.Random(seed)
     surf = pygame.Surface((width, height), pygame.SRCALPHA)
     cx = width // 2
+    ARCHETYPES = {
+        'balete':       (0.50, 18, 0.42, 22),
+        'mahogany':     (0.68, 12, 0.25, 16),
+        'bamboo':       (0.82, 5,  0.10, 0),
+        'dead':         (0.55, 14, 0.15, 18),
+        'banana':       (0.55, 9,  0.38, 0),
+        'palm':         (0.72, 7,  0.22, 0),
+        'supernatural': (0.48, 22, 0.38, 24),
+    }
+    th, tw, ch, rs = ARCHETYPES.get(tree_type, ARCHETYPES['balete'])
+    trunk_top = int(height * (1.0 - th))
+    trunk_base = height - 4
+    is_sup = (tree_type == 'supernatural')
+    is_dead = (tree_type == 'dead')
+    is_bam = (tree_type == 'bamboo')
+    is_trop = tree_type in ('banana', 'palm')
+    tcb = (55, 38, 25) if not is_sup else (35, 20, 28)
+    if is_bam:
+        tcb = (90, 120, 70)
 
-    if tree_type == 'balete':
-        for rx in range(-20, 21, 4):
-            rx_pos = cx + rx
-            ry_base = height - 10
-            ry_top = height - 40 - abs(rx) * 0.8
-            pygame.draw.line(surf, (45, 30, 20), (cx + rx // 2, ry_base), (rx_pos, int(ry_top)), 5)
-        pygame.draw.rect(surf, (55, 38, 25), (cx - 14, height - 70, 28, 60))
-        for bx in range(cx - 12, cx + 12, 4):
-            pygame.draw.line(surf, (35, 22, 15), (bx, height - 68), (bx + random.randint(-2, 2), height - 15), 2)
-        for _ in range(5):
-            mx = cx + random.randint(-12, 8)
-            my = random.randint(height - 50, height - 20)
-            pygame.draw.circle(surf, (30, 60, 30, 200), (mx, my), random.randint(3, 6))
-        for i in range(7):
-            ox = random.randint(-22, 22)
-            oy = random.randint(10, 50 - i * 5)
-            cr = random.randint(18, 30)
-            col = (20 + random.randint(0, 20), 45 + random.randint(0, 25), 20 + random.randint(0, 15))
-            pygame.draw.circle(surf, col, (cx + ox, height - oy - 55), cr)
-            pygame.draw.circle(surf, (10, 25, 10, 180), (cx + ox + 2, height - oy - 53), cr - 3)
+    # --- Buttress roots ---
+    if rs > 0:
+        rcol = (35, 25, 18) if not is_sup else (25, 15, 20)
+        for side in (-1, 1):
+            for i in range(3):
+                rx = cx + side * (tw // 2 + i * 4 + rng.randint(-2, 2))
+                ry_t = trunk_base - 8 - i * 6
+                ry_b = trunk_base + 2
+                pts = [(cx + side * tw // 2, ry_t), (rx, ry_t - 2),
+                       (rx + side * 2, ry_b), (cx + side * tw // 2, ry_b)]
+                pygame.draw.polygon(surf, rcol, pts)
 
-    elif tree_type == 'bamboo':
-        for b_idx in range(5):
-            bx = cx - 16 + b_idx * 8 + random.randint(-2, 2)
-            b_height = height - random.randint(10, 30)
-            pygame.draw.line(surf, (110, 140, 80), (bx, height - 5), (bx + random.randint(-2, 2), height - b_height), 5)
-            for ny in range(height - 15, height - b_height, 14):
-                pygame.draw.line(surf, (80, 100, 50), (bx - 3, ny), (bx + 3, ny), 2)
-            for lx in range(-12, 14, 6):
-                pygame.draw.line(surf, (90, 130, 60), (bx, height - b_height), (bx + lx, height - b_height - 15), 2)
+    # --- Trunk with tapering ---
+    for y in range(trunk_top, trunk_base):
+        t = (y - trunk_top) / max(1, trunk_base - trunk_top)
+        taper = 1.0 - 0.12 * (1.0 - t)
+        tw2 = max(2, int(tw * taper))
+        x0 = cx - tw2 // 2
+        shade = 0.82 + 0.18 * math.sin(y * 0.12 + seed * 0.01)
+        col = tuple(max(0, int(c * shade)) for c in tcb)
+        pygame.draw.line(surf, col, (x0, y), (x0 + tw2, y))
+        if y % 3 == 0 and not is_bam:
+            for gx in range(x0 + 2, x0 + tw2 - 1, 3):
+                gcol = tuple(max(0, c - 18) for c in col)
+                pygame.draw.line(surf, gcol, (gx, y), (gx + rng.randint(-1, 1), y + 2), 1)
+        if is_bam and y % 16 < 2:
+            ncol = tuple(max(0, c - 25) for c in col)
+            pygame.draw.line(surf, ncol, (x0, y), (x0 + tw2, y), 1)
 
-    elif tree_type == 'banana' or tree_type == 'palm':
-        for ty in range(height - 20, height - 80, -2):
-            tx_off = int(math.sin(ty * 0.05) * 4)
-            pygame.draw.rect(surf, (70, 80, 50), (cx - 6 + tx_off, ty, 12, 3))
-        fy = height - 85
-        for angle_deg in range(-70, 75, 25):
-            rad = math.radians(angle_deg)
-            fx = cx + int(math.cos(rad) * 35)
-            f_end_y = fy + int(math.sin(rad) * 25) - 15
-            pygame.draw.line(surf, (50, 110, 40), (cx, fy), (fx, f_end_y), 4)
-            pygame.draw.line(surf, (70, 140, 50), (cx + (fx - cx)//2, fy + (f_end_y - fy)//2), (fx + 5, f_end_y - 8), 2)
+    # --- Moss patches ---
+    if not is_bam and not is_dead:
+        for _ in range(rng.randint(3, 7)):
+            mx = cx + rng.randint(-tw // 2 + 2, tw // 2 - 2)
+            my = rng.randint(trunk_top + 10, trunk_base - 5)
+            mr = rng.randint(2, 5)
+            mc = (25 + rng.randint(0, 15), 55 + rng.randint(0, 25), 25 + rng.randint(0, 10), 180)
+            pygame.draw.circle(surf, mc, (mx, my), mr)
 
-    elif tree_type == 'pine':
-        # Enhanced pine with layered needles and texture
-        pygame.draw.rect(surf, (60, 45, 30), (cx - 5, height - 40, 10, 40))
-        # Textured trunk
-        pygame.draw.line(surf, (45, 35, 25), (cx - 2, height - 35), (cx - 2, height - 5), 2)
-        pygame.draw.line(surf, (45, 35, 25), (cx + 2, height - 35), (cx + 2, height - 5), 2)
-        for layer in range(5):
-            ly = height - 40 - layer * 20
-            lw = 32 - layer * 6
-            # Main needle polygon
-            pts = [(cx, ly - 22), (cx - lw, ly), (cx + lw, ly)]
-            base_color = 20 + layer * 4
-            light_color = 55 + layer * 8
-            dark_color = 15 + layer * 3
-            pygame.draw.polygon(surf, (base_color, light_color, dark_color), pts)
-            # Inner highlight for depth
-            highlight_pts = [(cx, ly - 18), (cx - lw // 2, ly - 4), (cx + lw // 2, ly - 4)]
-            pygame.draw.polygon(surf, (base_color + 15, light_color + 20, dark_color + 10), highlight_pts)
+    # --- Branches ---
+    if not is_bam:
+        bcol = tuple(max(0, c - 10) for c in tcb)
+        nb = 3 if not is_dead else 1
+        for i in range(nb):
+            by = trunk_top + int((trunk_base - trunk_top) * (0.25 + i * 0.2))
+            side = 1 if i % 2 == 0 else -1
+            bx_s = cx + side * tw // 2
+            bx_e = cx + side * (tw + rng.randint(12, 22))
+            by_e = by - rng.randint(3, 12)
+            pygame.draw.line(surf, bcol, (bx_s, by), (bx_e, by_e), 2)
+            if rng.random() > 0.4:
+                sx = bx_e + side * rng.randint(2, 6)
+                sy = by_e - rng.randint(2, 6)
+                pygame.draw.line(surf, bcol, (bx_e, by_e), (sx, sy), 1)
 
+    # --- Canopy ---
+    canopy_top = int(height * (1.0 - th - ch))
+    canopy_bot = trunk_top
+
+    if is_dead:
+        for i in range(4):
+            ang = rng.uniform(-math.pi, math.pi)
+            length = rng.randint(8, 16)
+            bx2 = cx + math.cos(ang) * length
+            by2 = canopy_bot - rng.randint(0, 15) + math.sin(ang) * length * 0.3
+            pygame.draw.line(surf, (40, 30, 25), (cx, canopy_bot - 5), (bx2, by2), 2)
+    elif is_bam:
+        for i in range(3):
+            lx = cx + rng.randint(-10, 10)
+            ly = canopy_bot - rng.randint(0, 15)
+            pygame.draw.circle(surf, (50, 100, 50), (lx, ly), rng.randint(3, 5))
+    elif is_trop:
+        fcol = (45, 95, 40) if not is_sup else (30, 50, 25)
+        nf = 6 if tree_type == 'palm' else 5
+        for i in range(nf):
+            ang = -math.pi / 2 + (i - nf / 2) * 0.4
+            fx = cx + math.cos(ang) * rng.randint(20, 30)
+            fy = canopy_top + math.sin(ang) * rng.randint(10, 20)
+            pygame.draw.line(surf, fcol, (cx, canopy_top + 5), (fx, fy), 3)
+            for j in range(3):
+                lj = j + 1
+                px = cx + (fx - cx) * lj / 4
+                py = canopy_top + 5 + (fy - canopy_top - 5) * lj / 4
+                pygame.draw.line(surf, (55, 115, 45), (px, py), (px + rng.randint(-4, 4), py - 4), 1)
     else:
-        pygame.draw.rect(surf, (60, 55, 50), (cx - 8, height - 80, 16, 75))
-        pygame.draw.line(surf, (50, 45, 40), (cx, height - 50), (cx - 25, height - 85), 4)
-        pygame.draw.line(surf, (50, 45, 40), (cx, height - 60), (cx + 22, height - 90), 4)
+        ccols = [(20, 45, 20), (25, 55, 25), (15, 35, 15)] if not is_sup else [(15, 25, 20), (20, 30, 25), (10, 15, 15)]
+        for i in range(rng.randint(8, 14)):
+            ox = rng.randint(-20, 20)
+            oy = rng.randint(canopy_top, canopy_bot - 5)
+            r = rng.randint(10, 22)
+            col = rng.choice(ccols)
+            col = tuple(max(0, min(255, c + rng.randint(-5, 5))) for c in col)
+            pygame.draw.circle(surf, col, (cx + ox, oy), r)
+            pygame.draw.circle(surf, (max(0, col[0] - 10), max(0, col[1] - 15), max(0, col[2] - 8)),
+                               (cx + ox + 2, oy + 3), max(1, r - 4))
+        for i in range(rng.randint(2, 5)):
+            hx = cx + rng.randint(-12, 12)
+            hy = canopy_top + rng.randint(0, 10)
+            pygame.draw.circle(surf, (35, 70, 35), (hx, hy), rng.randint(3, 6))
+
+    # --- Supernatural dark aura ---
+    if is_sup:
+        for i in range(5):
+            r = 20 + i * 4
+            pygame.draw.circle(surf, (60, 10, 40, 30), (cx, trunk_top + 10), r, 1)
 
     return surf
-
 
 def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42):
     random.seed(seed)
@@ -447,6 +503,52 @@ def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42)
             tx = random.randint(8, 24)
             ty = random.randint(height - 14, height - 6)
             pygame.draw.circle(surf, (70, 75, 80), (tx, ty), random.randint(1, 2))
+    elif plant_type == 'log':
+        # Fallen log with bark texture and moss
+        log_surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(log_surf, (70, 50, 30), (2, height - 10, 28, 8))
+        pygame.draw.ellipse(log_surf, (55, 40, 25), (4, height - 8, 24, 5))
+        # Bark lines
+        for i in range(4):
+            ly = height - 9 + i * 2
+            pygame.draw.line(log_surf, (45, 35, 25), (4, ly), (28, ly), 1)
+        # Moss on one end
+        pygame.draw.circle(log_surf, (30, 60, 30, 150), (6, height - 6), 3)
+        pygame.draw.circle(log_surf, (40, 70, 35, 120), (26, height - 6), 2)
+        surf.blit(log_surf, (0, 0))
+    elif plant_type == 'stump':
+        # Tree stump with rings
+        pygame.draw.ellipse(surf, (65, 50, 35), (4, height - 14, 24, 12))
+        pygame.draw.ellipse(surf, (50, 38, 25), (6, height - 12, 20, 9))
+        for r in range(3):
+            pygame.draw.ellipse(surf, (70 + r * 5, 55 + r * 3, 38 + r * 2),
+                                (8 + r * 2, height - 11 - r * 2, 16 - r * 4, 6 - r * 2))
+        # Dark center
+        pygame.draw.ellipse(surf, (30, 22, 15), (12, height - 9, 8, 4))
+    elif plant_type == 'boulder':
+        # Large mossy boulder
+        base = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(base, (75, 80, 85), (1, height - 22, 30, 18))
+        shadow = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (45, 50, 55, 50), (3, height - 18, 26, 14))
+        surf.blit(shadow, (0, 0))
+        surf.blit(base, (0, 0))
+        # Moss on top
+        for _ in range(4):
+            mx = random.randint(6, 24)
+            my = random.randint(height - 20, height - 10)
+            pygame.draw.circle(surf, (30, 55, 30, 120), (mx, my), random.randint(2, 4))
+    elif plant_type == 'sapling':
+        # Small tree sapling with thin trunk and small canopy
+        trunk_col = (60, 45, 30)
+        pygame.draw.line(surf, trunk_col, (cx, height - 4), (cx, height - 20), 2)
+        # Small canopy circles
+        for _ in range(3):
+            ox = random.randint(-6, 6)
+            oy = random.randint(-28, -20)
+            r = random.randint(4, 7)
+            pygame.draw.circle(surf, (35, 70, 35), (cx + ox, height + oy), r)
+            pygame.draw.circle(surf, (50, 90, 45), (cx + ox + 1, height + oy - 1), max(1, r - 2))
     else:  # bush
         # Enhanced bush with layered foliage
         layers = 3
@@ -607,7 +709,7 @@ def generate_all_pickups():
 
 
 def generate_world_ground_texture(width=1024, height=1024):
-    """Bake a large world-sized ground texture with fBm noise, moss, mud, and paths, with disk caching."""
+    """Bake a large world-sized ground texture with organic tropical forest detail."""
     cache_path = os.path.join(ASSET_DIR, 'cache', 'world_ground.npy')
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     import numpy as np
@@ -621,20 +723,65 @@ def generate_world_ground_texture(width=1024, height=1024):
         except Exception:
             pass
 
-    noise = generate_fbm_noise(width, height, octaves=6, seed=999)
-    base = np.array([25, 18, 12], dtype=np.float32)
+    rng = np.random.RandomState(42)
+    # Multi-octave noise for organic variation
+    n1 = generate_fbm_noise(width, height, octaves=6, seed=999)   # base soil
+    n2 = generate_fbm_noise(width, height, octaves=4, seed=777)   # moss patches
+    n3 = generate_fbm_noise(width, height, octaves=3, seed=555)   # leaf litter
+    n4 = generate_fbm_noise(width, height, octaves=5, seed=333)   # wet patches
+
+    base = np.array([28, 20, 14], dtype=np.float32)
     arr = np.zeros((height, width, 3), dtype=np.float32)
 
     for y in range(height):
         for x in range(width):
-            n = noise[y, x]
-            if n > 0.65:
-                col = np.array([35, 55, 30], dtype=np.float32) + (n - 0.65) * 30
-            elif n < 0.35:
-                col = np.array([18, 12, 8], dtype=np.float32) + n * 25
-            else:
-                col = base + (n - 0.5) * 40
+            n = n1[y, x]
+            # Base soil: dark damp earth
+            col = base + (n - 0.5) * 35
+            # Moss patches (green) where n2 > 0.55
+            if n2[y, x] > 0.55:
+                mg = (n2[y, x] - 0.55) * 2.0
+                col = col * (1.0 - mg * 0.4) + np.array([30, 55, 25], dtype=np.float32) * mg * 0.4
+            # Wet/muddy patches (darker, slight blue tint) where n4 > 0.6
+            if n4[y, x] > 0.6:
+                wg = (n4[y, x] - 0.6) * 2.5
+                col = col * (1.0 - wg * 0.5) + np.array([15, 18, 14], dtype=np.float32) * wg * 0.5
+            # Leaf litter (warm brown/orange specks) where n3 > 0.6
+            if n3[y, x] > 0.6:
+                lg = (n3[y, x] - 0.6) * 2.5
+                col = col + np.array([12, 8, 4], dtype=np.float32) * lg * 0.3
             arr[y, x] = np.clip(col, 0, 255)
+
+    # Add root patterns: dark wavy lines across the texture
+    root_rng = np.random.RandomState(123)
+    for _ in range(30):
+        ry = root_rng.randint(0, height)
+        rx = root_rng.randint(0, width)
+        rlen = root_rng.randint(20, 60)
+        angle = root_rng.uniform(0, math.pi * 2)
+        for i in range(rlen):
+            px = int(rx + math.cos(angle) * i)
+            py = int(ry + math.sin(angle) * i)
+            if 0 <= px < width and 0 <= py < height:
+                # Root is slightly darker than surrounding
+                if arr[py, px, 0] > 20:
+                    arr[py, px] *= 0.88
+            if 0 <= px + 1 < width:
+                if arr[py, px + 1, 0] > 20:
+                    arr[py, px + 1] *= 0.92
+
+    # Add stone/pebble spots
+    for _ in range(200):
+        sx = root_rng.randint(0, width)
+        sy = root_rng.randint(0, height)
+        sr = root_rng.randint(2, 6)
+        shade = root_rng.randint(60, 100)
+        for dy in range(-sr, sr + 1):
+            for dx in range(-sr, sr + 1):
+                if dx*dx + dy*dy <= sr*sr:
+                    nx, ny = sx + dx, sy + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        arr[ny, nx] = np.clip(arr[ny, nx] * 0.7 + shade * 0.3, 0, 255)
 
     uint_arr = arr.astype(np.uint8)
     np.save(cache_path, uint_arr)

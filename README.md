@@ -434,6 +434,8 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 ### Recent changes
 
 - **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Press **F5** (next) / **F6** (previous) during gameplay to switch quality tiers at runtime — changes take effect immediately and are saved to `settings.json`. Presets control resolution, bloom, HDR, god rays, SSAO, particles, dynamic lights, tree draw cap, and water movement speed.
+- **Towering Tropical Forest:** Tree billboards were upgraded from 64×128 to 64×256 sprites with 7 distinct archetypes — tall tropical hardwoods (balete) with buttress roots, massive trunks with tapered bark and layered canopies, slender bamboo clusters, broken dead trees with sparse branches, banana/palm trees with radiating fronds, and supernatural twisted trees with a dark aura. Trunks feature vertical bark grooves, moss patches, and branches extending in varied directions. Per-tree seeds ensure stable appearance across frames.
+- **Organic Terrain:** The world ground texture (1024×1024) now uses 4 layers of multi-octave fBm noise to produce wet soil patches, exposed moss clusters, leaf litter, and subtle root patterns. Stone/pebble spots are scattered across the surface. Undergrowth now includes 8 sprite types: fern, mushroom, rock, bush, fallen log, tree stump, mossy boulder, and sapling — all placed deterministically per chapter.
 - **Bloom & Post-Processing:** Bloom is now controlled by the active quality preset (`low` = off, `medium`/`high` = on). The `ShaderRenderer` performs a bloom extraction pass when enabled. Full multi-pass bloom blur requires ModernGL shader compilation; the pipeline gracefully falls back to software rendering if shaders fail.
 - **HDR Tone Mapping:** High quality enables HDR exposure (`HDR_EXPOSURE=1.1`) and ACES tone mapping. Medium and low use Reinhard tone mapping at default exposure.
 - **God Rays:** High quality enables screen-space god-ray scattering from the flashlight. Low and medium disable this pass.
@@ -452,6 +454,7 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 - Enemies path-find using a coarse 1-tile grid; they may clip near thin obstacles. They do not open doors.
 - Water tiles slow movement but do not implement swimming or depth variation.
 - SSAO is defined in presets but not yet integrated into the renderer (no depth buffer available).
+- Tree billboards are 2D sprites; they do not rotate to face the camera (static billboard orientation). Canopy overlap at extreme distances may appear flat.
 
 ---
 

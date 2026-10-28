@@ -226,16 +226,27 @@ class Renderer:
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
         self.tree_sprites = {
-            'balete': generate_tree_billboard('balete', 64, 128),
-            'bamboo': generate_tree_billboard('bamboo', 64, 128),
-            'mahogany': generate_tree_billboard('mahogany', 64, 128),
-            'dead': generate_tree_billboard('dead', 64, 128),
+            'balete': generate_tree_billboard('balete', 64, 256),
+            'bamboo': generate_tree_billboard('bamboo', 64, 256),
+            'mahogany': generate_tree_billboard('mahogany', 64, 256),
+            'dead': generate_tree_billboard('dead', 64, 256),
+            'banana': generate_tree_billboard('banana', 64, 256),
+            'palm': generate_tree_billboard('palm', 64, 256),
+            'supernatural': generate_tree_billboard('supernatural', 64, 256),
+        }
+        self._TREE_HEIGHT_MULT = {
+            'balete': 2.8, 'mahogany': 3.2, 'bamboo': 2.2, 'dead': 2.0,
+            'banana': 2.0, 'palm': 2.8, 'supernatural': 3.0,
         }
         self.undergrowth_sprites = {
             'fern': generate_undergrowth_sprite('fern', 32, 32),
             'mushroom': generate_undergrowth_sprite('mushroom', 32, 32),
             'rock': generate_undergrowth_sprite('rock', 32, 32),
             'bush': generate_undergrowth_sprite('bush', 32, 32),
+            'log': generate_undergrowth_sprite('log', 32, 32),
+            'stump': generate_undergrowth_sprite('stump', 32, 32),
+            'boulder': generate_undergrowth_sprite('boulder', 32, 32),
+            'sapling': generate_undergrowth_sprite('sapling', 32, 32),
         }
         self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
         self.frame_counter = 0
@@ -1008,7 +1019,8 @@ class Renderer:
 
             if kind == 'tree':
                 img = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
-                sh = unit * 1.6 * obj.get('scale', 1.0)
+                height_mult = self._TREE_HEIGHT_MULT.get(obj.get('type'), 2.5)
+                sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
                 
                 # Enhanced wind animation with gusts
