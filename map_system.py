@@ -136,7 +136,7 @@ class GameMap:
 
             d_val = density_noise[int(ty) % self.height, int(tx) % self.width]
             # Dense groves allow trees closer together; clearings force wider gaps.
-            min_dist = 1.4 if d_val > 0.7 else 2.8
+            min_dist = 1.2 if d_val > 0.7 else 2.4
 
             too_close = False
             for t in self.trees:
@@ -265,16 +265,22 @@ class GameMap:
                       [(c['x'], c['y'], 'checkpoint', c) for c in self.checkpoints] + \
                       [(self.exit_pos[0], self.exit_pos[1], 'exit', None)]
 
+        # Use PLAYER_SIZE as the clearance radius so validation matches the
+        # actual is_solid() checks.  The old 0.2 value was too loose: with
+        # denser trees some pickups/enemies sat just outside the validation
+        # threshold but inside the real collision radius.
+        CLEAR_RADIUS = PLAYER_SIZE
+
         for (x, y, kind, obj) in all_targets:
-            while self.is_tree_solid(x, y, radius=0.2):
+            while self.is_tree_solid(x, y, radius=CLEAR_RADIUS):
                 for t in list(self.trees):
-                    if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + 0.5):
+                    if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + CLEAR_RADIUS):
                         self.trees.remove(t)
                         cleared_trees += 1
                 self.spatial_hash.clear()
                 for t in self.trees:
                     self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
-            
+
             ix, iy = int(x), int(y)
             if 0 <= ix < self.width and 0 <= iy < self.height:
                 if self.grid[iy][ix] == WATER:
@@ -319,7 +325,7 @@ class GameMap:
                 for dy in range(-r, r + 1):
                     cx, cy = int(x) + dx, int(y) + dy
                     if (cx, cy) in reachable and self.grid[cy][cx] == EMPTY \
-                            and not self.is_tree_solid(cx + 0.5, cy + 0.5, radius=0.2):
+                            and not self.is_tree_solid(cx + 0.5, cy + 0.5, radius=PLAYER_SIZE):
                         return (cx + 0.5, cy + 0.5)
         return None
 

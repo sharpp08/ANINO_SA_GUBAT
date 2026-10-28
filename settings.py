@@ -65,7 +65,7 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
         'enable_particles': False, 'enable_dynamic_lights': False,
         'enable_aurora': False, 'enable_enhanced_floor': False,
-        'max_render_trees': 60, 'max_particles': 50, 'max_enemies': 4,
+        'max_render_trees': 80, 'max_particles': 50, 'max_enemies': 4,
         # Renderer pass parameters
         'bloom_threshold': 0.85, 'bloom_intensity': 0.3, 'bloom_blur_passes': 1,
         'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
@@ -79,7 +79,7 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': False,
         'enable_particles': True, 'enable_dynamic_lights': False,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'max_render_trees': 100, 'max_particles': 150, 'max_enemies': 6,
+        'max_render_trees': 150, 'max_particles': 150, 'max_enemies': 6,
         'bloom_threshold': 0.72, 'bloom_intensity': 0.45, 'bloom_blur_passes': 2,
         'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
         'hdr_exposure': 1.0, 'tone_mapping': 'reinhard',
@@ -92,7 +92,7 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': True,
         'enable_particles': True, 'enable_dynamic_lights': True,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'max_render_trees': 120, 'max_particles': 300, 'max_enemies': 8,
+        'max_render_trees': 220, 'max_particles': 300, 'max_enemies': 8,
         'bloom_threshold': 0.65, 'bloom_intensity': 0.6, 'bloom_blur_passes': 3,
         'god_ray_samples': 40, 'god_ray_intensity': 0.35, 'god_ray_decay': 0.88,
         'hdr_exposure': 1.1, 'tone_mapping': 'aces',
@@ -169,9 +169,9 @@ WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
 
 # Outdoor Forest Settings (Phases 1-4)
 MAP_SIZE = 64
-TREE_COUNT_CH1 = 220
-TREE_COUNT_CH2 = 300
-MAX_RENDER_TREES = 120
+TREE_COUNT_CH1 = 380
+TREE_COUNT_CH2 = 500
+MAX_RENDER_TREES = 220
 GROUND_TEX_SIZE = 1024
 UNDERGROWTH_DENSITY = 350
 

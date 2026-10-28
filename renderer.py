@@ -1004,7 +1004,11 @@ class Renderer:
             dx = x - player.x
             dy = y - player.y
             dist = math.sqrt(dx * dx + dy * dy)
-            if dist < 0.3 or dist > max_dist:
+            # Only cull when dist < 0.05 (essentially on top of the object).
+            # The old 0.3 threshold was too aggressive: with PLAYER_SIZE=0.3 and
+            # tree radii around 0.2-0.5, the player naturally stands within 0.3
+            # units of a trunk, causing trees to vanish on approach.
+            if dist < 0.05 or dist > max_dist:
                 return False
             angle = self._norm_angle(math.atan2(dy, dx) - player.angle)
             if abs(angle) > margin:
@@ -1114,7 +1118,17 @@ class Renderer:
         """Scale, light and depth-test-blit one billboard. Returns columns drawn."""
         sw = int(sw)
         sh = int(sh)
-        if sh < 2 or sw < 1 or sh > self.h * 3:
+        # Clamp oversized sprites instead of culling them.
+        # With taller trees (height_mult up to 4.2, scale up to 1.8), a close
+        # tree can project taller than 3× screen height.  Culling it makes the
+        # trunk disappear as the player approaches.  Clamping keeps the visible
+        # lower portion (which is correct — up close you only see the trunk).
+        MAX_SPRITE_H = self.h * 12
+        if sh > MAX_SPRITE_H:
+            aspect = sw / max(1, sh)
+            sh = MAX_SPRITE_H
+            sw = max(1, int(sh * aspect))
+        if sh < 2 or sw < 1:
             return 0
         scaled = pygame.transform.scale(img, (max(1, sw), max(1, sh)))
         self._light_sprite(scaled, dist)
