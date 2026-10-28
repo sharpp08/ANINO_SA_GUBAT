@@ -14,6 +14,7 @@
   "enable_sanity": true,
   "enable_intro": true,
   "debug_overlay": true,
+  "quality_tier": "medium",
   "enable_animations": true,
   "enable_spring_physics": true,
   "enable_particle_physics": false,

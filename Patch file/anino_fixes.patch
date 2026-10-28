@@ -1,0 +1,396 @@
+diff --git a/README.md b/README.md
+index a7aabd4..0094e0f 100644
+--- a/README.md
++++ b/README.md
+@@ -27,7 +27,7 @@
+ 15. [Debug Tools](#debug-tools)
+ 16. [Architecture & Modules](#architecture--modules)
+ 17. [Technical Notes](#technical-notes)
+-18. [Known Limitations](#known-limitations)
++18. [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations)
+ 19. [Intro Cinematic](#intro-cinematic)
+ 20. [Lore](#lore)
+ 
+@@ -59,7 +59,7 @@ The game features:
+ | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
+ | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
+ | 🌌 Atmospheric Sky | Layered clouds with parallax, subtle aurora borealis effect, twinkling stars, dynamic moon |
+-| 👹 7 Enemy Types | Each with unique stats and AI (5 spawn in the current chapters, see [Chapters](#chapters)) |
++| 👹 7 Enemy Types | Each with unique stats and AI (all 7 spawn across the two chapters, see [Chapters](#chapters)) |
+ | ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
+ | ✝️ 5 Sacred Wards | Light, Shield, Banish, Bind and Final, powered by Faith energy with per-ward cooldowns |
+ | 🔦 Flashlight | Battery-powered beam with sway, low-battery flicker, and pickups to recharge |
+@@ -162,8 +162,10 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder. Saves, se
+ | `F` or `1` | Toggle Flashlight (Ward 1: Light) |
+ | `2` | Cast Ward 2: Shield |
+ | `3` | Cast Ward 3: Banish |
++| `4` | Cast Ward 4: Bind |
++| `5` | Cast Ward 5: Final |
+ | `Tab` | Cycle the selected ward (Light → Shield → Banish → Bind → Final) |
+-| `Q` | Cast the currently selected ward (use this with `Tab` for **Bind** and **Final**) |
++| `Q` | Cast the currently selected ward (alternative to `4` / `5` for **Bind** and **Final**) |
+ | `G` | Place a Salt circle (repelling/slowing zone) |
+ | `H` | Throw Garlic (barrier zone against aswang) |
+ | `E` | Interact (open doors, save checkpoints) |
+@@ -235,8 +237,8 @@ Reloading makes noise (`4.0`). Shotgun reload takes 1.5 s, revolver reload 1.2 s
+ | **Aswang** | 80 | 15 | 2.0 | 8 tiles | Repel, Garlic | None | Ch. 1, Ch. 2 |
+ | **Manananggal** | 100 | 20 | 2.5 | 10 tiles | Repel, Cross | Bind | Ch. 2 |
+ | **Tikbalang** | 150 | 30 | 1.8 | 7 tiles | Shield | Repel | Ch. 2 |
+-| **Kapre** | 200 | 35 | 1.2 | 6 tiles | Banish | Bind, Repel | *Not placed yet* |
+-| **White Lady** | 60 | 10 | 1.5 | 12 tiles | Bind | Banish | *Not placed yet* |
++| **Kapre** | 200 | 35 | 1.2 | 6 tiles | Banish | Bind, Repel | Ch. 2 |
++| **White Lady** | 60 | 10 | 1.5 | 12 tiles | Bind | Banish | Ch. 1 |
+ | **Multo** | 50 | 12 | 2.0 | 8 tiles | Banish | None | Ch. 1, Ch. 2 |
+ | **Sigbin** | 70 | 18 | 3.5 | 7 tiles | Bind | None | Ch. 1, Ch. 2 |
+ 
+@@ -263,8 +265,8 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and
+ 
+ | Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
+ |---|---|---|---|---|---|---|
+-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin | 15 |
+-| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang | 9 |
++| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
++| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
+ 
+ Both chapters have a checkpoint and a Bible page inside the cabin near the map centre. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
+ 
+@@ -322,7 +324,8 @@ Sprite distance shading only changes colour, never transparency, so sprites no l
+ ### Constants (`settings.py`)
+ - Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
+ - Effect toggles such as `ENABLE_BLOOM`, `ENABLE_FOG`, `ENABLE_PARTICLES`, `ENABLE_SANITY` and `ENABLE_INTRO`.
+-- `QUALITY_PRESETS` (`low`, `medium`, `high`) are defined, with `QUALITY_TIER = 'medium'`, but they are not applied yet (see [Known Limitations](#known-limitations)).
++- `QUALITY_PRESETS` (`low`, `medium`, `high`): chosen with `"quality_tier"` in `settings.json` (default `medium`) and applied at startup by `main.py` before any module imports resolution-dependent values. See [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations).
++- Lighting constants (`AMBIENT`, `AMBIENT_LIGHT_OFF`, `BEAM_RADIUS`, `BEAM_GLOW`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW`, ...) are defined only in `settings.py`.
+ 
+ ### Animation & Physics System
+ The game includes a comprehensive physics and animation system built entirely in Python:
+@@ -348,7 +351,7 @@ The F3 debug overlay displays:
+ ### Configuration (`settings.json`)
+ `load_settings()` merges the file over these defaults:
+ 
+-`screen_width`, `screen_height`, `fullscreen`, `mouse_sensitivity`, `master_volume`, `music_volume`, `sfx_volume`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_audio_synth`, `enable_sanity`, `enable_intro`, `debug_overlay`, `controls`
++`screen_width`, `screen_height`, `fullscreen`, `mouse_sensitivity`, `master_volume`, `music_volume`, `sfx_volume`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_audio_synth`, `enable_sanity`, `enable_intro`, `debug_overlay`, `quality_tier`, `controls`
+ 
+ - In the code shown, `main.py` reads `enable_intro` when you start a new game (set it to `false` to skip the cinematic).
+ - `settings.json` is created when `save_settings()` is called; it is not required to run the game.
+@@ -428,12 +431,21 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
+ 
+ ## Known Limitations & Recent Optimizations
+ 
+-- **Quality Presets:** Set `"quality_tier"` to `low`, `medium`, or `high` in `settings.json`. Applied at startup before any resolution-dependent surface exists.
+-- **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurface), eliminating per-ray surface allocations and reducing the render pass to scale + multiply-fill + blit.
+-- **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final directly (alongside the original `Tab` + `Q` method).
++### Recent changes
++
++- **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Presets control resolution, particles, dynamic lights and the tree draw cap.
++- **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurfaces), so the per-ray work is scale + multiply-fill + blit with no per-ray surface allocations.
++- **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final (alongside the `Tab` + `Q` method).
+ - **Door Collision:** Closed doors block movement for both player and enemies (`is_solid(x, y, doors_block=True)`); opened doors are passable for both.
+-- **Enemy Placement:** White Lady is placed in Chapter 1, and Kapre is placed in Chapter 2 (with automatic tree clearance via reachability validation).
+-- **Lighting Constants:** Lighting constants (`AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOG`) are centralized in `settings.py` without duplication in renderer/enemies.
++- **Enemy Placement:** White Lady is placed in Chapter 1 and Kapre in Chapter 2. Trees near entities are cleared, and a flood-fill from the player start relocates or flags (in the F3 overlay) anything unreachable.
++- **Lighting Constants:** `AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW` and related constants are defined once in `settings.py`; `renderer.py` and `enemies.py` no longer redefine them.
++
++### Known limitations
++
++- Quality presets do not toggle bloom (it stays controlled by `ENABLE_BLOOM`); the HDR/PBR/SSAO/god-ray entries in the presets are not wired to any renderer yet.
++- `quality_tier` is read once at startup; changing it needs a restart.
++- Enemies can't path-find around trees or closed doors; they slide along obstacles.
++- Water tiles are walkable (no swimming or slowdown).
+ 
+ ---
+ 
+diff --git a/enemies.py b/enemies.py
+index 7c7d55a..20ea294 100644
+--- a/enemies.py
++++ b/enemies.py
+@@ -4,11 +4,6 @@ Enemy AI - Implements enemy behaviors, states, and combat interactions.
+ import math
+ import random
+ from settings import *
+-# Tunable Lighting & Horror Constants
+-AMBIENT = 0.35
+-FOG_DISTANCE = 35.0
+-BEAM_RADIUS = 0.45
+-ENEMY_EYE_GLOW = True
+ 
+ 
+ 
+diff --git a/main.py b/main.py
+index f3435e1..73f477c 100644
+--- a/main.py
++++ b/main.py
+@@ -9,6 +9,9 @@ import random
+ import json
+ import pygame
+ 
++import settings as _settings_mod
++# Apply the quality preset from settings.json before any module copies resolution-dependent values
++_settings_mod.apply_quality_preset(_settings_mod.load_settings().get('quality_tier', _settings_mod.QUALITY_TIER))
+ from settings import *
+ from player import Player
+ from map_system import GameMap
+@@ -473,6 +476,12 @@ class Game:
+             elif k == pygame.K_3:
+                 p.selected_ward = 2
+                 self._cast_selected_ward()
++            elif k == pygame.K_4:
++                p.selected_ward = 3
++                self._cast_selected_ward()
++            elif k == pygame.K_5:
++                p.selected_ward = 4
++                self._cast_selected_ward()
+             elif k == pygame.K_q:
+                 self._cast_selected_ward()
+             elif k == pygame.K_TAB:
+diff --git a/map_system.py b/map_system.py
+index dda2ffe..d5308fb 100644
+--- a/map_system.py
++++ b/map_system.py
+@@ -194,6 +194,7 @@ class GameMap:
+             {'type': 'multo', 'x': 15.5, 'y': 40.5},
+             {'type': 'aswang', 'x': 45.5, 'y': 25.5},
+             {'type': 'sigbin', 'x': 25.5, 'y': 50.5},
++            {'type': 'white_lady', 'x': 36.5, 'y': 44.5},
+         ]
+         self.checkpoints.append({'x': 32.5, 'y': 32.5})
+         self.exit_pos = (58.5, 58.5)
+@@ -217,6 +218,7 @@ class GameMap:
+             {'type': 'multo', 'x': 15.5, 'y': 35.5},
+             {'type': 'sigbin', 'x': 52.5, 'y': 40.5},
+             {'type': 'tikbalang', 'x': 32.5, 'y': 45.5},
++            {'type': 'kapre', 'x': 30.5, 'y': 20.5},
+         ]
+         self.checkpoints.append({'x': 32.5, 'y': 32.5})
+         self.exit_pos = (58.5, 58.5)
+@@ -249,6 +251,43 @@ class GameMap:
+         if cleared_trees > 0:
+             print(f"[MAP] chapter {self.chapter_num}: removed {cleared_trees} tree(s) blocking entities/exit")
+ 
++        # Flood-fill from the player start; relocate or flag anything that cannot be reached
++        reachable = self._reachable_cells()
++        for (x, y, kind, obj) in all_targets:
++            if kind == 'checkpoint' or (int(x), int(y)) in reachable:
++                continue
++            if obj is not None:
++                spot = self._nearest_reachable(x, y, reachable)
++                if spot:
++                    obj['x'], obj['y'] = spot
++                    continue
++            self.validation_errors.append(f"{kind} at ({x:.1f},{y:.1f}) is unreachable")
++
++    def _reachable_cells(self):
++        """Cells reachable from the player start. Closed doors count as passable (they can be opened)."""
++        sx, sy = int(self.player_start[0]), int(self.player_start[1])
++        seen = {(sx, sy)}
++        stack = [(sx, sy)]
++        while stack:
++            cx, cy = stack.pop()
++            for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
++                if (nx, ny) in seen or not (0 < nx < self.width - 1 and 0 < ny < self.height - 1):
++                    continue
++                if self.grid[ny][nx] in (EMPTY, DOOR, WATER):
++                    seen.add((nx, ny))
++                    stack.append((nx, ny))
++        return seen
++
++    def _nearest_reachable(self, x, y, reachable, max_r=6):
++        for r in range(1, max_r + 1):
++            for dx in range(-r, r + 1):
++                for dy in range(-r, r + 1):
++                    cx, cy = int(x) + dx, int(y) + dy
++                    if (cx, cy) in reachable and self.grid[cy][cx] == EMPTY \
++                            and not self.is_tree_solid(cx + 0.5, cy + 0.5, radius=0.2):
++                        return (cx + 0.5, cy + 0.5)
++        return None
++
+     def is_tree_solid(self, x, y, radius=0.3):
+         nearby = self.spatial_hash.query(x, y, radius=radius)
+         for t in nearby:
+@@ -262,12 +301,16 @@ class GameMap:
+             return True
+         return self.grid[iy][ix] != EMPTY
+ 
+-    def is_solid(self, x, y):
++    def is_solid(self, x, y, doors_block=True):
++        """True if (x, y) blocks movement. Closed doors block unless doors_block=False;
++        opened doors become EMPTY tiles and are always passable."""
+         ix, iy = int(x), int(y)
+         if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
+             return True
+         tile = self.grid[iy][ix]
+-        if tile != EMPTY and tile != DOOR and tile != WATER:
++        if tile == DOOR:
++            return doors_block
++        if tile != EMPTY and tile != WATER:
+             return True
+         return self.is_tree_solid(x, y, radius=0.25)
+ 
+diff --git a/renderer.py b/renderer.py
+index 78c88bc..1fa7348 100644
+--- a/renderer.py
++++ b/renderer.py
+@@ -28,16 +28,7 @@ import pygame
+ import numpy as np
+ from settings import *
+ 
+-# ─── Tunable Lighting & Horror Constants ─────────────────────────────────────
+-AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
+-AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
+-DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
+-BEAM_RADIUS = 0.45        # beam radius as a fraction of screen width
+-BEAM_GLOW = (52, 42, 22)  # warm additive light inside the beam
+-FOG_DISTANCE = 35.0
+-ENEMY_EYE_GLOW = True
+-MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
+-DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
++# Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
+ 
+ # eye positions in the 64x64 enemy sprites made by asset_generator.py
+ ENEMY_EYES = {
+@@ -184,6 +175,9 @@ class Renderer:
+         self.w = INTERNAL_WIDTH
+         self.h = INTERNAL_HEIGHT
+         self.textures = textures
++        self._wall_col_cache = {}
++        for _tex in self.textures.values():  # pre-slice wall columns once at startup
++            self._wall_columns(_tex)
+         self.weapon_sprites = weapon_sprites
+         self.enemy_sprites = enemy_sprites
+         self.pickup_sprites = pickup_sprites
+@@ -781,19 +775,15 @@ class Renderer:
+             # Texture mapping
+             tex = self._get_wall_texture(wall_type)
+             if tex:
+-                tex_x = int(hit_x_frac * tex.get_width()) % tex.get_width()
+-                # Get texture column
+-                tex_col = pygame.Surface((1, tex.get_height()), pygame.SRCALPHA)
+-                tex_col.blit(tex, (0, 0), (tex_x, 0, 1, tex.get_height()))
+-                scaled_col = pygame.transform.scale(tex_col, (1, max(1, wall_h)))
+-
+-                # Distance shading (+ a bit darker on side faces for depth)
++                cols = self._wall_columns(tex)
++                tex_x = int(hit_x_frac * len(cols)) % len(cols)
++                # Scale the pre-sliced column, then shade it with a multiply-fill
++                # (distance fog + darker side faces) instead of allocating overlays.
++                shaded = pygame.transform.scale(cols[tex_x], (1, max(1, wall_h)))
+                 shade = max(0.15, 1.0 - corrected_dist / MAX_DEPTH)
+-                dark_a = int((1 - shade) * 220) + (35 if side == 1 else 0)
+-                shaded = scaled_col.copy()
+-                dark = pygame.Surface((1, max(1, wall_h)), pygame.SRCALPHA)
+-                dark.fill((0, 0, 0, min(255, dark_a)))
+-                shaded.blit(dark, (0, 0))
++                dark_a = min(255, int((1 - shade) * 220) + (35 if side == 1 else 0))
++                v = 255 - dark_a
++                shaded.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+ 
+                 self.surface.blit(shaded, (i, max(0, draw_start)),
+                                   (0, max(0, -draw_start), 1, min(wall_h, self.h - max(0, draw_start))))
+@@ -805,6 +795,15 @@ class Renderer:
+                     de = min(self.h, draw_end)
+                     pygame.draw.line(self.surface, color, (i, ds), (i, de))
+ 
++    def _wall_columns(self, tex):
++        """Return the 1px-wide column subsurfaces of a wall texture (sliced once, zero-copy)."""
++        cols = self._wall_col_cache.get(id(tex))
++        if cols is None:
++            h = tex.get_height()
++            cols = [tex.subsurface((x, 0, 1, h)) for x in range(tex.get_width())]
++            self._wall_col_cache[id(tex)] = cols
++        return cols
++
+     def _dda_cast(self, px, py, cos_a, sin_a, game_map):
+         """Digital Differential Analyzer raycasting. Returns (dist, wall_type, hit_frac, side)."""
+         # Determine step direction
+diff --git a/settings.json b/settings.json
+index 1e7d6a8..86f9abb 100644
+--- a/settings.json
++++ b/settings.json
+@@ -14,6 +14,7 @@
+   "enable_sanity": true,
+   "enable_intro": true,
+   "debug_overlay": true,
++  "quality_tier": "medium",
+   "enable_animations": true,
+   "enable_spring_physics": true,
+   "enable_particle_physics": false,
+diff --git a/settings.py b/settings.py
+index 57d1ee7..9365856 100644
+--- a/settings.py
++++ b/settings.py
+@@ -16,9 +16,6 @@ FPS = 60
+ TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
+ FULLSCREEN = True
+ 
+-# Quality Tiers & Graphics Pipeline
+-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'
+-
+ # Performance & Effect Toggles
+ DEBUG = True
+ ENABLE_BLOOM = True
+@@ -55,7 +52,7 @@ ENABLE_CHROMATIC_ABERRATION = True
+ 
+ 
+ # Quality Tier Presets
+-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high' - set at runtime via quality_settings
++QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
+ 
+ # Performance-optimized quality presets with measurable differences
+ QUALITY_PRESETS = {
+@@ -90,16 +87,27 @@ ACTIVE_QUALITY = QUALITY_PRESETS['medium'].copy()
+ 
+ 
+ def apply_quality_preset(tier):
+-    """Apply a quality preset and return the settings dict."""
+-    global ACTIVE_QUALITY, INTERNAL_WIDTH, INTERNAL_HEIGHT, NUM_RAYS, WALL_HEIGHT_SCALE
++    """Apply a quality preset and return the settings dict.
++
++    Must run before any module does ``from settings import *`` (main.py does
++    this first), because resolution-dependent values are copied at import.
++    """
++    global ACTIVE_QUALITY, QUALITY_TIER, INTERNAL_WIDTH, INTERNAL_HEIGHT
++    global NUM_RAYS, WALL_HEIGHT_SCALE, MAX_RENDER_TREES
++    global ENABLE_PARTICLES, ENABLE_DYNAMIC_LIGHTS
+     if tier not in QUALITY_PRESETS:
+         tier = 'medium'
++    QUALITY_TIER = tier
+     ACTIVE_QUALITY = QUALITY_PRESETS[tier].copy()
+-    # Update render settings that depend on resolution
++    # Resolution-dependent render settings
+     INTERNAL_WIDTH = ACTIVE_QUALITY['internal_width']
+     INTERNAL_HEIGHT = ACTIVE_QUALITY['internal_height']
+     NUM_RAYS = INTERNAL_WIDTH
+     WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
++    # Feature toggles driven by the preset
++    MAX_RENDER_TREES = ACTIVE_QUALITY['max_render_trees']
++    ENABLE_PARTICLES = ENABLE_PARTICLES and ACTIVE_QUALITY['enable_particles']
++    ENABLE_DYNAMIC_LIGHTS = ENABLE_DYNAMIC_LIGHTS and ACTIVE_QUALITY['enable_dynamic_lights']
+     return ACTIVE_QUALITY
+ 
+ 
+@@ -241,10 +249,15 @@ FAITH_BLUE = (80, 120, 220)
+ SANITY_PURPLE = (140, 80, 200)
+ 
+ # Lighting & Horror Atmosphere Constants
+-AMBIENT = 0.35
++AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
++AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
++DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
++BEAM_RADIUS = 0.45        # beam radius as a fraction of screen width
++BEAM_GLOW = (52, 42, 22)  # warm additive light inside the beam
+ FOG_DISTANCE = 35.0
+-BEAM_RADIUS = 0.45
+ ENEMY_EYE_GLOW = True
++MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
++DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
+ 
+ # Custom Enemy Sprites
+ USE_CUSTOM_ENEMY_SPRITES = True
+@@ -340,6 +353,7 @@ def load_settings(path=SETTINGS_PATH):
+         'enable_sanity': ENABLE_SANITY,
+         'enable_intro': ENABLE_INTRO,
+         'debug_overlay': DEBUG_OVERLAY,
++        'quality_tier': QUALITY_TIER,
+         'controls': CONTROLS.copy(),
+     }
+     if os.path.exists(path):

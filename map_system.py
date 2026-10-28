@@ -194,6 +194,7 @@ class GameMap:
             {'type': 'multo', 'x': 15.5, 'y': 40.5},
             {'type': 'aswang', 'x': 45.5, 'y': 25.5},
             {'type': 'sigbin', 'x': 25.5, 'y': 50.5},
+            {'type': 'white_lady', 'x': 36.5, 'y': 44.5},
         ]
         self.checkpoints.append({'x': 32.5, 'y': 32.5})
         self.exit_pos = (58.5, 58.5)
@@ -217,6 +218,7 @@ class GameMap:
             {'type': 'multo', 'x': 15.5, 'y': 35.5},
             {'type': 'sigbin', 'x': 52.5, 'y': 40.5},
             {'type': 'tikbalang', 'x': 32.5, 'y': 45.5},
+            {'type': 'kapre', 'x': 30.5, 'y': 20.5},
         ]
         self.checkpoints.append({'x': 32.5, 'y': 32.5})
         self.exit_pos = (58.5, 58.5)
@@ -249,6 +251,43 @@ class GameMap:
         if cleared_trees > 0:
             print(f"[MAP] chapter {self.chapter_num}: removed {cleared_trees} tree(s) blocking entities/exit")
 
+        # Flood-fill from the player start; relocate or flag anything that cannot be reached
+        reachable = self._reachable_cells()
+        for (x, y, kind, obj) in all_targets:
+            if kind == 'checkpoint' or (int(x), int(y)) in reachable:
+                continue
+            if obj is not None:
+                spot = self._nearest_reachable(x, y, reachable)
+                if spot:
+                    obj['x'], obj['y'] = spot
+                    continue
+            self.validation_errors.append(f"{kind} at ({x:.1f},{y:.1f}) is unreachable")
+
+    def _reachable_cells(self):
+        """Cells reachable from the player start. Closed doors count as passable (they can be opened)."""
+        sx, sy = int(self.player_start[0]), int(self.player_start[1])
+        seen = {(sx, sy)}
+        stack = [(sx, sy)]
+        while stack:
+            cx, cy = stack.pop()
+            for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                if (nx, ny) in seen or not (0 < nx < self.width - 1 and 0 < ny < self.height - 1):
+                    continue
+                if self.grid[ny][nx] in (EMPTY, DOOR, WATER):
+                    seen.add((nx, ny))
+                    stack.append((nx, ny))
+        return seen
+
+    def _nearest_reachable(self, x, y, reachable, max_r=6):
+        for r in range(1, max_r + 1):
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    cx, cy = int(x) + dx, int(y) + dy
+                    if (cx, cy) in reachable and self.grid[cy][cx] == EMPTY \
+                            and not self.is_tree_solid(cx + 0.5, cy + 0.5, radius=0.2):
+                        return (cx + 0.5, cy + 0.5)
+        return None
+
     def is_tree_solid(self, x, y, radius=0.3):
         nearby = self.spatial_hash.query(x, y, radius=radius)
         for t in nearby:
@@ -262,12 +301,16 @@ class GameMap:
             return True
         return self.grid[iy][ix] != EMPTY
 
-    def is_solid(self, x, y):
+    def is_solid(self, x, y, doors_block=True):
+        """True if (x, y) blocks movement. Closed doors block unless doors_block=False;
+        opened doors become EMPTY tiles and are always passable."""
         ix, iy = int(x), int(y)
         if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
             return True
         tile = self.grid[iy][ix]
-        if tile != EMPTY and tile != DOOR and tile != WATER:
+        if tile == DOOR:
+            return doors_block
+        if tile != EMPTY and tile != WATER:
             return True
         return self.is_tree_solid(x, y, radius=0.25)
 

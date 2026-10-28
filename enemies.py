@@ -4,11 +4,6 @@ Enemy AI - Implements enemy behaviors, states, and combat interactions.
 import math
 import random
 from settings import *
-# Tunable Lighting & Horror Constants
-AMBIENT = 0.35
-FOG_DISTANCE = 35.0
-BEAM_RADIUS = 0.45
-ENEMY_EYE_GLOW = True
 
 
 

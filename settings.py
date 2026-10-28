@@ -16,9 +16,6 @@ FPS = 60
 TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
 FULLSCREEN = True
 
-# Quality Tiers & Graphics Pipeline
-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'
-
 # Performance & Effect Toggles
 DEBUG = True
 ENABLE_BLOOM = True
@@ -55,7 +52,7 @@ ENABLE_CHROMATIC_ABERRATION = True
 
 
 # Quality Tier Presets
-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high' - set at runtime via quality_settings
+QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
 
 # Performance-optimized quality presets with measurable differences
 QUALITY_PRESETS = {
@@ -90,16 +87,27 @@ ACTIVE_QUALITY = QUALITY_PRESETS['medium'].copy()
 
 
 def apply_quality_preset(tier):
-    """Apply a quality preset and return the settings dict."""
-    global ACTIVE_QUALITY, INTERNAL_WIDTH, INTERNAL_HEIGHT, NUM_RAYS, WALL_HEIGHT_SCALE
+    """Apply a quality preset and return the settings dict.
+
+    Must run before any module does ``from settings import *`` (main.py does
+    this first), because resolution-dependent values are copied at import.
+    """
+    global ACTIVE_QUALITY, QUALITY_TIER, INTERNAL_WIDTH, INTERNAL_HEIGHT
+    global NUM_RAYS, WALL_HEIGHT_SCALE, MAX_RENDER_TREES
+    global ENABLE_PARTICLES, ENABLE_DYNAMIC_LIGHTS
     if tier not in QUALITY_PRESETS:
         tier = 'medium'
+    QUALITY_TIER = tier
     ACTIVE_QUALITY = QUALITY_PRESETS[tier].copy()
-    # Update render settings that depend on resolution
+    # Resolution-dependent render settings
     INTERNAL_WIDTH = ACTIVE_QUALITY['internal_width']
     INTERNAL_HEIGHT = ACTIVE_QUALITY['internal_height']
     NUM_RAYS = INTERNAL_WIDTH
     WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
+    # Feature toggles driven by the preset
+    MAX_RENDER_TREES = ACTIVE_QUALITY['max_render_trees']
+    ENABLE_PARTICLES = ENABLE_PARTICLES and ACTIVE_QUALITY['enable_particles']
+    ENABLE_DYNAMIC_LIGHTS = ENABLE_DYNAMIC_LIGHTS and ACTIVE_QUALITY['enable_dynamic_lights']
     return ACTIVE_QUALITY
 
 
@@ -241,10 +249,15 @@ FAITH_BLUE = (80, 120, 220)
 SANITY_PURPLE = (140, 80, 200)
 
 # Lighting & Horror Atmosphere Constants
-AMBIENT = 0.35
+AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
+AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
+DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
+BEAM_RADIUS = 0.45        # beam radius as a fraction of screen width
+BEAM_GLOW = (52, 42, 22)  # warm additive light inside the beam
 FOG_DISTANCE = 35.0
-BEAM_RADIUS = 0.45
 ENEMY_EYE_GLOW = True
+MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
+DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
 
 # Custom Enemy Sprites
 USE_CUSTOM_ENEMY_SPRITES = True
@@ -340,6 +353,7 @@ def load_settings(path=SETTINGS_PATH):
         'enable_sanity': ENABLE_SANITY,
         'enable_intro': ENABLE_INTRO,
         'debug_overlay': DEBUG_OVERLAY,
+        'quality_tier': QUALITY_TIER,
         'controls': CONTROLS.copy(),
     }
     if os.path.exists(path):

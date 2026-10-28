@@ -28,16 +28,7 @@ import pygame
 import numpy as np
 from settings import *
 
-# ─── Tunable Lighting & Horror Constants ─────────────────────────────────────
-AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
-AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
-DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
-BEAM_RADIUS = 0.45        # beam radius as a fraction of screen width
-BEAM_GLOW = (52, 42, 22)  # warm additive light inside the beam
-FOG_DISTANCE = 35.0
-ENEMY_EYE_GLOW = True
-MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
-DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
+# Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
 # eye positions in the 64x64 enemy sprites made by asset_generator.py
 ENEMY_EYES = {
@@ -184,6 +175,9 @@ class Renderer:
         self.w = INTERNAL_WIDTH
         self.h = INTERNAL_HEIGHT
         self.textures = textures
+        self._wall_col_cache = {}
+        for _tex in self.textures.values():  # pre-slice wall columns once at startup
+            self._wall_columns(_tex)
         self.weapon_sprites = weapon_sprites
         self.enemy_sprites = enemy_sprites
         self.pickup_sprites = pickup_sprites
@@ -781,19 +775,15 @@ class Renderer:
             # Texture mapping
             tex = self._get_wall_texture(wall_type)
             if tex:
-                tex_x = int(hit_x_frac * tex.get_width()) % tex.get_width()
-                # Get texture column
-                tex_col = pygame.Surface((1, tex.get_height()), pygame.SRCALPHA)
-                tex_col.blit(tex, (0, 0), (tex_x, 0, 1, tex.get_height()))
-                scaled_col = pygame.transform.scale(tex_col, (1, max(1, wall_h)))
-
-                # Distance shading (+ a bit darker on side faces for depth)
+                cols = self._wall_columns(tex)
+                tex_x = int(hit_x_frac * len(cols)) % len(cols)
+                # Scale the pre-sliced column, then shade it with a multiply-fill
+                # (distance fog + darker side faces) instead of allocating overlays.
+                shaded = pygame.transform.scale(cols[tex_x], (1, max(1, wall_h)))
                 shade = max(0.15, 1.0 - corrected_dist / MAX_DEPTH)
-                dark_a = int((1 - shade) * 220) + (35 if side == 1 else 0)
-                shaded = scaled_col.copy()
-                dark = pygame.Surface((1, max(1, wall_h)), pygame.SRCALPHA)
-                dark.fill((0, 0, 0, min(255, dark_a)))
-                shaded.blit(dark, (0, 0))
+                dark_a = min(255, int((1 - shade) * 220) + (35 if side == 1 else 0))
+                v = 255 - dark_a
+                shaded.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
 
                 self.surface.blit(shaded, (i, max(0, draw_start)),
                                   (0, max(0, -draw_start), 1, min(wall_h, self.h - max(0, draw_start))))
@@ -804,6 +794,15 @@ class Renderer:
                     ds = max(0, draw_start)
                     de = min(self.h, draw_end)
                     pygame.draw.line(self.surface, color, (i, ds), (i, de))
+
+    def _wall_columns(self, tex):
+        """Return the 1px-wide column subsurfaces of a wall texture (sliced once, zero-copy)."""
+        cols = self._wall_col_cache.get(id(tex))
+        if cols is None:
+            h = tex.get_height()
+            cols = [tex.subsurface((x, 0, 1, h)) for x in range(tex.get_width())]
+            self._wall_col_cache[id(tex)] = cols
+        return cols
 
     def _dda_cast(self, px, py, cos_a, sin_a, game_map):
         """Digital Differential Analyzer raycasting. Returns (dist, wall_type, hit_frac, side)."""

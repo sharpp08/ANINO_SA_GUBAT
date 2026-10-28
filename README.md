@@ -27,7 +27,7 @@
 15. [Debug Tools](#debug-tools)
 16. [Architecture & Modules](#architecture--modules)
 17. [Technical Notes](#technical-notes)
-18. [Known Limitations](#known-limitations)
+18. [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations)
 19. [Intro Cinematic](#intro-cinematic)
 20. [Lore](#lore)
 
@@ -59,7 +59,7 @@ The game features:
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
 | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
 | 🌌 Atmospheric Sky | Layered clouds with parallax, subtle aurora borealis effect, twinkling stars, dynamic moon |
-| 👹 7 Enemy Types | Each with unique stats and AI (5 spawn in the current chapters, see [Chapters](#chapters)) |
+| 👹 7 Enemy Types | Each with unique stats and AI (all 7 spawn across the two chapters, see [Chapters](#chapters)) |
 | ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
 | ✝️ 5 Sacred Wards | Light, Shield, Banish, Bind and Final, powered by Faith energy with per-ward cooldowns |
 | 🔦 Flashlight | Battery-powered beam with sway, low-battery flicker, and pickups to recharge |
@@ -162,8 +162,10 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder. Saves, se
 | `F` or `1` | Toggle Flashlight (Ward 1: Light) |
 | `2` | Cast Ward 2: Shield |
 | `3` | Cast Ward 3: Banish |
+| `4` | Cast Ward 4: Bind |
+| `5` | Cast Ward 5: Final |
 | `Tab` | Cycle the selected ward (Light → Shield → Banish → Bind → Final) |
-| `Q` | Cast the currently selected ward (use this with `Tab` for **Bind** and **Final**) |
+| `Q` | Cast the currently selected ward (alternative to `4` / `5` for **Bind** and **Final**) |
 | `G` | Place a Salt circle (repelling/slowing zone) |
 | `H` | Throw Garlic (barrier zone against aswang) |
 | `E` | Interact (open doors, save checkpoints) |
@@ -235,8 +237,8 @@ Reloading makes noise (`4.0`). Shotgun reload takes 1.5 s, revolver reload 1.2 s
 | **Aswang** | 80 | 15 | 2.0 | 8 tiles | Repel, Garlic | None | Ch. 1, Ch. 2 |
 | **Manananggal** | 100 | 20 | 2.5 | 10 tiles | Repel, Cross | Bind | Ch. 2 |
 | **Tikbalang** | 150 | 30 | 1.8 | 7 tiles | Shield | Repel | Ch. 2 |
-| **Kapre** | 200 | 35 | 1.2 | 6 tiles | Banish | Bind, Repel | *Not placed yet* |
-| **White Lady** | 60 | 10 | 1.5 | 12 tiles | Bind | Banish | *Not placed yet* |
+| **Kapre** | 200 | 35 | 1.2 | 6 tiles | Banish | Bind, Repel | Ch. 2 |
+| **White Lady** | 60 | 10 | 1.5 | 12 tiles | Bind | Banish | Ch. 1 |
 | **Multo** | 50 | 12 | 2.0 | 8 tiles | Banish | None | Ch. 1, Ch. 2 |
 | **Sigbin** | 70 | 18 | 3.5 | 7 tiles | Bind | None | Ch. 1, Ch. 2 |
 
@@ -263,8 +265,8 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 | Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
 |---|---|---|---|---|---|---|
-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin | 15 |
-| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang | 9 |
+| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
+| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
 
 Both chapters have a checkpoint and a Bible page inside the cabin near the map centre. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
 
@@ -322,7 +324,8 @@ Sprite distance shading only changes colour, never transparency, so sprites no l
 ### Constants (`settings.py`)
 - Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
 - Effect toggles such as `ENABLE_BLOOM`, `ENABLE_FOG`, `ENABLE_PARTICLES`, `ENABLE_SANITY` and `ENABLE_INTRO`.
-- `QUALITY_PRESETS` (`low`, `medium`, `high`) are defined, with `QUALITY_TIER = 'medium'`, but they are not applied yet (see [Known Limitations](#known-limitations)).
+- `QUALITY_PRESETS` (`low`, `medium`, `high`): chosen with `"quality_tier"` in `settings.json` (default `medium`) and applied at startup by `main.py` before any module imports resolution-dependent values. See [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations).
+- Lighting constants (`AMBIENT`, `AMBIENT_LIGHT_OFF`, `BEAM_RADIUS`, `BEAM_GLOW`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW`, ...) are defined only in `settings.py`.
 
 ### Animation & Physics System
 The game includes a comprehensive physics and animation system built entirely in Python:
@@ -348,7 +351,7 @@ The F3 debug overlay displays:
 ### Configuration (`settings.json`)
 `load_settings()` merges the file over these defaults:
 
-`screen_width`, `screen_height`, `fullscreen`, `mouse_sensitivity`, `master_volume`, `music_volume`, `sfx_volume`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_audio_synth`, `enable_sanity`, `enable_intro`, `debug_overlay`, `controls`
+`screen_width`, `screen_height`, `fullscreen`, `mouse_sensitivity`, `master_volume`, `music_volume`, `sfx_volume`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_audio_synth`, `enable_sanity`, `enable_intro`, `debug_overlay`, `quality_tier`, `controls`
 
 - In the code shown, `main.py` reads `enable_intro` when you start a new game (set it to `false` to skip the cinematic).
 - `settings.json` is created when `save_settings()` is called; it is not required to run the game.
@@ -428,12 +431,21 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 
 ## Known Limitations & Recent Optimizations
 
-- **Quality Presets:** Set `"quality_tier"` to `low`, `medium`, or `high` in `settings.json`. Applied at startup before any resolution-dependent surface exists.
-- **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurface), eliminating per-ray surface allocations and reducing the render pass to scale + multiply-fill + blit.
-- **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final directly (alongside the original `Tab` + `Q` method).
+### Recent changes
+
+- **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Presets control resolution, particles, dynamic lights and the tree draw cap.
+- **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurfaces), so the per-ray work is scale + multiply-fill + blit with no per-ray surface allocations.
+- **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final (alongside the `Tab` + `Q` method).
 - **Door Collision:** Closed doors block movement for both player and enemies (`is_solid(x, y, doors_block=True)`); opened doors are passable for both.
-- **Enemy Placement:** White Lady is placed in Chapter 1, and Kapre is placed in Chapter 2 (with automatic tree clearance via reachability validation).
-- **Lighting Constants:** Lighting constants (`AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOG`) are centralized in `settings.py` without duplication in renderer/enemies.
+- **Enemy Placement:** White Lady is placed in Chapter 1 and Kapre in Chapter 2. Trees near entities are cleared, and a flood-fill from the player start relocates or flags (in the F3 overlay) anything unreachable.
+- **Lighting Constants:** `AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW` and related constants are defined once in `settings.py`; `renderer.py` and `enemies.py` no longer redefine them.
+
+### Known limitations
+
+- Quality presets do not toggle bloom (it stays controlled by `ENABLE_BLOOM`); the HDR/PBR/SSAO/god-ray entries in the presets are not wired to any renderer yet.
+- `quality_tier` is read once at startup; changing it needs a restart.
+- Enemies can't path-find around trees or closed doors; they slide along obstacles.
+- Water tiles are walkable (no swimming or slowdown).
 
 ---
 

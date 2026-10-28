@@ -9,6 +9,9 @@ import random
 import json
 import pygame
 
+import settings as _settings_mod
+# Apply the quality preset from settings.json before any module copies resolution-dependent values
+_settings_mod.apply_quality_preset(_settings_mod.load_settings().get('quality_tier', _settings_mod.QUALITY_TIER))
 from settings import *
 from player import Player
 from map_system import GameMap
@@ -472,6 +475,12 @@ class Game:
                 self._cast_selected_ward()
             elif k == pygame.K_3:
                 p.selected_ward = 2
+                self._cast_selected_ward()
+            elif k == pygame.K_4:
+                p.selected_ward = 3
+                self._cast_selected_ward()
+            elif k == pygame.K_5:
+                p.selected_ward = 4
                 self._cast_selected_ward()
             elif k == pygame.K_q:
                 self._cast_selected_ward()
