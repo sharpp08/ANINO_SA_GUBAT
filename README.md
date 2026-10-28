@@ -433,19 +433,25 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 
 ### Recent changes
 
-- **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Presets control resolution, particles, dynamic lights and the tree draw cap.
+- **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Press **F5** (next) / **F6** (previous) during gameplay to switch quality tiers at runtime — changes take effect immediately and are saved to `settings.json`. Presets control resolution, bloom, HDR, god rays, SSAO, particles, dynamic lights, tree draw cap, and water movement speed.
+- **Bloom & Post-Processing:** Bloom is now controlled by the active quality preset (`low` = off, `medium`/`high` = on). The `ShaderRenderer` performs a bloom extraction pass when enabled. Full multi-pass bloom blur requires ModernGL shader compilation; the pipeline gracefully falls back to software rendering if shaders fail.
+- **HDR Tone Mapping:** High quality enables HDR exposure (`HDR_EXPOSURE=1.1`) and ACES tone mapping. Medium and low use Reinhard tone mapping at default exposure.
+- **God Rays:** High quality enables screen-space god-ray scattering from the flashlight. Low and medium disable this pass.
 - **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurfaces), so the per-ray work is scale + multiply-fill + blit with no per-ray surface allocations.
 - **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final (alongside the `Tab` + `Q` method).
 - **Door Collision:** Closed doors block movement for both player and enemies (`is_solid(x, y, doors_block=True)`); opened doors are passable for both.
+- **Enemy Pathfinding:** Enemies now use A* pathfinding via `NavGrid` when chasing the player. Paths are recalculated every 3 seconds or when the player moves more than 5 tiles. Closed doors block pathfinding; opened doors are traversable. Water tiles add a 1.5× movement cost, making enemies prefer land routes.
+- **Water Movement Slowdown:** The player moves at 40% normal speed when standing on water tiles (`WATER_SPEED_MULTIPLIER = 0.4`). The slowdown applies smoothly on entry/exit with no frame-rate dependency.
 - **Enemy Placement:** White Lady is placed in Chapter 1 and Kapre in Chapter 2. Trees near entities are cleared, and a flood-fill from the player start relocates or flags (in the F3 overlay) anything unreachable.
 - **Lighting Constants:** `AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW` and related constants are defined once in `settings.py`; `renderer.py` and `enemies.py` no longer redefine them.
 
 ### Known limitations
 
-- Quality presets do not toggle bloom (it stays controlled by `ENABLE_BLOOM`); the HDR/PBR/SSAO/god-ray entries in the presets are not wired to any renderer yet.
-- `quality_tier` is read once at startup; changing it needs a restart.
-- Enemies can't path-find around trees or closed doors; they slide along obstacles.
-- Water tiles are walkable (no swimming or slowdown).
+- Quality presets do not toggle film grain or chromatic aberration (those remain controlled by `ENABLE_FILM_GRAIN` and `ENABLE_CHROMATIC_ABERRATION`).
+- `quality_tier` in `settings.json` is read once at startup; you can also switch at runtime with **F5** / **F6**.
+- Enemies path-find using a coarse 1-tile grid; they may clip near thin obstacles. They do not open doors.
+- Water tiles slow movement but do not implement swimming or depth variation.
+- SSAO is defined in presets but not yet integrated into the renderer (no depth buffer available).
 
 ---
 

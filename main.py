@@ -328,6 +328,38 @@ class Game:
         self.effects = []
         self.notif   = ''
         self.notif_t = 0.0
+        # Graphics quality manager for runtime switching
+        self._graphics_mgr = None
+        self._try_init_graphics_manager()
+
+    def _try_init_graphics_manager(self):
+        """Initialize graphics manager after renderer is created."""
+        try:
+            from graphics_manager import get_graphics_manager
+            self._graphics_mgr = get_graphics_manager(self.renderer)
+        except Exception as e:
+            print(f"[QUALITY] Could not init GraphicsManager: {e}")
+
+    def _cycle_quality(self, direction):
+        """Cycle quality tier up or down."""
+        if self._graphics_mgr is None:
+            return
+        tiers = ['low', 'medium', 'high']
+        idx = tiers.index(self._graphics_mgr.tier)
+        if direction == 'next':
+            idx = (idx + 1) % len(tiers)
+        else:
+            idx = (idx - 1) % len(tiers)
+        new_tier = tiers[idx]
+        if self._graphics_mgr.apply_tier(new_tier):
+            self.notify(f"Quality: {new_tier.upper()}")
+            # Save the preference
+            try:
+                import settings as _s
+                _s.QUALITY_TIER = new_tier
+                _s.save_settings(_s.load_settings())
+            except Exception:
+                pass
     def toggle_fullscreen(self):
         global FULLSCREEN
         FULLSCREEN = not FULLSCREEN
@@ -425,6 +457,10 @@ class Game:
                 safe_set_relative_mouse(False)
             elif k == pygame.K_F11:
                 self.toggle_fullscreen()
+            elif k == pygame.K_F5:
+                self._cycle_quality('next')
+            elif k == pygame.K_F6:
+                self._cycle_quality('prev')
             elif k == pygame.K_F3:
                 self.renderer.show_debug = not self.renderer.show_debug
             elif k == pygame.K_F4:

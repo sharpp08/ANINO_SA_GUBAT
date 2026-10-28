@@ -172,6 +172,126 @@ def run_smoke_tests():
     return failed == 0
 
 
+def run_extended_tests():
+    """Extended tests for quality presets, pathfinding, and water movement."""
+    print("=== STARTING EXTENDED TESTS ===")
+    passed = 0
+    failed = 0
+
+    def test_case(name, fn):
+        nonlocal passed, failed
+        try:
+            fn()
+            print(f"[PASS] {name}")
+            passed += 1
+        except Exception as e:
+            print(f"[FAIL] {name}: {e}")
+            import traceback
+            traceback.print_exc()
+            failed += 1
+
+    def test_quality_presets():
+        import settings as s
+        assert 'low' in s.QUALITY_PRESETS
+        assert 'medium' in s.QUALITY_PRESETS
+        assert 'high' in s.QUALITY_PRESETS
+        for tier in ('low', 'medium', 'high'):
+            cfg = s.QUALITY_PRESETS[tier]
+            assert 'enable_bloom' in cfg
+            assert 'enable_god_rays' in cfg
+            assert 'water_speed_multiplier' in cfg
+        assert s.QUALITY_PRESETS['low']['enable_bloom'] == False
+        assert s.QUALITY_PRESETS['medium']['enable_bloom'] == True
+        assert s.QUALITY_PRESETS['high']['enable_bloom'] == True
+        assert s.QUALITY_PRESETS['low']['enable_god_rays'] == False
+        assert s.QUALITY_PRESETS['high']['enable_god_rays'] == True
+    test_case("Quality Preset Configuration", test_quality_presets)
+
+    def test_apply_quality_preset():
+        import settings as s
+        s.apply_quality_preset('low')
+        assert s.ENABLE_BLOOM == False
+        assert s.ENABLE_HDR == False
+        s.apply_quality_preset('medium')
+        assert s.ENABLE_BLOOM == True
+        assert s.ENABLE_HDR == False
+        s.apply_quality_preset('high')
+        assert s.ENABLE_BLOOM == True
+        assert s.ENABLE_HDR == True
+        assert s.ENABLE_GOD_RAYS == True
+        s.apply_quality_preset('medium')
+    test_case("Apply Quality Preset Updates Globals", test_apply_quality_preset)
+
+    def test_navgrid_basic():
+        import settings as s
+        s.apply_quality_preset('medium')
+        from map_system import GameMap
+        from pathfinder import NavGrid
+        gm = GameMap(1)
+        nav = NavGrid(gm)
+        assert nav.is_walkable(5.0, 5.0) == True
+        assert nav.is_walkable(0.5, 0.5) == False
+        path = nav.find_path((5.0, 5.0), (10.0, 10.0))
+        assert path is not None
+        assert len(path) >= 2
+    test_case("NavGrid Basic Pathfinding", test_navgrid_basic)
+
+    def test_water_classification():
+        import settings as s
+        s.apply_quality_preset('medium')
+        from map_system import GameMap
+        gm = GameMap(1)
+        assert gm.is_water(4.5, 4.5) == False
+        water_pos = None
+        for y in range(gm.height):
+            for x in range(gm.width):
+                if gm.grid[y][x] == s.WATER:
+                    water_pos = (x + 0.5, y + 0.5)
+                    break
+            if water_pos:
+                break
+        if water_pos:
+            assert gm.is_water(*water_pos) == True
+            assert gm.is_solid(water_pos[0], water_pos[1]) == False
+    test_case("Water Tile Classification", test_water_classification)
+
+    def test_graphics_manager():
+        import settings as s
+        s.apply_quality_preset('medium')
+        from graphics_manager import GraphicsManager
+        gm = GraphicsManager()
+        assert gm.tier == 'medium'
+        assert gm.stage_transition('low') == True
+        assert gm.commit() == True
+        assert gm.tier == 'low'
+        assert gm.get_effective('enable_bloom') == False
+        gm.apply_tier('medium')
+        assert gm.tier == 'medium'
+        assert gm.get_effective('enable_bloom') == True
+        assert gm.stage_transition('ultra') == False
+    test_case("GraphicsManager Runtime Switching", test_graphics_manager)
+
+    def test_shader_renderer_interface():
+        import settings as s
+        s.apply_quality_preset('medium')
+        from shader_renderer import ShaderRenderer
+        sr = ShaderRenderer(640, 360)
+        assert hasattr(sr, 'render')
+        assert hasattr(sr, 'resize')
+        assert hasattr(sr, 'update_feature_flags')
+        assert hasattr(sr, 'release')
+        sr.update_feature_flags({'enable_bloom': True, 'bloom_threshold': 0.72})
+        assert sr.feature_flags.get('enable_bloom') == True
+        sr.resize(320, 180)
+        assert sr.width == 320
+        sr.release()
+    test_case("ShaderRenderer Interface", test_shader_renderer_interface)
+
+    print(f"=== EXTENDED TESTS COMPLETE: {passed} PASSED, {failed} FAILED ===")
+    return failed == 0
+
+
 if __name__ == '__main__':
     success = run_smoke_tests()
-    sys.exit(0 if success else 1)
+    ext_success = run_extended_tests()
+    sys.exit(0 if (success and ext_success) else 1)

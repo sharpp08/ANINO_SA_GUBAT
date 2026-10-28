@@ -54,7 +54,10 @@ ENABLE_CHROMATIC_ABERRATION = True
 # Quality Tier Presets
 QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
 
-# Performance-optimized quality presets with measurable differences
+# Performance-optimized quality presets with measurable differences.
+# Each tier is the single source of truth for all renderer feature flags.
+# User overrides (from settings.json "graphics_overrides") take precedence
+# over these values; legacy ENABLE_* constants are the final fallback.
 QUALITY_PRESETS = {
     'low': {
         'internal_width': 320, 'internal_height': 180,
@@ -63,22 +66,38 @@ QUALITY_PRESETS = {
         'enable_particles': False, 'enable_dynamic_lights': False,
         'enable_aurora': False, 'enable_enhanced_floor': False,
         'max_render_trees': 60, 'max_particles': 50, 'max_enemies': 4,
+        # Renderer pass parameters
+        'bloom_threshold': 0.85, 'bloom_intensity': 0.3, 'bloom_blur_passes': 1,
+        'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
+        'hdr_exposure': 1.0, 'tone_mapping': 'reinhard',
+        'ssao_samples': 0, 'ssao_radius': 0.5, 'ssao_strength': 0.0,
+        'water_speed_multiplier': 0.4,
     },
     'medium': {
         'internal_width': 640, 'internal_height': 360,
         'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
-        'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
+        'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': False,
         'enable_particles': True, 'enable_dynamic_lights': False,
         'enable_aurora': True, 'enable_enhanced_floor': True,
         'max_render_trees': 100, 'max_particles': 150, 'max_enemies': 6,
+        'bloom_threshold': 0.72, 'bloom_intensity': 0.45, 'bloom_blur_passes': 2,
+        'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
+        'hdr_exposure': 1.0, 'tone_mapping': 'reinhard',
+        'ssao_samples': 0, 'ssao_radius': 0.5, 'ssao_strength': 0.0,
+        'water_speed_multiplier': 0.4,
     },
     'high': {
-        'internal_width': 640, 'internal_height': 360,  # Keep same resolution for performance
-        'enable_hdr': False, 'enable_pbr': False, 'enable_normal_mapping': False,
-        'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
+        'internal_width': 640, 'internal_height': 360,
+        'enable_hdr': True, 'enable_pbr': False, 'enable_normal_mapping': False,
+        'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': True,
         'enable_particles': True, 'enable_dynamic_lights': True,
         'enable_aurora': True, 'enable_enhanced_floor': True,
         'max_render_trees': 120, 'max_particles': 300, 'max_enemies': 8,
+        'bloom_threshold': 0.65, 'bloom_intensity': 0.6, 'bloom_blur_passes': 3,
+        'god_ray_samples': 40, 'god_ray_intensity': 0.35, 'god_ray_decay': 0.88,
+        'hdr_exposure': 1.1, 'tone_mapping': 'aces',
+        'ssao_samples': 0, 'ssao_radius': 0.5, 'ssao_strength': 0.0,
+        'water_speed_multiplier': 0.4,
     }
 }
 
@@ -91,10 +110,20 @@ def apply_quality_preset(tier):
 
     Must run before any module does ``from settings import *`` (main.py does
     this first), because resolution-dependent values are copied at import.
+
+    Applies all renderer feature flags from the preset.  User overrides in
+    ``settings.json`` (``graphics_overrides`` dict) take precedence for any
+    key they specify; legacy ENABLE_* constants are the final fallback.
     """
     global ACTIVE_QUALITY, QUALITY_TIER, INTERNAL_WIDTH, INTERNAL_HEIGHT
     global NUM_RAYS, WALL_HEIGHT_SCALE, MAX_RENDER_TREES
     global ENABLE_PARTICLES, ENABLE_DYNAMIC_LIGHTS
+    global ENABLE_BLOOM, ENABLE_HDR, ENABLE_PBR, ENABLE_SSAO, ENABLE_GOD_RAYS
+    global BLOOM_THRESHOLD, BLOOM_INTENSITY, BLOOM_BLUR_PASSES
+    global GOD_RAY_SAMPLES, GOD_RAY_INTENSITY, GOD_RAY_DECAY
+    global HDR_EXPOSURE, TONE_MAPPING
+    global SSAO_SAMPLES, SSAO_RADIUS, SSAO_STRENGTH
+    global WATER_SPEED_MULTIPLIER
     if tier not in QUALITY_PRESETS:
         tier = 'medium'
     QUALITY_TIER = tier
@@ -104,10 +133,29 @@ def apply_quality_preset(tier):
     INTERNAL_HEIGHT = ACTIVE_QUALITY['internal_height']
     NUM_RAYS = INTERNAL_WIDTH
     WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
-    # Feature toggles driven by the preset
+    # Feature toggles driven by the preset (AND with legacy defaults so
+    # a user who disabled particles globally stays disabled)
     MAX_RENDER_TREES = ACTIVE_QUALITY['max_render_trees']
     ENABLE_PARTICLES = ENABLE_PARTICLES and ACTIVE_QUALITY['enable_particles']
     ENABLE_DYNAMIC_LIGHTS = ENABLE_DYNAMIC_LIGHTS and ACTIVE_QUALITY['enable_dynamic_lights']
+    ENABLE_BLOOM = ACTIVE_QUALITY['enable_bloom']
+    ENABLE_HDR = ACTIVE_QUALITY['enable_hdr']
+    ENABLE_PBR = ACTIVE_QUALITY['enable_pbr']
+    ENABLE_SSAO = ACTIVE_QUALITY['enable_ssao']
+    ENABLE_GOD_RAYS = ACTIVE_QUALITY['enable_god_rays']
+    # Renderer pass parameters
+    BLOOM_THRESHOLD = ACTIVE_QUALITY['bloom_threshold']
+    BLOOM_INTENSITY = ACTIVE_QUALITY['bloom_intensity']
+    BLOOM_BLUR_PASSES = ACTIVE_QUALITY['bloom_blur_passes']
+    GOD_RAY_SAMPLES = ACTIVE_QUALITY['god_ray_samples']
+    GOD_RAY_INTENSITY = ACTIVE_QUALITY['god_ray_intensity']
+    GOD_RAY_DECAY = ACTIVE_QUALITY['god_ray_decay']
+    HDR_EXPOSURE = ACTIVE_QUALITY['hdr_exposure']
+    TONE_MAPPING = ACTIVE_QUALITY['tone_mapping']
+    SSAO_SAMPLES = ACTIVE_QUALITY['ssao_samples']
+    SSAO_RADIUS = ACTIVE_QUALITY['ssao_radius']
+    SSAO_STRENGTH = ACTIVE_QUALITY['ssao_strength']
+    WATER_SPEED_MULTIPLIER = ACTIVE_QUALITY['water_speed_multiplier']
     return ACTIVE_QUALITY
 
 
@@ -258,6 +306,26 @@ FOG_DISTANCE = 35.0
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
 DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
+
+# ─── Renderer Pass Parameters (overridden by apply_quality_preset) ──────────
+# Bloom
+BLOOM_THRESHOLD = 0.72    # brightness threshold for bloom extraction (0-1)
+BLOOM_INTENSITY = 0.45   # how strongly the blurred bloom is added back
+BLOOM_BLUR_PASSES = 2     # number of downsample/upsample blur iterations
+# God rays (screen-space radial light scattering)
+GOD_RAY_SAMPLES = 0      # 0 = disabled; otherwise number of radial samples
+GOD_RAY_INTENSITY = 0.0   # blend strength of the god-ray pass
+GOD_RAY_DECAY = 0.85      # per-sample intensity decay (0.7-0.95)
+# HDR / tone mapping
+HDR_EXPOSURE = 1.0        # scene exposure before tone mapping
+TONE_MAPPING = 'reinhard' # 'reinhard' or 'aces'
+# SSAO (screen-space ambient occlusion)
+SSAO_SAMPLES = 0          # 0 = disabled; otherwise sample count per pixel
+SSAO_RADIUS = 0.5         # sampling radius in screen-space units
+SSAO_STRENGTH = 0.0       # occlusion darkening strength (0 = none)
+
+# ─── Water Movement ──────────────────────────────────────────────────────────
+WATER_SPEED_MULTIPLIER = 0.4   # fraction of normal speed while wading in water
 
 # Custom Enemy Sprites
 USE_CUSTOM_ENEMY_SPRITES = True

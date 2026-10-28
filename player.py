@@ -110,6 +110,10 @@ class Player:
         speed = PLAYER_SPRINT_SPEED if self.is_sprinting else PLAYER_SPEED
         if self.is_crouching:
             speed *= 0.5
+        # Water slowdown: check if player is standing in water
+        tile_at_feet = game_map.get_tile(self.x, self.y)
+        if tile_at_feet == WATER:
+            speed *= WATER_SPEED_MULTIPLIER
         move_x = 0
         move_y = 0
 

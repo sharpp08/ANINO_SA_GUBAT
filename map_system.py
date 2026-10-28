@@ -314,6 +314,13 @@ class GameMap:
             return True
         return self.is_tree_solid(x, y, radius=0.25)
 
+    def is_water(self, x, y):
+        """Check if the given world position is on a water tile."""
+        ix, iy = int(x), int(y)
+        if 0 <= ix < self.width and 0 <= iy < self.height:
+            return self.grid[iy][ix] == WATER
+        return False
+
     def get_tile(self, x, y):
         ix, iy = int(x), int(y)
         if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:

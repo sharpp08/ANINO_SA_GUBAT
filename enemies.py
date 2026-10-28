@@ -109,7 +109,14 @@ class Enemy:
         
         # Chase scream: set True on passive→chase transition, consumed by main loop
         self.just_entered_chase = False
-        
+
+        # Pathfinding state
+        self._path = None
+        self._path_index = 0
+        self._last_repath_dist = 5.0
+        self._last_player_pos = (x, y)
+        self._repath_timer = 0.0
+
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
             from animation_core import SpringScalar
@@ -154,6 +161,29 @@ class Enemy:
                 return True
         return False
 
+    def _move_along_path(self, game_map, path, dt, speed):
+        """Follow a path computed by NavGrid. Returns True if still following."""
+        if not path or len(path) < 2:
+            return False
+        if not hasattr(self, '_path_index'):
+            self._path_index = 0
+        target = path[self._path_index]
+        dx = target[0] - self.x
+        dy = target[1] - self.y
+        dist = math.sqrt(dx*dx + dy*dy)
+        if dist < 0.5:
+            self._path_index += 1
+            if self._path_index >= len(path) - 1:
+                self._path_index = 0
+                self._path = None
+                return False
+            return True
+        angle = math.atan2(dy, dx)
+        move_speed = min(speed * dt, dist)
+        new_x = self.x + math.cos(angle) * move_speed
+        new_y = self.y + math.sin(angle) * move_speed
+        return self._try_move(game_map, new_x, new_y, angle, move_speed)
+
     def update(self, dt, player_x, player_y, game_map):
         """Update enemy AI state machine."""
         if not self.alive:
@@ -178,6 +208,22 @@ class Enemy:
                 new_y = self.y + math.sin(angle) * move_speed
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
                 return
+
+        # Path recalculation: repath when player moves far or timer expires
+        if self.state in (EnemyState.INVESTIGATE, EnemyState.STALK, EnemyState.ATTACK):
+            self._repath_timer -= dt
+            dx = player_x - self._last_player_pos[0]
+            dy = player_y - self._last_player_pos[1]
+            player_moved = math.sqrt(dx*dx + dy*dy) > self._last_repath_dist
+            if self._repath_timer <= 0 or player_moved:
+                self._repath_timer = 3.0
+                self._last_player_pos = (player_x, player_y)
+                try:
+                    from pathfinder import NavGrid
+                    nav = NavGrid(game_map)
+                    self._path = nav.find_path((self.x, self.y), (player_x, player_y))
+                except Exception:
+                    self._path = None
 
         if self.shield_debuff:
             self.shield_debuff_timer -= dt
@@ -261,6 +307,19 @@ class Enemy:
         elif self.state == EnemyState.INVESTIGATE:
             angle = self.angle_to(player_x, player_y)
             self.facing_angle = angle
+            # Use pathfinding if available and path is stale
+            if hasattr(self, '_path') and self._path:
+                if not self._move_along_path(game_map, self._path, dt, self.speed * 0.6):
+                    pass  # still following path
+                elif dist < self.attack_range:
+                    self.state = EnemyState.ATTACK
+                    self.state_timer = 0.5
+                    self.just_entered_chase = True
+                elif dist > self.detect_range * 1.5:
+                    self.state = EnemyState.IDLE
+                    self.state_timer = 3.0
+                return
+            # Fallback to direct movement
             move_speed = self.speed * 0.6 * dt
             new_x = self.x + math.cos(angle) * move_speed
             new_y = self.y + math.sin(angle) * move_speed
@@ -309,11 +368,18 @@ class Enemy:
             self.facing_angle = angle
 
             if dist > self.attack_range:
-                # Chase
-                move_speed = self.speed * dt
-                new_x = self.x + math.cos(angle) * move_speed
-                new_y = self.y + math.sin(angle) * move_speed
-                self._try_move(game_map, new_x, new_y, angle, move_speed)
+                # Use pathfinding for chase
+                if hasattr(self, '_path') and self._path:
+                    if not self._move_along_path(game_map, self._path, dt, self.speed):
+                        pass  # still following
+                    else:
+                        pass  # reached end of path
+                else:
+                    # Fallback direct chase
+                    move_speed = self.speed * dt
+                    new_x = self.x + math.cos(angle) * move_speed
+                    new_y = self.y + math.sin(angle) * move_speed
+                    self._try_move(game_map, new_x, new_y, angle, move_speed)
 
             if dist > self.detect_range * 2:
                 self.state = EnemyState.IDLE
