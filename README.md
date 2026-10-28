@@ -426,14 +426,14 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 
 ---
 
-## Known Limitations
+## Known Limitations & Recent Optimizations
 
-- **Quality presets are not wired up.** `QUALITY_TIER` and `QUALITY_PRESETS` do not change resolution or effects yet; the internal resolution and ray count are fixed at import time.
-- **Wall rendering is the main performance cost.** Each ray creates surfaces and scales a texture column every frame.
-- **Wards 4 and 5 have no direct number key.** Select them with `Tab` and cast with `Q`.
-- **Closed doors do not block the player.** Movement collision treats `DOOR` tiles as passable, while enemy pathing treats them as walls.
-- **Kapre and White Lady** have stats and sprites but are not placed in either chapter.
-- **Duplicate constants.** `AMBIENT`, `BEAM_RADIUS` and `FOG_DISTANCE` are defined in both `settings.py` and `renderer.py`; the values in `renderer.py` are the ones in effect.
+- **Quality Presets:** Set `"quality_tier"` to `low`, `medium`, or `high` in `settings.json`. Applied at startup before any resolution-dependent surface exists.
+- **Wall Rendering Performance:** Wall texture columns are pre-sliced once at startup (zero-copy subsurface), eliminating per-ray surface allocations and reducing the render pass to scale + multiply-fill + blit.
+- **Wards 4 & 5 Direct Keys:** Key `4` casts Bind and key `5` casts Final directly (alongside the original `Tab` + `Q` method).
+- **Door Collision:** Closed doors block movement for both player and enemies (`is_solid(x, y, doors_block=True)`); opened doors are passable for both.
+- **Enemy Placement:** White Lady is placed in Chapter 1, and Kapre is placed in Chapter 2 (with automatic tree clearance via reachability validation).
+- **Lighting Constants:** Lighting constants (`AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOG`) are centralized in `settings.py` without duplication in renderer/enemies.
 
 ---
 
