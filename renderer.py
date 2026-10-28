@@ -235,8 +235,8 @@ class Renderer:
             'supernatural': generate_tree_billboard('supernatural', 64, 256),
         }
         self._TREE_HEIGHT_MULT = {
-            'balete': 2.8, 'mahogany': 3.2, 'bamboo': 2.2, 'dead': 2.0,
-            'banana': 2.0, 'palm': 2.8, 'supernatural': 3.0,
+            'balete': 3.6, 'mahogany': 4.2, 'bamboo': 3.4, 'dead': 3.0,
+            'banana': 2.8, 'palm': 3.6, 'supernatural': 3.8,
         }
         self.undergrowth_sprites = {
             'fern': generate_undergrowth_sprite('fern', 32, 32),
@@ -288,18 +288,22 @@ class Renderer:
         self.vignette = self._generate_vignette()
         self.red_vig = self._generate_edge_surface((150, 0, 0), 230)
 
-        # Particles (Fireflies, dust motes)
+        # Particles (Fireflies, dust motes, spores)
         self.particles = []
-        for _ in range(35):
+        rng_p = random.Random(777)
+        for _ in range(50):
             self.particles.append({
-                'x': random.uniform(0, self.w),
-                'y': random.uniform(0, self.h),
-                'vx': random.uniform(-0.5, 0.5),
-                'vy': random.uniform(-0.3, 0.3),
-                'size': random.uniform(1.0, 2.5),
-                'phase': random.uniform(0, math.pi * 2),
-                'color': (random.randint(180, 255), random.randint(200, 255), random.randint(100, 180))
+                'x': rng_p.uniform(0, self.w),
+                'y': rng_p.uniform(0, self.h),
+                'vx': rng_p.uniform(-0.5, 0.5),
+                'vy': rng_p.uniform(-0.3, 0.3),
+                'size': rng_p.uniform(1.0, 2.5),
+                'phase': rng_p.uniform(0, math.pi * 2),
+                'color': (rng_p.randint(180, 255), rng_p.randint(200, 255), rng_p.randint(100, 180)),
+                'kind': 'firefly' if rng_p.random() < 0.4 else 'dust',
             })
+        # Pre-rendered particle surfaces (cached per size) to avoid per-frame allocation
+        self._particle_cache = {}
 
         # Debug overlay (F3)
         self.show_debug = True
@@ -555,9 +559,10 @@ class Renderer:
                     pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
                     self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
-        # 2. Floor with exp-squared fog & min 8% ambient
+        # 2. Floor with exp-squared fog, min 8% ambient, and ground mist
         floor_h = self.h - horizon_y
         if floor_h > 0:
+            mist_phase = t_ticks * 0.0003  # slow drift for ground mist
             for y in range(horizon_y, self.h):
                 row_y = y - half_h - pitch_offset
                 if row_y <= 0:
@@ -565,19 +570,33 @@ class Renderer:
                 dist = (self.h * 0.5) / row_y
                 fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
                 shade = max(0.08, 1.0 - fog)
-                
+
                 # Enhanced atmospheric coloring with depth-based tinting
                 r = int(FLOOR_COLOR[0] * shade + 24 * (1 - shade))
                 g = int(FLOOR_COLOR[1] * shade + 34 * (1 - shade))
                 b = int(FLOOR_COLOR[2] * shade + 42 * (1 - shade))
-                
+
                 # Add subtle color variation based on distance
                 if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
                     color_var = int(math.sin(t_ticks * 0.001 + y * 0.01) * 5)
                     r = max(0, min(255, r + color_var))
                     g = max(0, min(255, g + color_var // 2))
                     b = max(0, min(255, b - color_var // 3))
-                
+
+                # Ground-level mist: a thin, drifting fog layer near the
+                # horizon that fades with distance.  Uses a low-frequency
+                # sine so the mist appears to roll slowly across the floor.
+                # Only the top ~40% of the floor (near horizon = far distance)
+                # gets the mist, simulating depth haze.
+                floor_t = (y - horizon_y) / max(1, floor_h)
+                if floor_t < 0.45:
+                    mist_strength = (0.45 - floor_t) / 0.45
+                    mist_wave = math.sin(mist_phase + y * 0.08) * 0.5 + 0.5
+                    mist_alpha = mist_strength * mist_wave * 0.25
+                    r = int(r * (1 - mist_alpha) + 30 * mist_alpha)
+                    g = int(g * (1 - mist_alpha) + 40 * mist_alpha)
+                    b = int(b * (1 - mist_alpha) + 38 * mist_alpha)
+
                 pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
@@ -596,15 +615,27 @@ class Renderer:
         # 6. Glowing eyes / halos: drawn AFTER darkness so they show in the dark
         self._draw_emissive()
 
-        # 7. Particles (fireflies / dust)
+        # 7. Particles (fireflies / dust / spores)
         if ENABLE_PARTICLES:
             for p in self.particles:
                 p['x'] = (p['x'] + p['vx']) % self.w
                 p['y'] = (p['y'] + p['vy']) % self.h
                 p['phase'] += dt * 2
-                alpha = int(abs(math.sin(p['phase'])) * 180)
-                psurf = pygame.Surface((int(p['size'] * 2), int(p['size'] * 2)), pygame.SRCALPHA)
-                pygame.draw.circle(psurf, (*p['color'], alpha), (int(p['size']), int(p['size'])), int(p['size']))
+                # Dust motes are dimmer and slower-pulsing than fireflies
+                if p.get('kind') == 'dust':
+                    alpha = int(abs(math.sin(p['phase'] * 0.5)) * 60)
+                else:
+                    alpha = int(abs(math.sin(p['phase'])) * 180)
+                if alpha < 5:
+                    continue
+                psize = int(p['size'])
+                key = (psize, p['color'])
+                psurf = self._particle_cache.get(key)
+                if psurf is None:
+                    psurf = pygame.Surface((psize * 2, psize * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(psurf, (*p['color'], 255), (psize, psize), psize)
+                    self._particle_cache[key] = psurf
+                psurf.set_alpha(alpha)
                 self.surface.blit(psurf, (int(p['x']), int(p['y'])))
 
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:

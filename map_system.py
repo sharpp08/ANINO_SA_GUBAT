@@ -26,14 +26,31 @@ class SpatialHash:
                 self.cells[key].append((obj, x, y, radius))
 
     def query(self, x, y, radius=0.5):
+        """Return all objects whose stored radius overlaps the query circle.
+
+        insert() spreads each object into a 3×3 cell neighbourhood so that a
+        single-cell lookup here is sufficient — the inserter already ensured
+        every neighbouring cell carries the object.  But if the query circle
+        straddles a cell boundary we must also check that boundary's neighbour.
+        We therefore scan the 3×3 neighbourhood of the query point, using a
+        seen-set to avoid returning duplicates.
+        """
         cx, cy = int(x // self.cell_size), int(y // self.cell_size)
-        key = (cx, cy)
         results = []
-        if key in self.cells:
-            for item in self.cells[key]:
-                obj, ox, oy, orad = item
-                if math.hypot(ox - x, oy - y) < (orad + radius):
-                    results.append(obj)
+        seen_ids: set = set()
+        for ddx in (-1, 0, 1):
+            for ddy in (-1, 0, 1):
+                key = (cx + ddx, cy + ddy)
+                if key not in self.cells:
+                    continue
+                for item in self.cells[key]:
+                    obj, ox, oy, orad = item
+                    oid = id(obj)
+                    if oid in seen_ids:
+                        continue
+                    if math.hypot(ox - x, oy - y) < (orad + radius):
+                        seen_ids.add(oid)
+                        results.append(obj)
         return results
 
 
@@ -102,6 +119,7 @@ class GameMap:
                                 self.grid[ny][nx] = WATER
 
         self.trees = []
+        # Species mix per chapter.  Chapter 2 adds tropical broadleaf species.
         tree_types = ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm'] if chapter_num == 2 else ['balete', 'bamboo', 'mahogany', 'dead']
         count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
 
@@ -117,7 +135,8 @@ class GameMap:
                 continue
 
             d_val = density_noise[int(ty) % self.height, int(tx) % self.width]
-            min_dist = 1.6 if d_val > 0.7 else 2.5
+            # Dense groves allow trees closer together; clearings force wider gaps.
+            min_dist = 1.4 if d_val > 0.7 else 2.8
 
             too_close = False
             for t in self.trees:
@@ -126,12 +145,28 @@ class GameMap:
                     break
             if not too_close:
                 t_type = rng_map.choice(tree_types)
-                scale = rng_map.uniform(0.7, 1.5)
-                radius = 0.25 * scale + 0.15
+                # Scale varies by species: canopy trees are tall, saplings small.
+                # Dead and balete can be very large; bamboo is slender and tall.
+                if t_type in ('balete', 'mahogany'):
+                    scale = rng_map.uniform(0.9, 1.8)
+                elif t_type == 'dead':
+                    scale = rng_map.uniform(0.8, 1.6)
+                elif t_type == 'bamboo':
+                    scale = rng_map.uniform(0.8, 1.4)
+                else:
+                    scale = rng_map.uniform(0.6, 1.3)
+                # Collision radius corresponds to the visible trunk only.
+                # Trunk width is a fraction of scale; roots add a small margin.
+                trunk_fraction = 0.18 if t_type == 'bamboo' else 0.22
+                radius = max(0.18, scale * trunk_fraction + 0.08)
+                # Store a canopy seed for deterministic per-tree visual variation
+                canopy_seed = rng_map.randint(0, 99999)
                 self.trees.append({
                     'x': tx, 'y': ty, 'type': t_type,
                     'scale': scale, 'tint': rng_map.randint(200, 255),
-                    'radius': radius
+                    'radius': radius,
+                    'canopy_seed': canopy_seed,
+                    'lean': rng_map.uniform(-0.08, 0.08),  # trunk lean angle
                 })
 
         self.spatial_hash.clear()
@@ -294,6 +329,41 @@ class GameMap:
             if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + radius):
                 return True
         return False
+
+    def resolve_circle_collision(self, x, y, radius):
+        """Push a circle out of every overlapping tree trunk.
+
+        Returns the corrected (x, y).  Each tree is treated as a circle of
+        ``t['radius']`` centred at ``(t['x'], t['y'])``; the player circle has
+        ``radius``.  When the two overlap we push the player along the
+        centre-to-centre vector by exactly the penetration depth, which lets
+        the player slide smoothly along the trunk because the tangential
+        component of movement is never cancelled — only the normal (radial)
+        component is corrected.  A small margin prevents jitter while keeping
+        the player close enough to feel the trunk.
+        """
+        margin = 0.02
+        for _ in range(2):  # two passes handle the common 2-tree squeeze
+            nearby = self.spatial_hash.query(x, y, radius=radius + margin)
+            pushed = False
+            for t in nearby:
+                dx = x - t['x']
+                dy = y - t['y']
+                dist = math.hypot(dx, dy)
+                min_dist = t['radius'] + radius + margin
+                if dist < min_dist:
+                    if dist < 1e-5:
+                        # perfectly overlapping centre — nudge along +X
+                        x += min_dist
+                        pushed = True
+                        continue
+                    overlap = min_dist - dist
+                    x += (dx / dist) * overlap
+                    y += (dy / dist) * overlap
+                    pushed = True
+            if not pushed:
+                break
+        return x, y
 
     def is_wall(self, x, y):
         ix, iy = int(x), int(y)
