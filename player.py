@@ -97,9 +97,13 @@ class Player:
 
         # Sprint & Crouch with Stamina
         wants_sprint = keys[pygame.K_LSHIFT] and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d])
-        if wants_sprint and self.stamina > 5.0 and not self.is_crouching:
-            self.is_sprinting = True
-            self.stamina = max(0.0, self.stamina - STAMINA_DRAIN_RATE * dt)
+        if wants_sprint and not self.is_crouching:
+            if self.stamina > 5.0:
+                self.is_sprinting = True
+                self.stamina = max(0.0, self.stamina - STAMINA_DRAIN_RATE * dt)
+            elif not self.is_sprinting:
+                # Just exhausted — transition gracefully (don't flicker)
+                self.is_sprinting = False
         else:
             self.is_sprinting = False
             self.stamina = min(STAMINA_MAX, self.stamina + STAMINA_REGEN_RATE * dt)
@@ -118,17 +122,23 @@ class Player:
         move_y = 0
 
         if keys[pygame.K_w]:
-            move_x += math.cos(self.angle) * speed * dt
-            move_y += math.sin(self.angle) * speed * dt
+            move_x += math.cos(self.angle)
+            move_y += math.sin(self.angle)
         if keys[pygame.K_s]:
-            move_x -= math.cos(self.angle) * speed * dt
-            move_y -= math.sin(self.angle) * speed * dt
+            move_x -= math.cos(self.angle)
+            move_y -= math.sin(self.angle)
         if keys[pygame.K_a]:
-            move_x += math.cos(self.angle - math.pi / 2) * speed * dt
-            move_y += math.sin(self.angle - math.pi / 2) * speed * dt
+            move_x += math.cos(self.angle - math.pi / 2)
+            move_y += math.sin(self.angle - math.pi / 2)
         if keys[pygame.K_d]:
-            move_x += math.cos(self.angle + math.pi / 2) * speed * dt
-            move_y += math.sin(self.angle + math.pi / 2) * speed * dt
+            move_x += math.cos(self.angle + math.pi / 2)
+            move_y += math.sin(self.angle + math.pi / 2)
+
+        # Normalize diagonal movement so speed is consistent in all directions
+        mag = math.sqrt(move_x * move_x + move_y * move_y)
+        if mag > 0:
+            move_x = move_x / mag * speed * dt
+            move_y = move_y / mag * speed * dt
 
         # Collision detection - separate X and Y
         new_x = self.x + move_x
@@ -143,8 +153,14 @@ class Player:
         # Head bob & footsteps noise
         moving = abs(move_x) > 0.001 or abs(move_y) > 0.001
         if moving:
-            bob_speed = 8 if self.is_sprinting else 5
-            self.bob_timer += dt * bob_speed
+            # Smooth bob-speed transition to avoid phase jumps when stamina depletes
+            target_bob_speed = 8 if self.is_sprinting else 5
+            self._bob_speed_target = getattr(self, '_bob_speed_target', target_bob_speed)
+            # Lerp bob_speed toward target to prevent discontinuity
+            current_bob = getattr(self, '_current_bob_speed', target_bob_speed)
+            current_bob += (target_bob_speed - current_bob) * min(1.0, dt * 12)
+            self._current_bob_speed = current_bob
+            self.bob_timer += dt * current_bob
             self.bob_amount = math.sin(self.bob_timer) * (4 if self.is_sprinting else 2)
             if self.is_sprinting:
                 self.noise_level = max(self.noise_level, 3.5)

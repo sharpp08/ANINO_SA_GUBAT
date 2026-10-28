@@ -167,6 +167,11 @@ class Enemy:
             return False
         if not hasattr(self, '_path_index'):
             self._path_index = 0
+        # Bounds check: if index went past end, reset
+        if self._path_index >= len(path):
+            self._path_index = 0
+            self._path = None
+            return False
         target = path[self._path_index]
         dx = target[0] - self.x
         dy = target[1] - self.y
