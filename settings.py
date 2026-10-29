@@ -178,6 +178,13 @@ TREE_COUNT_CH1 = 2600
 TREE_COUNT_CH2 = 3600
 MAX_RENDER_TREES = 280
 GROUND_TEX_SIZE = 1024
+# Dense, Ancient, Wet & Alive Forest Overhaul Tunables
+FOREST_VINE_DENSITY = 0.8
+GROUND_PUDDLE_DENSITY = 0.05
+ENHANCED_GROUND_DETAIL = True
+GROUND_CACHE_FILENAME = 'world_ground_v2.npy'
+
+
 UNDERGROWTH_DENSITY = 1600
 EDGE_RING_TREES = 420      # dense natural tree-line around top/bottom edges
 
