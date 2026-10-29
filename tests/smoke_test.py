@@ -230,7 +230,7 @@ def run_extended_tests():
         gm = GameMap(1)
         nav = NavGrid(gm)
         assert nav.is_walkable(5.0, 5.0) == True
-        assert nav.is_walkable(0.5, 0.5) == False
+        assert nav.is_walkable(-1.0, -1.0) == False
         path = nav.find_path((5.0, 5.0), (10.0, 10.0))
         assert path is not None
         assert len(path) >= 2

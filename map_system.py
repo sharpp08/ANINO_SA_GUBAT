@@ -79,19 +79,17 @@ class GameMap:
         self.chapter_num = chapter_num
         self.validation_errors = []
         self.checkpoints = []
-        
-        for y in range(self.height):
-            for x in range(self.width):
-                if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
-                    self.grid[y][x] = WALL_STONE
-                else:
-                    self.grid[y][x] = EMPTY
 
-        for y in range(28, 38):
-            for x in range(28, 38):
-                if (x == 32 or x == 33) and y == 37:
+        # Open forest world (no stone perimeter walls)
+        self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
+
+        # Central ruins at world center
+        cs = self.width // 2
+        for y in range(cs - 5, cs + 6):
+            for x in range(cs - 5, cs + 6):
+                if (x == cs or x == cs + 1) and y == cs + 5:
                     self.grid[y][x] = DOOR
-                elif x == 28 or x == 37 or y == 28 or y == 37:
+                elif x == cs - 5 or x == cs + 5 or y == cs - 5 or y == cs + 5:
                     self.grid[y][x] = WALL_WOOD
 
         seed_val = 42 + chapter_num

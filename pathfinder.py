@@ -91,4 +91,4 @@ class NavGrid:
         cx, cy = self._cell(x, y)
         if 0 <= cx < self.width and 0 <= cy < self.height:
             return self.gm.grid[cy][cx]
-        return WALL_STONE
+        return EMPTY

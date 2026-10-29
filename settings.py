@@ -168,12 +168,17 @@ TILE_SIZE = 64
 WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
 
 # Outdoor Forest Settings (Phases 1-4)
-MAP_SIZE = 64
-TREE_COUNT_CH1 = 380
-TREE_COUNT_CH2 = 500
+# Large open forest world: 128x128 tiles with a natural tree-line boundary
+# (no artificial stone perimeter wall).  Configurable via savegame-safe
+# constant; determinism is driven by WORLD_SEED + chapter seed.
+MAP_SIZE = 128
+WORLD_SEED = 1337          # master world seed (deterministic terrain)
+TREE_COUNT_CH1 = 600
+TREE_COUNT_CH2 = 800
 MAX_RENDER_TREES = 220
 GROUND_TEX_SIZE = 1024
-UNDERGROWTH_DENSITY = 350
+UNDERGROWTH_DENSITY = 400
+EDGE_RING_TREES = 240      # dense natural tree-line around the world edge
 
 
 # Player
