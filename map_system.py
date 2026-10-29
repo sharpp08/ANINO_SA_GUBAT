@@ -223,55 +223,57 @@ class GameMap:
 
     def _place_chapter1_entities(self):
         self.pickups = [
-            {'type': 'ammo_shotgun', 'x': 8.5, 'y': 8.5, 'amount': 6, 'active': True},
-            {'type': 'ammo_revolver', 'x': 20.5, 'y': 10.5, 'amount': 6, 'active': True},
-            {'type': 'health', 'x': 15.5, 'y': 15.5, 'amount': 25, 'active': True},
-            {'type': 'battery', 'x': 18.5, 'y': 16.5, 'amount': 30, 'active': True},
-            {'type': 'salt', 'x': 32.5, 'y': 25.5, 'amount': 3, 'active': True},
-            {'type': 'faith', 'x': 14.5, 'y': 20.5, 'amount': 20, 'active': True},
-            {'type': 'ammo_shotgun', 'x': 40.5, 'y': 30.5, 'amount': 4, 'active': True},
-            {'type': 'health', 'x': 10.5, 'y': 35.5, 'amount': 20, 'active': True},
-            {'type': 'garlic', 'x': 16.5, 'y': 32.5, 'amount': 2, 'active': True},
-            {'type': 'bible_page', 'x': 33.5, 'y': 33.5, 'amount': 1, 'active': True},
-            {'type': 'ammo_revolver', 'x': 45.5, 'y': 45.5, 'amount': 6, 'active': True},
-            {'type': 'health', 'x': 50.5, 'y': 50.5, 'amount': 25, 'active': True},
-            {'type': 'salt', 'x': 8.5, 'y': 4.8, 'amount': 2, 'active': True},
-            {'type': 'battery', 'x': 11.5, 'y': 3.6, 'amount': 30, 'active': True},
-            {'type': 'faith', 'x': 9.5, 'y': 6.0, 'amount': 20, 'active': True},
+            {'type': 'ammo_shotgun', 'x': 25.5, 'y': 20.5, 'amount': 6, 'active': True},
+            {'type': 'ammo_revolver', 'x': 52.5, 'y': 30.5, 'amount': 6, 'active': True},
+            {'type': 'health', 'x': 80.5, 'y': 45.5, 'amount': 25, 'active': True},
+            {'type': 'bible_page', 'x': 90.5, 'y': 60.5, 'amount': 1, 'active': True},
+            {'type': 'battery', 'x': 110.5, 'y': 48.5, 'amount': 30, 'active': True},
+            {'type': 'salt', 'x': 140.5, 'y': 80.5, 'amount': 3, 'active': True},
+            {'type': 'bible_page', 'x': 160.5, 'y': 50.5, 'amount': 1, 'active': True},
+            {'type': 'faith', 'x': 180.5, 'y': 60.5, 'amount': 20, 'active': True},
+            {'type': 'ammo_shotgun', 'x': 220.5, 'y': 90.5, 'amount': 4, 'active': True},
+            {'type': 'bible_page', 'x': 250.5, 'y': 70.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 270.5, 'y': 105.5, 'amount': 20, 'active': True},
+            {'type': 'garlic', 'x': 290.5, 'y': 96.5, 'amount': 2, 'active': True},
+            {'type': 'ammo_revolver', 'x': 320.5, 'y': 110.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 340.5, 'y': 64.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 360.5, 'y': 100.5, 'amount': 25, 'active': True},
         ]
         self.enemies = [
-            {'type': 'aswang', 'x': 17.5, 'y': 6.0},
-            {'type': 'multo', 'x': 15.5, 'y': 40.5},
-            {'type': 'aswang', 'x': 45.5, 'y': 25.5},
-            {'type': 'sigbin', 'x': 25.5, 'y': 50.5},
-            {'type': 'white_lady', 'x': 36.5, 'y': 44.5},
+            {'type': 'aswang', 'x': 75.5, 'y': 40.0},
+            {'type': 'multo', 'x': 130.5, 'y': 85.5},
+            {'type': 'aswang', 'x': 210.5, 'y': 55.5},
+            {'type': 'sigbin', 'x': 280.5, 'y': 90.5},
+            {'type': 'white_lady', 'x': 340.5, 'y': 70.5},
         ]
-        self.checkpoints.append({'x': 32.5, 'y': 32.5})
-        self.exit_pos = (58.5, 58.5)
+        self.checkpoints.append({'x': 192.5, 'y': 64.5})
+        self.exit_pos = (374.5, 64.5)
 
     def _place_chapter2_entities(self):
         self.pickups = [
-            {'type': 'ammo_shotgun', 'x': 10.5, 'y': 8.5, 'amount': 6, 'active': True},
-            {'type': 'health', 'x': 25.5, 'y': 15.5, 'amount': 30, 'active': True},
-            {'type': 'salt', 'x': 35.5, 'y': 10.5, 'amount': 3, 'active': True},
-            {'type': 'garlic', 'x': 45.5, 'y': 8.5, 'amount': 3, 'active': True},
-            {'type': 'faith', 'x': 33.5, 'y': 33.5, 'amount': 25, 'active': True},
-            {'type': 'battery', 'x': 18.5, 'y': 25.5, 'amount': 40, 'active': True},
-            {'type': 'ammo_revolver', 'x': 50.5, 'y': 20.5, 'amount': 6, 'active': True},
-            {'type': 'bible_page', 'x': 32.5, 'y': 32.5, 'amount': 1, 'active': True},
-            {'type': 'health', 'x': 55.5, 'y': 45.5, 'amount': 25, 'active': True},
+            {'type': 'ammo_shotgun', 'x': 30.5, 'y': 25.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 70.5, 'y': 40.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 105.5, 'y': 30.5, 'amount': 30, 'active': True},
+            {'type': 'garlic', 'x': 135.5, 'y': 24.5, 'amount': 3, 'active': True},
+            {'type': 'bible_page', 'x': 170.5, 'y': 80.5, 'amount': 1, 'active': True},
+            {'type': 'faith', 'x': 200.5, 'y': 60.5, 'amount': 25, 'active': True},
+            {'type': 'battery', 'x': 240.5, 'y': 75.5, 'amount': 40, 'active': True},
+            {'type': 'bible_page', 'x': 280.5, 'y': 50.5, 'amount': 1, 'active': True},
+            {'type': 'ammo_revolver', 'x': 310.5, 'y': 60.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 340.5, 'y': 90.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 365.5, 'y': 115.5, 'amount': 25, 'active': True},
         ]
         self.enemies = [
-            {'type': 'aswang', 'x': 20.5, 'y': 15.5},
-            {'type': 'aswang', 'x': 45.5, 'y': 12.5},
-            {'type': 'manananggal', 'x': 40.5, 'y': 30.5},
-            {'type': 'multo', 'x': 15.5, 'y': 35.5},
-            {'type': 'sigbin', 'x': 52.5, 'y': 40.5},
-            {'type': 'tikbalang', 'x': 32.5, 'y': 45.5},
-            {'type': 'kapre', 'x': 30.5, 'y': 20.5},
+            {'type': 'aswang', 'x': 80.5, 'y': 45.5},
+            {'type': 'aswang', 'x': 150.5, 'y': 36.5},
+            {'type': 'manananggal', 'x': 210.5, 'y': 90.5},
+            {'type': 'multo', 'x': 120.5, 'y': 105.5},
+            {'type': 'sigbin', 'x': 286.5, 'y': 120.5},
+            {'type': 'tikbalang', 'x': 320.5, 'y': 55.5},
+            {'type': 'kapre', 'x': 340.5, 'y': 60.5},
         ]
-        self.checkpoints.append({'x': 32.5, 'y': 32.5})
-        self.exit_pos = (58.5, 58.5)
+        self.checkpoints.append({'x': 192.5, 'y': 64.5})
+        self.exit_pos = (374.5, 64.5)
 
     def _validate_and_fix_reachability(self):
         cleared_trees = 0

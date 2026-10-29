@@ -259,22 +259,32 @@ class Enemy:
         if not self.alive:
             self.animation_state = 'death'
         elif self.hit_flash > 0:
-            self.animation_state = 'stagger'
+            self.animation_state = 'vanish' if self.type == 'white_lady' else 'stagger'
         elif self.bound:
             self.animation_state = 'crouch'
         elif self.state == EnemyState.IDLE:
             self.animation_state = 'hover' if self.type in ('manananggal', 'multo', 'white_lady') else 'idle'
         elif self.state == EnemyState.PATROL:
-            self.animation_state = 'crawl' if self.type in ('sigbin',) else 'walk'
+            self.animation_state = 'crawl' if self.type in ('sigbin',) else ('fly' if self.type == 'manananggal' else 'walk')
         elif self.state == EnemyState.INVESTIGATE:
-            self.animation_state = 'crawl' if self.type in ('sigbin',) else ('stalk' if self.type == 'aswang' else 'walk')
+            self.animation_state = 'rear' if self.type == 'tikbalang' else ('crawl' if self.type in ('sigbin',) else ('stalk' if self.type == 'aswang' else 'walk'))
         elif self.state == EnemyState.STALK:
-            self.animation_state = 'stalk'
+            self.animation_state = 'transform' if self.type == 'aswang' else ('fly' if self.type == 'manananggal' else 'stalk')
         elif self.state == EnemyState.ATTACK:
             if dist <= self.attack_range * 1.2:
-                self.animation_state = 'attack'
+                if self.type == 'kapre':
+                    self.animation_state = 'smash'
+                elif self.type == 'multo':
+                    self.animation_state = 'phase'
+                else:
+                    self.animation_state = 'attack'
             else:
-                self.animation_state = 'lunge' if self.type in ('aswang', 'tikbalang', 'sigbin') else ('sprint' if self.speed > 2.0 else 'run')
+                if self.type == 'sigbin':
+                    self.animation_state = 'pounce'
+                elif self.type == 'manananggal':
+                    self.animation_state = 'fly'
+                else:
+                    self.animation_state = 'lunge' if self.type in ('aswang', 'tikbalang', 'sigbin') else ('sprint' if self.speed > 2.0 else 'run')
         elif self.state == EnemyState.RETREAT:
             self.animation_state = 'run'
         elif self.state == EnemyState.RECOVER:
@@ -503,6 +513,15 @@ class Enemy:
             return True
         return False
 
+    def apply_cross(self):
+        """React to cross radiance."""
+        if 'cross' in self.vulnerabilities or self.type == 'manananggal':
+            self.repelled = True
+            self.repel_timer = 4.0
+            self.take_damage(15, 'sacred')
+            return True
+        return False
+
     def apply_salt(self):
         """React to salt circle."""
         if self.type in ('aswang', 'multo', 'white_lady', 'sigbin'):
@@ -647,6 +666,18 @@ class EnemyManager:
             dist = enemy.distance_to(player_x, player_y)
             if dist < radius:
                 if enemy.apply_ward_effect(ward_type):
+                    affected.append(enemy)
+        return affected
+
+    def apply_cross(self, player_x, player_y, radius=6.0):
+        """Apply cross radiance to nearby enemies."""
+        affected = []
+        for enemy in self.enemies:
+            if not enemy.alive:
+                continue
+            dist = enemy.distance_to(player_x, player_y)
+            if dist < radius:
+                if enemy.apply_cross():
                     affected.append(enemy)
         return affected
 

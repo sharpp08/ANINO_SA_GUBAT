@@ -48,6 +48,7 @@ class Player:
         self.rosary_cooldown = 0
         self.cross_cooldown = 0
         self.bible_pages = 0
+        self.pages_this_chapter = 0
         self.wards_unlocked = [True, False, False, False, False]
         self.selected_ward = 0
         self.ward_cooldowns = [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -387,6 +388,7 @@ class Player:
             self.faith_energy = min(FAITH_ENERGY_MAX, self.faith_energy + amount)
         elif ptype == 'bible_page':
             self.bible_pages += amount
+            self.pages_this_chapter += amount
             # Unlock wards based on pages
             if self.bible_pages >= 1:
                 self.wards_unlocked[1] = True
@@ -494,6 +496,7 @@ class Player:
             'salt_count': self.salt_count,
             'garlic_count': self.garlic_count,
             'bible_pages': self.bible_pages,
+            'pages_this_chapter': self.pages_this_chapter,
             'wards_unlocked': self.wards_unlocked[:],
             'journal_entries': self.journal_entries[:],
             'relics': self.relics[:],
@@ -521,6 +524,7 @@ class Player:
         self.salt_count = state.get('salt_count', 5)
         self.garlic_count = state.get('garlic_count', 3)
         self.bible_pages = state.get('bible_pages', 0)
+        self.pages_this_chapter = state.get('pages_this_chapter', self.bible_pages)
         self.wards_unlocked = state.get('wards_unlocked', [True, False, False, False, False])
         self.journal_entries = state.get('journal_entries', [])
         self.relics = state.get('relics', [])

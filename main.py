@@ -85,8 +85,11 @@ def draw_hud(surf, player, font_sm, font_tiny):
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.health, PLAYER_MAX_HEALTH, HEALTH_GREEN)
     current_y -= (font_h + 12)
 
-    # 5. Items (Salt, Garlic, Pages)
-    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.bible_pages}", True, (200, 200, 200))
+    # 5. Items (Salt, Garlic, Pages, Rosary, Cross)
+    ros_cd = f"{player.rosary_cooldown:.1f}s" if player.rosary_cooldown > 0 else "READY"
+    crs_cd = f"{player.cross_cooldown:.1f}s" if player.cross_cooldown > 0 else "READY"
+    pages_needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
+    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.pages_this_chapter}/{pages_needed} ROS:{ros_cd} CRS:{crs_cd}", True, (200, 200, 200))
     surf.blit(items_txt, (pad, current_y - font_h))
     current_y -= (font_h + 12)
 
@@ -377,6 +380,7 @@ class Game:
         sx, sy = self.game_map.player_start
         self.player = Player(sx, sy, self.game_map.player_start_angle)
         self.player.current_chapter = chapter_num
+        self.player.pages_this_chapter = 0
         self.player.set_checkpoint(sx, sy)
         self.enemy_manager.spawn_enemies(self.game_map.enemies)
         self.effects = []
@@ -497,6 +501,10 @@ class Game:
                 self._use_salt()
             elif k == pygame.K_h:
                 self._use_garlic()
+            elif k == pygame.key.key_code(CONTROLS.get('rosary', 'v')) if CONTROLS.get('rosary') else pygame.K_v:
+                self._use_rosary()
+            elif k == pygame.key.key_code(CONTROLS.get('cross', 'c')) if CONTROLS.get('cross') else pygame.K_c:
+                self._use_cross()
             elif k == pygame.K_1:
                 if p.flashlight_battery > 0:
                     p.flashlight_on = not p.flashlight_on
@@ -572,6 +580,31 @@ class Game:
         if self.player.use_garlic():
             self.enemy_manager.add_garlic_zone(self.player.x, self.player.y)
             self.notify("Garlic thrown!")
+
+    def _use_rosary(self):
+        p = self.player
+        if p.rosary_cooldown <= 0:
+            if p.use_rosary():
+                try:
+                    audio_mgr.play('page_rustle')
+                except Exception:
+                    pass
+                self.notify("Rosary prayed. Sanity restored.")
+        else:
+            self.notify(f"Rosary not ready! ({p.rosary_cooldown:.1f}s)")
+
+    def _use_cross(self):
+        p = self.player
+        if p.cross_cooldown <= 0:
+            if p.use_cross():
+                try:
+                    audio_mgr.play('pickup')
+                except Exception:
+                    pass
+                affected = self.enemy_manager.apply_cross(p.x, p.y, radius=6.0)
+                self.notify("Cross held high. Radiance restored." + (f" Repelled {len(affected)} creature(s)!" if affected else ""))
+        else:
+            self.notify(f"Cross not ready! ({p.cross_cooldown:.1f}s)")
 
     def _cast_selected_ward(self):
         p = self.player
@@ -678,7 +711,7 @@ class Game:
                 audio_mgr.play('pickup')
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
-        # Check level completion (all enemies defeated OR exit reached)
+        # Check level completion (Exit reached requires sufficient pages collected this chapter; enemy defeat optional per config)
         total = getattr(self, 'level_enemy_total', 0)
         alive_now = len(self.enemy_manager.get_alive_enemies())
         all_enemies_defeated = total > 0 and alive_now == 0
@@ -688,9 +721,21 @@ class Game:
             if math.sqrt((ex - p.x)**2 + (ey - p.y)**2) < 1.2:
                 exit_reached = True
 
-        if all_enemies_defeated or exit_reached:
-            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! "
-                  f"(enemies defeated: {all_enemies_defeated}, exit reached: {exit_reached})")
+        pages_needed = PAGES_REQUIRED_CH1 if self.chapter == 1 else PAGES_REQUIRED_CH2
+        pages_have = getattr(p, 'pages_this_chapter', p.bible_pages)
+        pages_met = (not REQUIRE_PAGES_FOR_EXIT) or (pages_have >= pages_needed)
+
+        cleared = False
+        if exit_reached:
+            if pages_met or (ALLOW_ENEMY_CLEAR_EXIT and all_enemies_defeated):
+                cleared = True
+            else:
+                self.notify(f"The way is sealed. Pages: {pages_have}/{pages_needed}", 2.0)
+        elif all_enemies_defeated and not REQUIRE_PAGES_FOR_EXIT:
+            cleared = True
+
+        if cleared:
+            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! (enemies defeated: {all_enemies_defeated}, exit reached: {exit_reached})")
             self.notify(f"CHAPTER {self.chapter} CLEARED!", 3.0)
             self.advance_chapter()
             return

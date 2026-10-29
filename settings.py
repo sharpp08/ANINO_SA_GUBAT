@@ -27,7 +27,7 @@ ENABLE_INTRO = True
 ENABLE_AUDIO_SYNTH = True
 ENABLE_SANITY = True
 ENABLE_STEALTH_NOISE = True
-DEBUG_OVERLAY = True
+DEBUG_OVERLAY = False
 
 # Animation & Physics Toggles
 ENABLE_ANIMATIONS = True
@@ -365,6 +365,12 @@ CHECKPOINT = 31
 LEVEL_EXIT = 32
 INTERACT_OBJECT = 33
 
+# Chapter Page Gate Config
+REQUIRE_PAGES_FOR_EXIT = True
+PAGES_REQUIRED_CH1 = 3
+PAGES_REQUIRED_CH2 = 3
+ALLOW_ENEMY_CLEAR_EXIT = False
+
 # Audio
 MASTER_VOLUME = 0.7
 MUSIC_VOLUME = 0.4
@@ -377,13 +383,13 @@ CONTROLS = {
     'strafe_left': 'a',
     'strafe_right': 'd',
     'fire': 'mouse1',
-    'alt_fire': 'mouse3',
+    'alt_fire': '',      # reserved
     'reload': 'r',
     'flashlight': 'f',
     'interact': 'e',
     'sprint': 'lshift',
     'crouch': 'lctrl',
-    'jump': 'space',
+    'jump': '',          # reserved
     'ward_menu': 'q',
     'ward_1': '1',
     'ward_2': '2',
