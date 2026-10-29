@@ -53,8 +53,8 @@ The game features:
 | Feature | Details |
 |---|---|
 | 🎮 Raycasting 3D | Pseudo-3D first-person view; internal resolution scales with the quality preset (320×180 on low, 640×360 on medium/high), upscaled to 1280×720 |
-| 🌲 Outdoor Forest | 64×64 map with 220 (Ch. 1) / 300 (Ch. 2) procedurally placed trees, dense undergrowth, stone boundary wall and an abandoned cabin |
-| 🌿 Legit Forest | 350 procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
+| 🌲 Outdoor Forest | 384×128 open world with 2000 (Ch. 1) / 2800 (Ch. 2) procedurally placed trees, dense undergrowth, a tree-line on the top and bottom edges, left/right edges that continue as endless forest, and an abandoned cabin |
+| 🌿 Legit Forest | 1200 procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
 | 🌀 Physics Animation | Spring-driven systems for camera, weapon sway, head bob; NumPy particle physics for casings/smoke/sparks |
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
 | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
@@ -265,8 +265,8 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 | Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
 |---|---|---|---|---|---|---|
-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
-| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
+| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 2000 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
+| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 2800 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
 
 Both chapters have a checkpoint and a Bible page inside the cabin near the map centre. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
 
@@ -434,7 +434,7 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 ### Recent changes
 
 - **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Press **F5** (next) / **F6** (previous) during gameplay to switch quality tiers at runtime — changes take effect immediately and are saved to `settings.json`. Presets control resolution, bloom, HDR, god rays, SSAO, particles, dynamic lights, tree draw cap, and water movement speed.
-- **Towering Tropical Forest:** Tree billboards were upgraded from 64×128 to 64×256 sprites with 7 distinct archetypes — tall tropical hardwoods (balete) with buttress roots, massive trunks with tapered bark and layered canopies, slender bamboo clusters, broken dead trees with sparse branches, banana/palm trees with radiating fronds, and supernatural twisted trees with a dark aura. Trunks feature vertical bark grooves, moss patches, and branches extending in varied directions. Per-tree seeds ensure stable appearance across frames.
+- **Towering Tropical Forest:** Tree billboards were upgraded from 64×128 to 64×256 sprites with 7 distinct archetypes — tall tropical hardwoods (balete) with buttress roots, massive trunks with tapered bark and layered canopies, slender bamboo clusters, broken dead trees with sparse branches, banana/palm trees with radiating fronds, and supernatural twisted trees with a dark aura. Trunks feature vertical bark grooves, moss patches, and branches extending in varied directions. Most non-dead, non-bamboo trees also get hanging vines (lianas). Per-tree seeds ensure stable appearance across frames.
 - **Organic Terrain:** The world ground texture (1024×1024) now uses 4 layers of multi-octave fBm noise to produce wet soil patches, exposed moss clusters, leaf litter, and subtle root patterns. Stone/pebble spots are scattered across the surface. Undergrowth now includes 8 sprite types: fern, mushroom, rock, bush, fallen log, tree stump, mossy boulder, and sapling — all placed deterministically per chapter.
 - **Bloom & Post-Processing:** Bloom is now controlled by the active quality preset (`low` = off, `medium`/`high` = on). The `ShaderRenderer` performs a bloom extraction pass when enabled. Full multi-pass bloom blur requires ModernGL shader compilation; the pipeline gracefully falls back to software rendering if shaders fail.
 - **HDR Tone Mapping:** High quality enables HDR exposure (`HDR_EXPOSURE=1.1`) and ACES tone mapping. Medium and low use Reinhard tone mapping at default exposure.

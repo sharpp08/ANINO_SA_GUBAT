@@ -427,7 +427,15 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
                     pygame.draw.line(surf, bcol, (sx, sy),
                                      (sx + side * rng.randint(2, 5), sy - rng.randint(2, 5)), 1)
 
-    # --- Hanging Vines / Lianas (Tropical Jungle Atmosphere) ---\n    if not is_dead and not is_bam and rng.random() > 0.2:\n        vcol = (30, 65, 35)\n        for _ in range(rng.randint(2, 5)):\n            vx = cx + rng.randint(-tw, tw)\n            vy = rng.randint(trunk_top, trunk_top + 30)\n            v_len = rng.randint(15, 35)\n            pygame.draw.line(surf, vcol, (vx, vy), (vx + rng.randint(-3, 3), vy + v_len), 1)\n\n
+    # --- Hanging Vines / Lianas (Tropical Jungle Atmosphere) ---
+    if not is_dead and not is_bam and rng.random() > 0.2:
+        vcol = (30, 65, 35)
+        for _ in range(rng.randint(2, 5)):
+            vx = cx + rng.randint(-tw, tw)
+            vy = rng.randint(trunk_top, trunk_top + 30)
+            v_len = rng.randint(15, 35)
+            pygame.draw.line(surf, vcol, (vx, vy), (vx + rng.randint(-3, 3), vy + v_len), 1)
+
     # --- Canopy: layered, asymmetrical, species-specific ---
     canopy_top = int(height * (1.0 - th - ch))
     canopy_bot = trunk_top
