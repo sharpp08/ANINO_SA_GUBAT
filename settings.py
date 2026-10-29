@@ -174,12 +174,12 @@ MAP_WIDTH = 384
 MAP_HEIGHT = 128
 MAP_SIZE = 128
 WORLD_SEED = 1337          # master world seed (deterministic terrain)
-TREE_COUNT_CH1 = 1400
-TREE_COUNT_CH2 = 1900
-MAX_RENDER_TREES = 220
+TREE_COUNT_CH1 = 2000
+TREE_COUNT_CH2 = 2800
+MAX_RENDER_TREES = 240
 GROUND_TEX_SIZE = 1024
-UNDERGROWTH_DENSITY = 900
-EDGE_RING_TREES = 320      # dense natural tree-line around top/bottom edges
+UNDERGROWTH_DENSITY = 1200
+EDGE_RING_TREES = 360      # dense natural tree-line around top/bottom edges
 
 
 # Player
