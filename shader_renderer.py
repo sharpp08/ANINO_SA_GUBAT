@@ -100,6 +100,8 @@ class ShaderRenderer:
             pass
 
     def resize(self, w, h):
+        self.width = w
+        self.height = h
         if not self.enabled:
             return
         try:
