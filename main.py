@@ -287,6 +287,21 @@ class Game:
     def __init__(self):
         pygame.init()
         print(f"[{BUILD_VERSION}] Starting ANINO SA GUBAT...")
+        
+        # Phase 3 Runtime Diagnostics
+        import sys, os, settings, map_system, renderer, asset_generator
+        print(f"[DIAGNOSTICS] Python Executable: {sys.executable}")
+        print(f"[DIAGNOSTICS] Entry Point: {__file__}")
+        print(f"[DIAGNOSTICS] CWD: {os.getcwd()}")
+        print(f"[DIAGNOSTICS] Settings module: {settings.__file__}")
+        print(f"[DIAGNOSTICS] MapSystem module: {map_system.__file__}")
+        print(f"[DIAGNOSTICS] Renderer module: {renderer.__file__}")
+        print(f"[DIAGNOSTICS] AssetGen module: {asset_generator.__file__}")
+        test_gm = map_system.GameMap(1)
+        print(f"[DIAGNOSTICS] Map Dimensions: width={test_gm.width}, height={test_gm.height}")
+        print(f"[DIAGNOSTICS] Trees Generated (Chapter 1): {len(test_gm.trees)}")
+        print(f"[DIAGNOSTICS] Undergrowth Generated: {len(test_gm.undergrowth)}")
+
         flags = pygame.FULLSCREEN if FULLSCREEN else 0
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
         pygame.display.set_caption(TITLE)
