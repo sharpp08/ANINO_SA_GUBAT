@@ -22,6 +22,7 @@ class Player:
         self.damage_flash = 0
         self.sanity = SANITY_MAX
         self.stamina = STAMINA_MAX
+        self.exhausted = False
         self.noise_level = 0.0
         self.stunned = False
         self.stun_timer = 0.0
@@ -97,12 +98,20 @@ class Player:
 
         # Sprint & Crouch with Stamina
         wants_sprint = keys[pygame.K_LSHIFT] and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d])
-        if wants_sprint and not self.is_crouching:
-            if self.stamina > 5.0:
+
+        if getattr(self, 'exhausted', False):
+            if self.stamina >= 30.0:
+                self.exhausted = False
+
+        if wants_sprint and not self.is_crouching and not getattr(self, 'exhausted', False):
+            if self.stamina > 2.0:
                 self.is_sprinting = True
                 self.stamina = max(0.0, self.stamina - STAMINA_DRAIN_RATE * dt)
-            elif not self.is_sprinting:
-                # Just exhausted — transition gracefully (don't flicker)
+                if self.stamina <= 0.0:
+                    self.exhausted = True
+                    self.is_sprinting = False
+            else:
+                self.exhausted = True
                 self.is_sprinting = False
         else:
             self.is_sprinting = False
