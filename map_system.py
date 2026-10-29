@@ -58,8 +58,8 @@ class GameMap:
     """Outdoor forest map system with advanced biomes, trails, stream, ponds, ruins, spatial hashing, and reachability validation."""
 
     def __init__(self, chapter_num=1):
-        self.width = MAP_SIZE
-        self.height = MAP_SIZE
+        self.width = MAP_WIDTH
+        self.height = MAP_HEIGHT
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
         self.trees = []
         self.undergrowth = []
@@ -84,12 +84,12 @@ class GameMap:
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
 
         # Central ruins at world center
-        cs = self.width // 2
-        for y in range(cs - 5, cs + 6):
-            for x in range(cs - 5, cs + 6):
-                if (x == cs or x == cs + 1) and y == cs + 5:
+        cs_x, cs_y = self.width // 2, self.height // 2
+        for y in range(cs_y - 5, cs_y + 6):
+            for x in range(cs_x - 5, cs_x + 6):
+                if (x == cs_x or x == cs_x + 1) and y == cs_y + 5:
                     self.grid[y][x] = DOOR
-                elif x == cs - 5 or x == cs + 5 or y == cs - 5 or y == cs + 5:
+                elif x == cs_x - 5 or x == cs_x + 5 or y == cs_y - 5 or y == cs_y + 5:
                     self.grid[y][x] = WALL_WOOD
 
         seed_val = 42 + chapter_num
@@ -127,7 +127,7 @@ class GameMap:
             
             if math.hypot(tx - 4.5, ty - 4.5) < 5.0:
                 continue
-            if 27 <= tx <= 38 and 27 <= ty <= 38:
+            if cs_x - 12 <= tx <= cs_x + 12 and cs_y - 12 <= ty <= cs_y + 12:
                 continue
             if self.grid[int(ty)][int(tx)] == WATER:
                 continue
@@ -179,7 +179,7 @@ class GameMap:
             py = rng_map.uniform(2.0, float(self.height - 2))
             if math.hypot(px - 4.5, py - 4.5) < 3.0:
                 continue
-            if 27 <= px <= 38 and 27 <= py <= 38:
+            if cs_x - 8 <= px <= cs_x + 8 and cs_y - 8 <= py <= cs_y + 8:
                 continue
             if self.grid[int(py)][int(px)] == WATER:
                 continue
@@ -193,6 +193,11 @@ class GameMap:
                     'tint': rng_map.randint(180, 255)
                 })
 
+        # Natural tree-line boundary ONLY on top and bottom (left/right fully open)
+        self._spawn_edge_ring(rng_map)
+        for t in self._edge_ring:
+            self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
+
         if chapter_num == 1:
             self.player_start = (4.5, 4.5)
             self.player_start_angle = 0.785
@@ -203,6 +208,27 @@ class GameMap:
             self._place_chapter2_entities()
 
         self._validate_and_fix_reachability()
+
+    def _spawn_edge_ring(self, rng_map):
+        # Boundary on top and bottom rows of the wide horizontal forest.
+        # Left and right remain completely open/continuous for seamless traversal.
+        self._edge_ring = []
+        w, h = self.width, self.height
+        step = 1.0
+        for x in range(2, w - 2, int(step)):
+            for y_off in (1.2, 2.8, 5.0):
+                for edge_y in (y_off, h - y_off):
+                    if rng_map.random() < 0.9:
+                        tx = x + rng_map.uniform(-0.4, 0.4)
+                        ty = edge_y + rng_map.uniform(-0.4, 0.4)
+                        scale = rng_map.uniform(1.3, 2.2)
+                        self._edge_ring.append({
+                            'x': tx, 'y': ty, 'type': 'balete',
+                            'scale': scale, 'tint': rng_map.randint(170, 220),
+                            'radius': max(0.25, scale * 0.22 + 0.08),
+                            'canopy_seed': rng_map.randint(0, 99999),
+                            'lean': rng_map.uniform(-0.05, 0.05),
+                        })
 
     def _place_chapter1_entities(self):
         self.pickups = [
@@ -332,6 +358,15 @@ class GameMap:
         for t in nearby:
             if math.hypot(t['x'] - x, t['y'] - y) < (t['radius'] + radius):
                 return True
+        if x < 0 or x >= self.width:
+            cx, cy = int(math.floor(x / 2.0)), int(math.floor(y / 2.0))
+            h = abs(hash((cx, cy, WORLD_SEED))) % 1000
+            if h < 90:
+                rng_p = random.Random(hash((cx, cy, WORLD_SEED, 99)))
+                tx = (cx + rng_p.uniform(0.2, 1.8)) * 2.0
+                ty = (cy + rng_p.uniform(0.2, 1.8)) * 2.0
+                if math.hypot(tx - x, ty - y) < (0.4 + radius):
+                    return True
         return False
 
     def resolve_circle_collision(self, x, y, radius):
@@ -371,17 +406,21 @@ class GameMap:
 
     def is_wall(self, x, y):
         ix, iy = int(x), int(y)
-        if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
+        if iy < 0 or iy >= self.height:
             return True
+        if ix < 0 or ix >= self.width:
+            return False
         return self.grid[iy][ix] != EMPTY
 
     def is_solid(self, x, y, doors_block=True):
         """True if (x, y) blocks movement. Closed doors block unless doors_block=False;
-        opened doors become EMPTY tiles and are always passable."""
+        opened doors become EMPTY tiles and are always passable.
+        Left/right boundaries are open/continuous (no invisible walls);
+        top/bottom remain bounded natural terrain."""
         ix, iy = int(x), int(y)
-        if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
+        if iy < 0 or iy >= self.height:
             return True
-        tile = self.grid[iy][ix]
+        tile = self.get_tile(x, y)
         if tile == DOOR:
             return doors_block
         if tile != EMPTY and tile != WATER:
@@ -396,9 +435,13 @@ class GameMap:
         return False
 
     def get_tile(self, x, y):
+        """Return tile at position. Left/right out-of-bounds are open forest (no stone wall);
+        top/bottom out-of-bounds are bounded by natural canopy."""
         ix, iy = int(x), int(y)
-        if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
+        if iy < 0 or iy >= self.height:
             return WALL_STONE
+        if ix < 0 or ix >= self.width:
+            return EMPTY
         return self.grid[iy][ix]
 
     def open_door(self, x, y):
