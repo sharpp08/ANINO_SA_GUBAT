@@ -244,6 +244,7 @@ class Renderer:
             'sapling': generate_undergrowth_sprite('sapling', 32, 32),
         }
         self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
+        self._ground_arr = pygame.surfarray.array3d(self.world_ground_tex)
         self.frame_counter = 0
 
         self.floor_surf = pygame.Surface((self.w, self.h // 2))
@@ -555,45 +556,44 @@ class Renderer:
                     pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
                     self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
-        # 2. Floor with exp-squared fog, min 8% ambient, and ground mist
+        # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
         floor_h = self.h - horizon_y
-        if floor_h > 0:
-            mist_phase = t_ticks * 0.0003  # slow drift for ground mist
+        if floor_h > 0 and hasattr(self, '_ground_arr'):
+            mist_phase = t_ticks * 0.0003
+            arr_3d = pygame.surfarray.pixels3d(self.surface)
+            gw, gh, _ = self._ground_arr.shape
+            px, py, pa = player.x, player.y, player.angle
+            
+            ray_dx = np.cos(pa + np.array(self.ray_angles, dtype=np.float32) if hasattr(self, 'ray_angles') else np.linspace(-0.5, 0.5, self.w))
+            ray_dy = np.sin(pa + np.array(self.ray_angles, dtype=np.float32) if hasattr(self, 'ray_angles') else np.linspace(-0.5, 0.5, self.w))
+            
             for y in range(horizon_y, self.h):
                 row_y = y - half_h - pitch_offset
                 if row_y <= 0:
                     continue
                 dist = (self.h * 0.5) / row_y
+                wx = px + dist * ray_dx
+                wy = py + dist * ray_dy
+                
+                tx = ((wx * 8.0) % gw).astype(np.int32)
+                ty = ((wy * 8.0) % gh).astype(np.int32)
+                
+                tex_cols = self._ground_arr[tx, ty] # shape (w, 3)
+                
                 fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
                 shade = max(0.08, 1.0 - fog)
-
-                # Enhanced atmospheric coloring with depth-based tinting
-                r = int(FLOOR_COLOR[0] * shade + 24 * (1 - shade))
-                g = int(FLOOR_COLOR[1] * shade + 34 * (1 - shade))
-                b = int(FLOOR_COLOR[2] * shade + 42 * (1 - shade))
-
-                # Add subtle color variation based on distance
-                if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
-                    color_var = int(math.sin(t_ticks * 0.001 + y * 0.01) * 5)
-                    r = max(0, min(255, r + color_var))
-                    g = max(0, min(255, g + color_var // 2))
-                    b = max(0, min(255, b - color_var // 3))
-
-                # Ground-level mist: a thin, drifting fog layer near the
-                # horizon that fades with distance.  Uses a low-frequency
-                # sine so the mist appears to roll slowly across the floor.
-                # Only the top ~40% of the floor (near horizon = far distance)
-                # gets the mist, simulating depth haze.
+                
+                shaded_cols = (tex_cols.astype(np.float32) * shade).astype(np.uint8)
+                
                 floor_t = (y - horizon_y) / max(1, floor_h)
                 if floor_t < 0.45:
                     mist_strength = (0.45 - floor_t) / 0.45
                     mist_wave = math.sin(mist_phase + y * 0.08) * 0.5 + 0.5
                     mist_alpha = mist_strength * mist_wave * 0.25
-                    r = int(r * (1 - mist_alpha) + 30 * mist_alpha)
-                    g = int(g * (1 - mist_alpha) + 40 * mist_alpha)
-                    b = int(b * (1 - mist_alpha) + 38 * mist_alpha)
-
-                pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
+                    shaded_cols = (shaded_cols.astype(np.float32) * (1 - mist_alpha) + np.array([30, 40, 38], dtype=np.float32) * mist_alpha).astype(np.uint8)
+                
+                arr_3d[:, y, :] = shaded_cols
+            del arr_3d
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
         t_rays = pygame.time.get_ticks()

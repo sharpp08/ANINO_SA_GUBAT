@@ -66,6 +66,11 @@ QUALITY_PRESETS = {
         'enable_particles': False, 'enable_dynamic_lights': False,
         'enable_aurora': False, 'enable_enhanced_floor': False,
         'max_render_trees': 80, 'max_particles': 50, 'max_enemies': 4,
+        # Ground detail tiers
+        'ground_grass_blade_layers': 2,
+        'ground_enable_clover': False,
+        'ground_enable_flowers': False,
+        'ground_enable_roots': False,
         # Renderer pass parameters
         'bloom_threshold': 0.85, 'bloom_intensity': 0.3, 'bloom_blur_passes': 1,
         'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
@@ -80,6 +85,11 @@ QUALITY_PRESETS = {
         'enable_particles': True, 'enable_dynamic_lights': False,
         'enable_aurora': True, 'enable_enhanced_floor': True,
         'max_render_trees': 150, 'max_particles': 150, 'max_enemies': 6,
+        # Ground detail tiers
+        'ground_grass_blade_layers': 4,
+        'ground_enable_clover': True,
+        'ground_enable_flowers': True,
+        'ground_enable_roots': True,
         'bloom_threshold': 0.72, 'bloom_intensity': 0.45, 'bloom_blur_passes': 2,
         'god_ray_samples': 0, 'god_ray_intensity': 0.0, 'god_ray_decay': 0.85,
         'hdr_exposure': 1.0, 'tone_mapping': 'reinhard',
@@ -93,6 +103,11 @@ QUALITY_PRESETS = {
         'enable_particles': True, 'enable_dynamic_lights': True,
         'enable_aurora': True, 'enable_enhanced_floor': True,
         'max_render_trees': 220, 'max_particles': 300, 'max_enemies': 8,
+        # Ground detail tiers
+        'ground_grass_blade_layers': 6,
+        'ground_enable_clover': True,
+        'ground_enable_flowers': True,
+        'ground_enable_roots': True,
         'bloom_threshold': 0.65, 'bloom_intensity': 0.6, 'bloom_blur_passes': 3,
         'god_ray_samples': 40, 'god_ray_intensity': 0.35, 'god_ray_decay': 0.88,
         'hdr_exposure': 1.1, 'tone_mapping': 'aces',
@@ -182,7 +197,7 @@ GROUND_TEX_SIZE = 1024
 FOREST_VINE_DENSITY = 0.8
 GROUND_PUDDLE_DENSITY = 0.05
 ENHANCED_GROUND_DETAIL = True
-GROUND_CACHE_FILENAME = 'world_ground_v2.npy'
+GROUND_CACHE_FILENAME = 'world_ground_knoll_v1.npy'
 
 
 UNDERGROWTH_DENSITY = 1600

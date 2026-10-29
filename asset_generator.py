@@ -786,12 +786,13 @@ def generate_all_pickups():
     return {t: generate_pickup_sprite(t, 32) for t in pickup_types}
 
 
-def generate_world_ground_texture(width=1024, height=1024):
-    """Bake a large world-sized ground texture with organic tropical forest detail."""
-    cache_path = os.path.join(ASSET_DIR, 'cache', 'world_ground.npy')
+def generate_world_ground_texture(width=1024, height=1024, chapter=1):
+    """Bake a dense grassy-knoll forest ground texture."""
+    import settings as _s
+    cache_filename = getattr(_s, 'GROUND_CACHE_FILENAME', 'world_ground_knoll_v1.npy')
+    cache_path = os.path.join(ASSET_DIR, 'cache', cache_filename)
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     import numpy as np
-
     if os.path.exists(cache_path):
         try:
             arr = np.load(cache_path)
@@ -801,76 +802,104 @@ def generate_world_ground_texture(width=1024, height=1024):
         except Exception:
             pass
 
-    rng = np.random.RandomState(42)
-    # Multi-octave noise for organic variation
-    n1 = generate_fbm_noise(width, height, octaves=6, seed=999)   # base soil
-    n2 = generate_fbm_noise(width, height, octaves=4, seed=777)   # moss patches
-    n3 = generate_fbm_noise(width, height, octaves=3, seed=555)   # leaf litter
-    n4 = generate_fbm_noise(width, height, octaves=5, seed=333)   # wet patches
+    base_soil = np.array([22, 28, 20], dtype=np.float32)
+    n_base = generate_fbm_noise(width, height, octaves=6, seed=999 + chapter)
+    n_mound = generate_fbm_noise(width, height, octaves=4, seed=777 + chapter)
+    warp_x = generate_fbm_noise(width, height, octaves=3, seed=555 + chapter) * 40.0
+    warp_y = generate_fbm_noise(width, height, octaves=3, seed=333 + chapter) * 40.0
+    xs = np.arange(width, dtype=np.float32)
+    ys = np.arange(height, dtype=np.float32)
+    xx, yy = np.meshgrid(xs, ys)
+    wx = np.clip(((xx + warp_x) % width).astype(np.int32), 0, width-1)
+    wy = np.clip(((yy + warp_y) % height).astype(np.int32), 0, height-1)
+    mounds = n_mound[wy, wx]
+    undulation = 0.6 * n_base + 0.4 * mounds
+    arr = base_soil[np.newaxis, np.newaxis, :] + (undulation[:, :, np.newaxis] - 0.5) * 28.0
+    shadow_olive = np.array([48, 48, 16], dtype=np.float32) * 0.42
+    dark_moss = np.array([48, 80, 16], dtype=np.float32) * 0.42
+    mid_olive = np.array([80, 80, 48], dtype=np.float32) * 0.42
+    mid_green = np.array([80, 112, 48], dtype=np.float32) * 0.42
+    muted_sage = np.array([112, 144, 80], dtype=np.float32) * 0.42
+    dry_yellow_green = np.array([112, 112, 48], dtype=np.float32) * 0.42
+    moonlit_tip = np.array([180, 195, 170], dtype=np.float32) * 0.55
 
-    base = np.array([28, 20, 14], dtype=np.float32)
-    arr = np.zeros((height, width, 3), dtype=np.float32)
+    grass_layers = min(6, max(2, int(getattr(_s, 'ACTIVE_QUALITY', {}).get('ground_grass_blade_layers', 4))))
+    blade_rng = np.random.RandomState(1000 + chapter)
+    for layer in range(grass_layers):
+        num_blades = 8000 + layer * 3000
+        bx = blade_rng.randint(0, width, num_blades)
+        by = blade_rng.randint(0, height, num_blades)
+        bangle = blade_rng.uniform(-0.8, 0.8, num_blades)
+        blen = blade_rng.uniform(2, 6, num_blades)
+        if layer < 2:
+            colors = np.vstack([shadow_olive, dark_moss])
+        elif layer < 4:
+            colors = np.vstack([mid_olive, mid_green, muted_sage])
+        else:
+            colors = np.vstack([muted_sage, dry_yellow_green, moonlit_tip])
+        bc = colors[blade_rng.randint(0, len(colors), num_blades)]
+        dx = np.cos(bangle) * blen
+        dy = -np.sin(bangle) * blen
+        for i in range(num_blades):
+            x0, y0 = bx[i], by[i]
+            x1, y1 = int(x0 + dx[i]), int(y0 + dy[i])
+            cx0, cy0 = max(0, min(width-1, x0)), max(0, min(height-1, y0))
+            cx1, cy1 = max(0, min(width-1, x1)), max(0, min(height-1, y1))
+            steps = max(abs(cx1-cx0), abs(cy1-cy0), 1)
+            for s in range(steps + 1):
+                t = s / max(1, steps)
+                px = int(cx0 + (cx1-cx0)*t)
+                py = int(cy0 + (cy1-cy0)*t)
+                if 0 <= px < width and 0 <= py < height:
+                    arr[py, px] = arr[py, px] * 0.7 + bc[i] * 0.3
 
-    for y in range(height):
-        for x in range(width):
-            n = n1[y, x]
-            # Base soil: dark damp earth
-            col = base + (n - 0.5) * 35
-            # Moss patches (green) where n2 > 0.55
-            if n2[y, x] > 0.55:
-                mg = (n2[y, x] - 0.55) * 2.0
-                col = col * (1.0 - mg * 0.4) + np.array([30, 55, 25], dtype=np.float32) * mg * 0.4
-            # Wet/muddy patches (darker, slight blue tint) where n4 > 0.6
-            if n4[y, x] > 0.6:
-                wg = (n4[y, x] - 0.6) * 2.5
-                col = col * (1.0 - wg * 0.5) + np.array([15, 18, 14], dtype=np.float32) * wg * 0.5
-            # Leaf litter (warm brown/orange specks) where n3 > 0.6
-            if n3[y, x] > 0.6:
-                lg = (n3[y, x] - 0.6) * 2.5
-                col = col + np.array([12, 8, 4], dtype=np.float32) * lg * 0.3
-            arr[y, x] = np.clip(col, 0, 255)
+    clump_noise = generate_fbm_noise(width, height, octaves=5, seed=888 + chapter)
+    clump_mask = (clump_noise > 0.45).astype(np.float32)
+    arr = arr * (0.65 + 0.35 * clump_mask[:, :, np.newaxis])
 
-    # Add root patterns: dark wavy lines across the texture (denser root systems)
-    root_rng = np.random.RandomState(123)
-    for _ in range(90):
-        ry = root_rng.randint(0, height)
-        rx = root_rng.randint(0, width)
-        rlen = root_rng.randint(25, 80)
-        angle = root_rng.uniform(0, math.pi * 2)
-        for i in range(rlen):
-            px = int(rx + math.cos(angle) * i)
-            py = int(ry + math.sin(angle) * i)
-            if 0 <= px < width and 0 <= py < height:
-                if arr[py, px, 0] > 20:
-                    arr[py, px] *= 0.85
-            if 0 <= px + 1 < width:
-                if arr[py, px + 1, 0] > 20:
-                    arr[py, px + 1] *= 0.90
+    if getattr(_s, 'ACTIVE_QUALITY', {}).get('ground_enable_clover', True):
+        clover_noise = generate_fbm_noise(width, height, octaves=4, seed=7771 + chapter)
+        clover_mask = (clover_noise > 0.6).astype(np.float32)
+        clover_color = np.array([60, 90, 50], dtype=np.float32) * 0.45
+        for _ in range(300):
+            cx = blade_rng.randint(5, width-5)
+            cy = blade_rng.randint(5, height-5)
+            if clover_mask[cy, cx] > 0.5:
+                y0, y1 = max(0, cy-2), min(height, cy+3)
+                x0, x1 = max(0, cx-2), min(width, cx+3)
+                arr[y0:y1, x0:x1] = arr[y0:y1, x0:x1] * 0.7 + clover_color * 0.3
 
-    # Add scattered tiny stone/pebble micro-details
-    stone_rng = np.random.RandomState(456)
-    for _ in range(250):
-        sx = stone_rng.randint(0, width)
-        sy = stone_rng.randint(0, height)
-        if 0 <= sx < width and 0 <= sy < height:
-            arr[sy, sx] = np.clip(arr[sy, sx] * 1.25, 0, 255)
+    if getattr(_s, 'ACTIVE_QUALITY', {}).get('ground_enable_flowers', True):
+        for _ in range(100):
+            fx = blade_rng.randint(5, width-5)
+            fy = blade_rng.randint(5, height-5)
+            y0, y1 = max(0, fy-1), min(height, fy+2)
+            x0, x1 = max(0, fx-1), min(width, fx+2)
+            arr[y0:y1, x0:x1] = np.clip(arr[y0:y1, x0:x1] * 0.6 + moonlit_tip * 0.4, 0, 255)
 
-    # Add stone/pebble spots
-    for _ in range(200):
-        sx = root_rng.randint(0, width)
-        sy = root_rng.randint(0, height)
-        sr = root_rng.randint(2, 6)
-        shade = root_rng.randint(60, 100)
-        for dy in range(-sr, sr + 1):
-            for dx in range(-sr, sr + 1):
-                if dx*dx + dy*dy <= sr*sr:
-                    nx, ny = sx + dx, sy + dy
-                    if 0 <= nx < width and 0 <= ny < height:
-                        arr[ny, nx] = np.clip(arr[ny, nx] * 0.7 + shade * 0.3, 0, 255)
+    trail_noise = generate_fbm_noise(width, height, octaves=3, seed=6666 + chapter)
+    trail_mask = (trail_noise > 0.65).astype(np.float32)
+    trail_color = np.array([35, 30, 22], dtype=np.float32)
+    arr = arr * (1.0 - trail_mask[:, :, np.newaxis] * 0.4) + trail_color[np.newaxis, np.newaxis, :] * trail_mask[:, :, np.newaxis] * 0.4
 
-    uint_arr = arr.astype(np.uint8)
-    np.save(cache_path, uint_arr)
-    surf = pygame.Surface((width, height))
-    pygame.surfarray.blit_array(surf, uint_arr)
-    return surf
+    if getattr(_s, 'ACTIVE_QUALITY', {}).get('ground_enable_roots', True):
+        for _ in range(50):
+            rx = blade_rng.randint(0, width)
+            ry = blade_rng.randint(0, height)
+            rlen = blade_rng.randint(15, 50)
+            angle = blade_rng.uniform(0, math.pi * 2)
+            for i in range(rlen):
+                px = int(rx + math.cos(angle) * i)
+                py = int(ry + math.sin(angle) * i)
+                if 0 <= px < width and 0 <= py < height:
+                    arr[py, px] *= 0.82
 
+    gray = arr.mean(axis=2, keepdims=True)
+    arr = arr * 0.7 + gray * 0.3
+    arr[:, :, 2] = np.clip(arr[:, :, 2] * 1.08 + 3.0, 0, 255)
+    arr[:, :, 1] = np.clip(arr[:, :, 1] * 1.04, 0, 255)
+    arr = np.clip(arr, 0, 255).astype(np.uint8)
+
+    np.save(cache_path, arr)
+    print(f"[ASSET] Ground texture cached to {cache_path}")
+    return pygame.surfarray.make_surface(arr.transpose((1, 0, 2)))
