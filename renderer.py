@@ -575,8 +575,8 @@ class Renderer:
                 wx = px + dist * ray_dx
                 wy = py + dist * ray_dy
                 
-                tx = ((wx * 8.0) % gw).astype(np.int32)
-                ty = ((wy * 8.0) % gh).astype(np.int32)
+                tx = np.clip(np.abs((wx * 8.0) % gw).astype(np.int32), 0, gw - 1)
+                ty = np.clip(np.abs((wy * 8.0) % gh).astype(np.int32), 0, gh - 1)
                 
                 tex_cols = self._ground_arr[tx, ty] # shape (w, 3)
                 
