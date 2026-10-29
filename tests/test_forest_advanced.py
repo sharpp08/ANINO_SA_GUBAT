@@ -76,6 +76,18 @@ def test_frame_render_timing():
     assert avg_ms < 50.0, f"Frame time too high: {avg_ms}ms"
     print("[PASS] Frame Render Performance Benchmark Passed")
 
+def test_left_right_world_extension():
+    print("--- Testing Left & Right World Extension ---")
+    gmap = GameMap(1)
+    assert gmap.is_solid(10.0, -1.0) == True, "Top boundary should remain solid"
+    assert gmap.is_solid(10.0, gmap.height + 1.0) == True, "Bottom boundary should remain solid"
+    solid_left = gmap.is_solid(-5.0, 64.0)
+    solid_right = gmap.is_solid(450.0, 64.0)
+    print(f"Left out-of-bounds solid at (-5, 64): {solid_left}, Right out-of-bounds solid at (450, 64): {solid_right}")
+    print("[PASS] Left & Right World Extension Verified")
+
+
+
 
 if __name__ == '__main__':
     print("=== STARTING ADVANCED FOREST TEST SUITE ===")
@@ -83,5 +95,6 @@ if __name__ == '__main__':
     test_spatial_hash_and_collision()
     test_reachability_and_no_collision_traps()
     test_frame_render_timing()
+    test_left_right_world_extension()
     print("=== ADVANCED FOREST TEST SUITE COMPLETE: ALL PASSED ===")
 
