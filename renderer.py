@@ -225,18 +225,13 @@ class Renderer:
 
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
-        self.tree_sprites = {
-            'balete': generate_tree_billboard('balete', 64, 256),
-            'bamboo': generate_tree_billboard('bamboo', 64, 256),
-            'mahogany': generate_tree_billboard('mahogany', 64, 256),
-            'dead': generate_tree_billboard('dead', 64, 256),
-            'banana': generate_tree_billboard('banana', 64, 256),
-            'palm': generate_tree_billboard('palm', 64, 256),
-            'supernatural': generate_tree_billboard('supernatural', 64, 256),
-        }
+        self.tree_sprites = {}
+        for tname in ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm', 'supernatural', 'akasya', 'narra', 'tree_fern', 'strangler']:
+            self.tree_sprites[tname] = [generate_tree_billboard(tname, 64, 256, seed=42 + v * 333) for v in range(5)]
         self._TREE_HEIGHT_MULT = {
             'balete': 3.6, 'mahogany': 4.2, 'bamboo': 3.4, 'dead': 3.0,
             'banana': 2.8, 'palm': 3.6, 'supernatural': 3.8,
+            'akasya': 3.9, 'narra': 4.0, 'tree_fern': 2.5, 'strangler': 3.7,
         }
         self.undergrowth_sprites = {
             'fern': generate_undergrowth_sprite('fern', 32, 32),
@@ -341,8 +336,9 @@ class Renderer:
                 all_assets.append((f"enemy_{etype}_{st}", spr))
         for ptype, spr in self.pickup_sprites.items():
             all_assets.append((f"pickup_{ptype}", spr))
-        for ttype, spr in self.tree_sprites.items():
-            all_assets.append((f"tree_{ttype}", spr))
+        for ttype, spr_list in self.tree_sprites.items():
+            for idx, spr in enumerate(spr_list):
+                all_assets.append((f"tree_{ttype}_{idx}", spr))
         for utype, spr in self.undergrowth_sprites.items():
             all_assets.append((f"undergrowth_{utype}", spr))
 
@@ -1053,7 +1049,9 @@ class Renderer:
             floor_y = horizon + unit / 2.0          # where this distance meets the ground
 
             if kind == 'tree':
-                img = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
+                img_list = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
+                variant_idx = obj.get('canopy_seed', 0) % len(img_list)
+                img = img_list[variant_idx]
                 height_mult = self._TREE_HEIGHT_MULT.get(obj.get('type'), 2.5)
                 sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()

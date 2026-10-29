@@ -117,56 +117,47 @@ class GameMap:
                                 self.grid[ny][nx] = WATER
 
         self.trees = []
-        # Species mix per chapter.  Chapter 2 adds tropical broadleaf species.
-        tree_types = ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm'] if chapter_num == 2 else ['balete', 'bamboo', 'mahogany', 'dead']
+        if chapter_num == 2:
+            tree_types = ['balete', 'mahogany', 'bamboo', 'dead', 'banana', 'palm', 'akasya', 'narra', 'tree_fern', 'strangler', 'supernatural']
+            weights    = [14,       14,         9,        8,      8,        8,     11,       9,         9,           8,           2]
+        else:
+            tree_types = ['balete', 'mahogany', 'bamboo', 'dead', 'akasya', 'narra', 'tree_fern', 'supernatural']
+            weights    = [18,       18,         14,       10,     14,       10,      13,          3]
         count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
 
-        while len(self.trees) < count:
-            tx = rng_map.uniform(3.0, float(self.width - 3))
-            ty = rng_map.uniform(3.0, float(self.height - 3))
-            
-            if math.hypot(tx - 4.5, ty - 4.5) < 5.0:
-                continue
-            if cs_x - 12 <= tx <= cs_x + 12 and cs_y - 12 <= ty <= cs_y + 12:
-                continue
-            if self.grid[int(ty)][int(tx)] == WATER:
-                continue
-
-            d_val = density_noise[int(ty) % self.height, int(tx) % self.width]
-            # Dense groves allow trees closer together; clearings force wider gaps.
-            min_dist = 1.2 if d_val > 0.7 else 2.4
-
-            too_close = False
-            for t in self.trees:
-                if math.hypot(t['x'] - tx, t['y'] - ty) < min_dist:
-                    too_close = True
+        grid_step = max(2.2, math.sqrt((self.width * self.height) / max(1, count)))
+        for gy in range(2, self.height - 2, int(grid_step)):
+            for gx in range(2, self.width - 2, int(grid_step)):
+                if len(self.trees) >= count:
                     break
-            if not too_close:
-                t_type = rng_map.choice(tree_types)
-                # Scale varies by species: canopy trees are tall, saplings small.
-                # Dead and balete can be very large; bamboo is slender and tall.
-                if t_type in ('balete', 'mahogany'):
-                    scale = rng_map.uniform(0.9, 1.8)
-                elif t_type == 'dead':
-                    scale = rng_map.uniform(0.8, 1.6)
-                elif t_type == 'bamboo':
-                    scale = rng_map.uniform(0.8, 1.4)
+                tx = gx + rng_map.uniform(0.1, grid_step - 0.1)
+                ty = gy + rng_map.uniform(0.1, grid_step - 0.1)
+                if math.hypot(tx - 4.5, ty - 4.5) < 6.0:
+                    continue
+                if cs_x - 10 <= tx <= cs_x + 10 and cs_y - 10 <= ty <= cs_y + 10:
+                    continue
+                if self.grid[int(ty)][int(tx)] == WATER:
+                    continue
+
+                t_type = rng_map.choices(tree_types, weights=weights, k=1)[0]
+                layer_roll = rng_map.random()
+                if layer_roll < 0.45:
+                    scale = rng_map.uniform(1.2, 1.8)
+                elif layer_roll < 0.80:
+                    scale = rng_map.uniform(0.7, 1.1)
                 else:
-                    scale = rng_map.uniform(0.6, 1.3)
-                # Collision radius corresponds to the visible trunk only.
-                # Trunk width is a fraction of scale; roots add a small margin.
-                trunk_fraction = 0.18 if t_type == 'bamboo' else 0.22
+                    scale = rng_map.uniform(0.4, 0.7)
+
+                trunk_fraction = 0.18 if t_type in ('bamboo', 'tree_fern', 'banana', 'palm') else 0.22
                 radius = max(0.18, scale * trunk_fraction + 0.08)
-                # Store a canopy seed for deterministic per-tree visual variation
                 canopy_seed = rng_map.randint(0, 99999)
                 self.trees.append({
                     'x': tx, 'y': ty, 'type': t_type,
                     'scale': scale, 'tint': rng_map.randint(200, 255),
                     'radius': radius,
                     'canopy_seed': canopy_seed,
-                    'lean': rng_map.uniform(-0.08, 0.08),  # trunk lean angle
+                    'lean': rng_map.uniform(-0.08, 0.08),
                 })
-
         self.spatial_hash.clear()
         for t in self.trees:
             self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])

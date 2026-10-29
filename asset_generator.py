@@ -346,6 +346,11 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
         'banana':       (0.48, 9,  0.40, 0),
         'palm':         (0.62, 7,  0.26, 0),
         'supernatural': (0.40, 22, 0.34, 26),
+        # New Philippine tropical species
+        'akasya':       (0.35, 14, 0.42, 12),     # broad umbrella-crown rain tree
+        'narra':        (0.45, 10, 0.35, 14),     # spreading narra-style tree
+        'tree_fern':    (0.65, 4,  0.15, 0),      # tall tree fern understory
+        'strangler':    (0.40, 16, 0.38, 20),     # strangler fig / balete variant
     }
     th, tw, ch, rs = ARCHETYPES.get(tree_type, ARCHETYPES['balete'])
     trunk_top = int(height * (1.0 - th))
@@ -427,6 +432,9 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
                     pygame.draw.line(surf, bcol, (sx, sy),
                                      (sx + side * rng.randint(2, 5), sy - rng.randint(2, 5)), 1)
 
+    canopy_top = int(height * (1.0 - th - ch))
+    canopy_bot = trunk_top
+
     # --- Hanging Vines / Lianas (Tropical Jungle Atmosphere) ---
     if not is_dead and not is_bam and rng.random() > 0.2:
         vcol = (30, 65, 35)
@@ -436,9 +444,17 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             v_len = rng.randint(15, 35)
             pygame.draw.line(surf, vcol, (vx, vy), (vx + rng.randint(-3, 3), vy + v_len), 1)
 
+    # --- Extra foliage clusters for denser canopy (used by variant seeds) ---
+    if not is_bam and not is_dead:
+        extra_clumps = rng.randint(3, 7)
+        for _ in range(extra_clumps):
+            fx = cx + rng.randint(-tw * 2, tw * 2)
+            fy = rng.randint(canopy_top, canopy_bot)
+            fr = rng.randint(3, 8)
+            fc = (20 + rng.randint(0, 15), 50 + rng.randint(0, 25), 20 + rng.randint(0, 10))
+            pygame.draw.circle(surf, fc, (fx, fy), fr)
+
     # --- Canopy: layered, asymmetrical, species-specific ---
-    canopy_top = int(height * (1.0 - th - ch))
-    canopy_bot = trunk_top
 
     if is_dead:
         # Bare skeletal branches reaching upward
