@@ -830,23 +830,30 @@ def generate_world_ground_texture(width=1024, height=1024):
                 col = col + np.array([12, 8, 4], dtype=np.float32) * lg * 0.3
             arr[y, x] = np.clip(col, 0, 255)
 
-    # Add root patterns: dark wavy lines across the texture
+    # Add root patterns: dark wavy lines across the texture (denser root systems)
     root_rng = np.random.RandomState(123)
-    for _ in range(30):
+    for _ in range(90):
         ry = root_rng.randint(0, height)
         rx = root_rng.randint(0, width)
-        rlen = root_rng.randint(20, 60)
+        rlen = root_rng.randint(25, 80)
         angle = root_rng.uniform(0, math.pi * 2)
         for i in range(rlen):
             px = int(rx + math.cos(angle) * i)
             py = int(ry + math.sin(angle) * i)
             if 0 <= px < width and 0 <= py < height:
-                # Root is slightly darker than surrounding
                 if arr[py, px, 0] > 20:
-                    arr[py, px] *= 0.88
+                    arr[py, px] *= 0.85
             if 0 <= px + 1 < width:
                 if arr[py, px + 1, 0] > 20:
-                    arr[py, px + 1] *= 0.92
+                    arr[py, px + 1] *= 0.90
+
+    # Add scattered tiny stone/pebble micro-details
+    stone_rng = np.random.RandomState(456)
+    for _ in range(250):
+        sx = stone_rng.randint(0, width)
+        sy = stone_rng.randint(0, height)
+        if 0 <= sx < width and 0 <= sy < height:
+            arr[sy, sx] = np.clip(arr[sy, sx] * 1.25, 0, 255)
 
     # Add stone/pebble spots
     for _ in range(200):
