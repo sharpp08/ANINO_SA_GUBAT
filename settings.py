@@ -119,13 +119,19 @@ MAX_DEPTH = 35
 TILE_SIZE = 64
 WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
 
-# Outdoor Forest Settings (Phases 1-4)
+# Outdoor Forest Settings
+# The world is endless. MAP_SIZE is only the hand-authored area (cabin, river, ponds, exit);
+# trees and undergrowth are streamed in per chunk around the player.
 MAP_SIZE = 64
-TREE_COUNT_CH1 = 220
-TREE_COUNT_CH2 = 300
+CHUNK_SIZE = 16            # tiles per chunk side
+CHUNK_LOAD_RADIUS = 4      # chunks generated around the player (4 * 16 = 64 tiles > MAX_DEPTH)
+CHUNK_KEEP_RADIUS = 6      # chunks farther than this from the player are dropped
+TREE_CELL = 2.2            # approx. tile size of the jittered tree grid
+TREE_DENSITY_MIN = 0.30    # chance a grid cell holds a tree, in sparse clearings...
+TREE_DENSITY_MAX = 0.75    # ...and in dense thickets (smooth noise between the two)
+UNDERGROWTH_PER_TREE = 0.6 # chance a tree gets a plant next to it
 MAX_RENDER_TREES = 120
 GROUND_TEX_SIZE = 1024
-UNDERGROWTH_DENSITY = 350
 
 
 # Player

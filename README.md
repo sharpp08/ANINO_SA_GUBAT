@@ -53,8 +53,8 @@ The game features:
 | Feature | Details |
 |---|---|
 | 🎮 Raycasting 3D | Pseudo-3D first-person view; internal resolution scales with the quality preset (320×180 on low, 640×360 on medium/high), upscaled to 1280×720 |
-| 🌲 Outdoor Forest | 64×64 map with 220 (Ch. 1) / 300 (Ch. 2) procedurally placed trees, dense undergrowth, stone boundary wall and an abandoned cabin |
-| 🌿 Legit Forest | 350 procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
+| 🌲 Endless Forest | Boundless world: trees and undergrowth are generated in chunks around you as you walk (deterministic per chapter), around a hand-authored area with an abandoned cabin, river and ponds |
+| 🌿 Legit Forest | Procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
 | 🌀 Physics Animation | Spring-driven systems for camera, weapon sway, head bob; NumPy particle physics for casings/smoke/sparks |
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
 | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
@@ -248,16 +248,16 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 ## Map & Tile System
 
-- **Grid Size:** 64 × 64 outdoor forest map.
+- **World:** Endless. The 64 × 64 grid is only the hand-authored area (cabin, river, ponds, exit); everything outside it is open forest ground with streamed trees. There is no boundary wall any more.
 - **Tile Types:**
   - `EMPTY`: Walkable forest ground.
-  - `WALL_STONE`: Outer boundary wall (edges at `0` and `63`).
+  - `WALL_STONE`: Defined with a texture but no longer used (the outer boundary was removed).
   - `WALL_WOOD`: Cabin walls (tiles 28–37 on both axes).
   - `DOOR`: Cabin entryway, two tiles wide at `(32, 37)` and `(33, 37)`. Opened with `E`.
   - `WALL_BAMBOO`, `WALL_BALETE`: Defined with textures but not used by the current maps.
-- **Trees:** Not grid tiles. They are billboard objects placed from a fixed seed (`42 + chapter`), so each chapter has the same layout every run. Chapter 1 uses `balete`, `bamboo`, `mahogany`, and `dead` trees; Chapter 2 adds `banana` and `palm`. Trees keep a minimum spacing of 1.6–2.5 tiles (density-dependent), stay out of the cabin area and the start area, and act as circular obstacles for movement.
-- **Entity Clearance:** After enemies, pickups, checkpoints, the exit and the player start are placed, any tree overlapping them is removed so nothing spawns inside a trunk. The console reports how many trees were removed.
-- **Validation:** Each chapter load checks that entities are not inside walls or trees, then runs a flood-fill from the player start to confirm every entity is reachable. Unreachable entities are relocated to the nearest reachable empty cell, or flagged as unreachable in the F3 overlay if no spot is found.
+- **Trees:** Not grid tiles. The world is split into 16×16-tile chunks; each chunk's trees and undergrowth are generated on first use from a hash of the chapter seed (`42 + chapter`) and the chunk coordinates, so the same place always has the same trees, in any direction and any distance. Chunks within ~64 tiles are kept loaded and farther ones are dropped. Density varies smoothly between sparse clearings and thickets (`TREE_DENSITY_MIN/MAX`). Chapter 1 uses `balete`, `bamboo`, `mahogany`, and `dead` trees; Chapter 2 adds `banana` and `palm`. Trees stay out of the cabin area, the start clearing, water and a clearance zone around every enemy, pickup, checkpoint and the exit, and act as circular obstacles for movement.
+- **Entity Clearance:** Tree generation skips a clearance zone around every enemy, pickup, checkpoint, the exit and the player start, so nothing spawns inside a trunk.
+- **Validation:** Each chapter load checks that entities are not inside walls or trees, then runs a flood-fill over the authored grid from the player start to confirm every entity is reachable. Unreachable entities are relocated to the nearest reachable empty cell, or flagged as unreachable in the F3 overlay if no spot is found.
 
 ---
 
@@ -265,8 +265,8 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 | Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
 |---|---|---|---|---|---|---|
-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 220 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
-| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 300 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
+| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | endless | 2 Aswang, Multo, Sigbin, White Lady | 15 |
+| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | endless | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
 
 Both chapters have a checkpoint and a Bible page inside the cabin near the map centre. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
 
@@ -322,7 +322,7 @@ Sprite distance shading only changes colour, never transparency, so sprites no l
 ## Settings
 
 ### Constants (`settings.py`)
-- Display resolution (`1280×720`), internal raycasting resolution (preset-dependent: 320×180 on low, 640×360 on medium/high), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (map size, tree counts, ground texture size), and UI colors.
+- Display resolution (`1280×720`), internal raycasting resolution (preset-dependent: 320×180 on low, 640×360 on medium/high), target FPS (`60`), FOV (`60°`), max ray depth (`35` tiles), mouse sensitivity, player movement speeds, weapon, enemy and ward stats, forest settings (authored area size, chunk size, tree density, ground texture size), and UI colors.
 - Effect toggles such as `ENABLE_BLOOM`, `ENABLE_FOG`, `ENABLE_PARTICLES`, `ENABLE_SANITY` and `ENABLE_INTRO`.
 - `QUALITY_PRESETS` (`low`, `medium`, `high`): chosen with `"quality_tier"` in `settings.json` (default `medium`) and applied at startup by `main.py` before any module imports resolution-dependent values. See [Known Limitations & Recent Optimizations](#known-limitations--recent-optimizations).
 - Lighting constants (`AMBIENT`, `AMBIENT_LIGHT_OFF`, `BEAM_RADIUS`, `BEAM_GLOW`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW`, ...) are defined only in `settings.py`.
@@ -423,7 +423,7 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 - **Procedural Art:** No external asset files. Everything is generated from Python code at startup, and the 1024×1024 ground texture is saved to `assets/cache/world_ground.npy` after the first run.
 - **Delta Time Cap:** `dt` is capped at 50 ms per frame to prevent physics tunneling on lag spikes.
 - **Upscaling:** Internal buffer (preset-dependent: 320×180 on low, 640×360 on medium/high) upscaled to 1280×720 via `pygame.transform.scale`.
-- **Deterministic maps:** Tree layouts use a seeded random generator per chapter.
+- **Deterministic maps:** Tree layouts come from a hash of the chapter seed and chunk coordinates, so they are identical every run without storing anything.
 - **Error handling:** An unhandled exception is written to `crash.log` next to the game (with a message box on Windows).
 - **Platform:** Built and tested on Windows with Python 3.10+. Compatible with Linux/macOS given the same dependencies (the crash message box is Windows-only and is skipped elsewhere).
 
@@ -439,6 +439,10 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 - **Door Collision:** Closed doors block movement for both player and enemies (`is_solid(x, y, doors_block=True)`); opened doors are passable for both.
 - **Enemy Placement:** White Lady is placed in Chapter 1 and Kapre in Chapter 2. Trees near entities are cleared, and a flood-fill from the player start relocates or flags (in the F3 overlay) anything unreachable.
 - **Lighting Constants:** `AMBIENT`, `BEAM_RADIUS`, `FOG_DISTANCE`, `ENEMY_EYE_GLOW` and related constants are defined once in `settings.py`; `renderer.py` and `enemies.py` no longer redefine them.
+
+### Recent: endless map
+
+- The map is no longer a closed 64×64 box. Trees and undergrowth stream in around the player (`CHUNK_SIZE`, `CHUNK_LOAD_RADIUS`, `CHUNK_KEEP_RADIUS`, `TREE_DENSITY_MIN/MAX` in `settings.py`). The river and ponds only exist in the authored area, and the chapter exit stays at (58.5, 58.5). `python tests/test_endless_map.py` checks determinism, density and memory without needing pygame.
 
 ### Known limitations
 

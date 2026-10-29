@@ -91,7 +91,7 @@ class Radar:
                                          (c + int(ox) - 1, c + int(oy) - 1, 2, 2))
 
         # trees (dark green dots)
-        for t in getattr(game_map, 'trees', []):
+        for t in game_map.trees_near(px, py, RADAR_RANGE):
             dx, dy = t['x'] - px, t['y'] - py
             if dx * dx + dy * dy > RADAR_RANGE * RADAR_RANGE:
                 continue

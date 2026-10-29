@@ -716,7 +716,7 @@ class Renderer:
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
             f"Enemies alive/total: {len(enemies)}/{self.level_enemy_total}"
             + (f" | nearest {nearest:.1f}" if nearest is not None else ""),
-            f"Pickups active: {pickups_active} | Trees: {len(getattr(game_map, 'trees', []))}",
+            f"Pickups active: {pickups_active} | Trees loaded: {game_map.tree_count}",
             f"In view -> enemies:{self.stats['enemies_view']} pickups:{self.stats['pickups_view']} drawn:{self.stats['drawn']}",
             f"Danger: {self.danger:.2f}",
             f"Anim timing: {self.timings.get('animation', 0.0):.1f}ms | Particles: {self.physics_particles.count}",
@@ -846,8 +846,16 @@ class Renderer:
                 map_y += y_step
                 side = 1
 
+            # The world is endless: only the authored grid (cabin etc.) has walls.
+            # Outside it the ray keeps going, but stops once it is leaving the grid for good
+            # or has travelled further than we ever draw.
             if map_x < 0 or map_x >= game_map.width or map_y < 0 or map_y >= game_map.height:
-                break
+                if ((map_x < 0 and x_step < 0) or (map_x >= game_map.width and x_step > 0) or
+                        (map_y < 0 and y_step < 0) or (map_y >= game_map.height and y_step > 0)):
+                    break
+                if min(x_dist, y_dist) > MAX_DEPTH:
+                    break
+                continue
 
             tile = game_map.grid[map_y][map_x]
             if tile != EMPTY:
@@ -970,14 +978,12 @@ class Renderer:
             items.append((dist, angle, kind, obj))
             return True
 
-        for t in getattr(game_map, 'trees', []):
+        # Endless map: only ask for what is within draw distance (chunks stream in on demand)
+        for t in game_map.trees_near(player.x, player.y, MAX_DEPTH):
             if consider('tree', t, t['x'], t['y'], MAX_DEPTH):
                 stats['trees'] += 1
-        for u in (getattr(game_map, 'undergrowth', None) or getattr(game_map, 'plants', None) or []):
-            try:
-                consider('plant', u, u['x'], u['y'], MAX_DEPTH * 0.6)
-            except Exception:
-                pass
+        for u in game_map.plants_near(player.x, player.y, MAX_DEPTH * 0.6):
+            consider('plant', u, u['x'], u['y'], MAX_DEPTH * 0.6)
         for enemy in enemies:
             if not enemy.alive:
                 continue

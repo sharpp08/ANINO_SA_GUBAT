@@ -353,7 +353,7 @@ class Game:
         # Spawn report: shows in the console if enemies/pickups spawn in bad places
         print(f"[CHAPTER {chapter_num}] enemies={self.level_enemy_total} "
               f"pickups={len(getattr(self.game_map, 'pickups', []))} "
-              f"trees={len(getattr(self.game_map, 'trees', []))} start=({sx:.1f},{sy:.1f})")
+              f"trees={self.game_map.tree_count} (endless, streamed) start=({sx:.1f},{sy:.1f})")
         for e in self.enemy_manager.enemies:
             solid = False
             try:
@@ -566,6 +566,7 @@ class Game:
         p   = self.player
         keys = pygame.key.get_pressed()
         p.update(dt, keys, mouse_dx, mouse_dy, self.game_map)
+        self.game_map.update_streaming(p.x, p.y)     # endless forest: generate/drop chunks around the player
 
         # Footstep audio on movement
         if abs(p.bob_amount) > 1.8 and random.random() < 0.12:
