@@ -102,7 +102,7 @@ class Flashlight:
         f = np.clip(1.0 - r, 0.0, 1.0) ** 2
         rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
         for c in range(3):
-            rgb[:, :, c] = (f * BEAM_GLOW[c]).T.astype(np.uint8)
+            rgb[:, :, c] = (f * BEAM_GLOW[c] * 0.55).T.astype(np.uint8)
         self.glow_mask = pygame.Surface((mw, mh))
         pygame.surfarray.blit_array(self.glow_mask, rgb)
 
