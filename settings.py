@@ -188,16 +188,16 @@ WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
 # World Seed & Procedural Chunk Generation Settings
 ACTIVE_WORLD_SEED = 1337
 CHUNK_SIZE = 32
-CHUNK_LOAD_RADIUS = 3  # Load chunks within 3x3 radius around player chunk
+CHUNK_LOAD_RADIUS = 5  # Expanded chunk load radius for massive forest density (5x5 chunks around player)
 
 # Outdoor Forest Settings (Phases 1-4)
 MAP_WIDTH = 384
 MAP_HEIGHT = 128
 MAP_SIZE = 128
 WORLD_SEED = 1337          # master world seed (deterministic terrain)
-TREE_COUNT_CH1 = 2600
-TREE_COUNT_CH2 = 3600
-MAX_RENDER_TREES = 280
+TREE_COUNT_CH1 = 6500      # massively increased tree population for dense wilderness
+TREE_COUNT_CH2 = 9000      # massively increased tree population for chapter 2
+MAX_RENDER_TREES = 750     # increased render limit for Intel UHD optimization
 GROUND_TEX_SIZE = 1024
 # Dense, Ancient, Wet & Alive Forest Overhaul Tunables
 FOREST_VINE_DENSITY = 0.8

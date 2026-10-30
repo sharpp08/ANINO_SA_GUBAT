@@ -115,10 +115,20 @@ class ProceduralWorldEngine:
                     if 0 <= ny < self.chunk_size:
                         tiles[ny][x] = WATER
 
-        # Tree generation inside chunk
         tree_types = list(tree_weights.keys())
         weights = list(tree_weights.values())
-        tree_count = rng.randint(12, 24) if biome != 'clearing' else rng.randint(3, 8)
+
+        # Extreme Tree Population Density per chunk based on biome
+        if biome == 'ancient_grove':
+            tree_count = rng.randint(45, 65)
+        elif biome in ('dense_forest', 'pine_forest'):
+            tree_count = rng.randint(35, 55)
+        elif biome == 'dead_forest':
+            tree_count = rng.randint(25, 40)
+        elif biome == 'swamp':
+            tree_count = rng.randint(20, 35)
+        else:
+            tree_count = rng.randint(8, 18)
 
         for _ in range(tree_count):
             local_x = rng.uniform(2.0, float(self.chunk_size - 2))
