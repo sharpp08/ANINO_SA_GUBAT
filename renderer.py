@@ -106,7 +106,7 @@ class Flashlight:
 
         self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
-                            int((1.0 - 0.05) * 255)))
+                            int((1.0 - 0.10) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 70))
 
