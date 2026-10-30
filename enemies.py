@@ -21,38 +21,38 @@ class EnemyState:
 
 ENEMY_STATS = {
     'aswang': {
-        'health': ASWANG_HEALTH, 'damage': ASWANG_DAMAGE, 'speed': ASWANG_SPEED,
-        'attack_range': 1.5, 'detect_range': 8, 'attack_cooldown': 1.2,
+        'health': ASWANG_HEALTH, 'damage': ASWANG_DAMAGE, 'speed': ASWANG_SPEED * 1.35,
+        'attack_range': 1.8, 'detect_range': 14, 'attack_cooldown': 1.0,
         'vulnerabilities': ['repel', 'garlic'], 'resistances': [],
     },
     'manananggal': {
-        'health': MANANANGGAL_HEALTH, 'damage': MANANANGGAL_DAMAGE, 'speed': MANANANGGAL_SPEED,
-        'attack_range': 2.0, 'detect_range': 10, 'attack_cooldown': 1.5,
+        'health': MANANANGGAL_HEALTH, 'damage': MANANANGGAL_DAMAGE, 'speed': MANANANGGAL_SPEED * 1.3,
+        'attack_range': 2.2, 'detect_range': 16, 'attack_cooldown': 1.2,
         'vulnerabilities': ['repel', 'cross'], 'resistances': ['bind'],
     },
     'tikbalang': {
-        'health': TIKBALANG_HEALTH, 'damage': TIKBALANG_DAMAGE, 'speed': TIKBALANG_SPEED,
-        'attack_range': 2.0, 'detect_range': 7, 'attack_cooldown': 2.0,
+        'health': TIKBALANG_HEALTH, 'damage': TIKBALANG_DAMAGE, 'speed': TIKBALANG_SPEED * 1.3,
+        'attack_range': 2.2, 'detect_range': 13, 'attack_cooldown': 1.6,
         'vulnerabilities': ['shield'], 'resistances': ['repel'],
     },
     'kapre': {
-        'health': KAPRE_HEALTH, 'damage': KAPRE_DAMAGE, 'speed': KAPRE_SPEED,
-        'attack_range': 2.5, 'detect_range': 6, 'attack_cooldown': 2.5,
+        'health': KAPRE_HEALTH, 'damage': KAPRE_DAMAGE, 'speed': KAPRE_SPEED * 1.25,
+        'attack_range': 2.8, 'detect_range': 12, 'attack_cooldown': 2.0,
         'vulnerabilities': ['banish'], 'resistances': ['bind', 'repel'],
     },
     'white_lady': {
-        'health': WHITE_LADY_HEALTH, 'damage': WHITE_LADY_DAMAGE, 'speed': WHITE_LADY_SPEED,
-        'attack_range': 3.0, 'detect_range': 12, 'attack_cooldown': 3.0,
+        'health': WHITE_LADY_HEALTH, 'damage': WHITE_LADY_DAMAGE, 'speed': WHITE_LADY_SPEED * 1.35,
+        'attack_range': 3.2, 'detect_range': 18, 'attack_cooldown': 2.5,
         'vulnerabilities': ['bind'], 'resistances': ['banish'],
     },
     'multo': {
-        'health': MULTO_HEALTH, 'damage': MULTO_DAMAGE, 'speed': MULTO_SPEED,
-        'attack_range': 2.0, 'detect_range': 8, 'attack_cooldown': 2.0,
+        'health': MULTO_HEALTH, 'damage': MULTO_DAMAGE, 'speed': MULTO_SPEED * 1.3,
+        'attack_range': 2.2, 'detect_range': 14, 'attack_cooldown': 1.6,
         'vulnerabilities': ['banish'], 'resistances': [],
     },
     'sigbin': {
-        'health': SIGBIN_HEALTH, 'damage': SIGBIN_DAMAGE, 'speed': SIGBIN_SPEED,
-        'attack_range': 1.5, 'detect_range': 7, 'attack_cooldown': 0.8,
+        'health': SIGBIN_HEALTH, 'damage': SIGBIN_DAMAGE, 'speed': SIGBIN_SPEED * 1.4,
+        'attack_range': 1.8, 'detect_range': 13, 'attack_cooldown': 0.6,
         'vulnerabilities': ['bind'], 'resistances': [],
     },
 }
@@ -563,16 +563,13 @@ class EnemyManager:
             if not enemy.alive:
                 continue
 
-            # Stealth & Noise mechanic (Phase 5)
-            if player and hasattr(player, 'noise_level') and player.noise_level > 1.5:
-                dist = enemy.distance_to(player_x, player_y)
-                if dist < player.noise_level * 2.5:
-                    if enemy.state in (EnemyState.IDLE, EnemyState.PATROL):
-                        enemy.state = EnemyState.INVESTIGATE
-                        enemy.investigate_x = player_x
-                        enemy.investigate_y = player_y
-                        enemy.state_timer = 4.0
-                        enemy.just_entered_chase = True
+            # Advanced Hunting & Flashlight Aggro: if flashlight is on, enemies detect player from further away
+            dist = enemy.distance_to(player_x, player_y)
+            detect_bonus = 1.5 if (player and getattr(player, 'flashlight_on', False)) else 1.0
+            if enemy.state in (EnemyState.IDLE, EnemyState.PATROL) and dist < enemy.detect_range * detect_bonus:
+                enemy.state = EnemyState.INVESTIGATE
+                enemy.state_timer = 5.0
+                enemy.just_entered_chase = True
 
             # Proximity sanity drain (Phase 4)
             if player and hasattr(player, 'sanity'):
