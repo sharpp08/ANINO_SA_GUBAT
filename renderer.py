@@ -86,11 +86,22 @@ class Flashlight:
         dx = (xs - w).astype(np.float32)
         dy = (ys - h).astype(np.float32)
         
-        R = float(w * BEAM_RADIUS * 1.1)
-        dist_tri = np.maximum(abs(dx) * 0.866 + (dy + R * 0.3) * 0.5, -dy - R * 0.4)
-        r = np.clip(dist_tri / R, 0.0, 1.0)
+        R = float(w * BEAM_RADIUS * 1.2)
+        # Equilateral triangle SDF (pointing upwards: apex at top-center, flat base at bottom)
+        # Coordinates: x horizontal, y vertical (positive down)
+        k = 1.73205080757  # sqrt(3)
+        px = abs(dx)
+        py = dy
+        # Triangle edges: py >= 0 (base), py - k * px <= 0 (left/right sloped sides)
+        # Distance to sides: (px * k + py) / 2 for slope, and py for base
+        dist_slope = (px * 0.8660254 + py * 0.5)
+        dist_base = py
+        dist_top = -py - R * 0.6
+        
+        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.5, dist_base - R * 0.5), dist_top)
+        r = np.clip((dist_tri + R * 0.2) / (R * 0.9), 0.0, 1.0)
 
-        t = np.clip((r - 0.1) / 0.9, 0.0, 1.0)
+        t = np.clip((r - 0.05) / 0.95, 0.0, 1.0)
         t = t * t * (3.0 - 2.0 * t)
         dark_alpha = int((1.0 - AMBIENT) * 255)
         self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
