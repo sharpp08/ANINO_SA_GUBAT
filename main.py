@@ -651,6 +651,10 @@ class Game:
         setattr(p, '_last_mouse_dx', mouse_dx)
         keys = pygame.key.get_pressed()
         p.update(dt, keys, mouse_dx, mouse_dy, self.game_map)
+        # Update procedural world chunks around player for infinite exploration
+        if hasattr(self.game_map, 'world_engine'):
+            self.game_map.world_engine.update_world_chunks(p.x, p.y, self.game_map)
+
 
         # Footstep audio on movement
         if abs(p.bob_amount) > 1.8 and random.random() < 0.12:

@@ -54,6 +54,146 @@ class SpatialHash:
         return results
 
 
+class ProceduralWorldEngine:
+    """Minecraft-style infinite chunk-based procedural world engine for ANINO SA GUBAT.
+    Generates deterministic chunks based on world seed, elevation noise, biomes,
+    trees, undergrowth, and landmarks.
+    """
+    def __init__(self, world_seed=1337, chunk_size=32):
+        self.world_seed = world_seed
+        self.chunk_size = chunk_size
+        self.chunks = {}  # (cx, cy) -> Chunk data
+
+    def set_seed(self, seed):
+        self.world_seed = seed
+        self.chunks.clear()
+
+    def get_chunk(self, cx, cy):
+        key = (cx, cy)
+        if key in self.chunks:
+            return self.chunks[key]
+        
+        # Generate chunk deterministically
+        chunk = self._generate_chunk(cx, cy)
+        self.chunks[key] = chunk
+        return chunk
+
+    def _generate_chunk(self, cx, cy):
+        # Deterministic RNG for chunk based on world seed and chunk coords
+        chunk_seed = self.world_seed ^ (cx * 73856093) ^ (cy * 19349663)
+        rng = random.Random(chunk_seed)
+        np_rng = np.random.RandomState(chunk_seed & 0xFFFFFFFF)
+
+        trees = []
+        undergrowth = []
+        tiles = [[EMPTY for _ in range(self.chunk_size)] for _ in range(self.chunk_size)]
+
+        # Biome determination based on chunk position noise
+        biome_val = math.sin(cx * 0.3) * math.cos(cy * 0.3)
+        if biome_val < -0.4:
+            biome = 'dead_forest'
+            tree_weights = {'dead': 50, 'balete': 15, 'strangler': 15, 'bamboo': 20}
+        elif biome_val < -0.1:
+            biome = 'swamp'
+            tree_weights = {'balete': 40, 'tree_fern': 30, 'dead': 20, 'bamboo': 10}
+        elif biome_val < 0.2:
+            biome = 'pine_forest'
+            tree_weights = {'bamboo': 45, 'mahogany': 25, 'akasya': 20, 'dead': 10}
+        elif biome_val < 0.5:
+            biome = 'ancient_grove'
+            tree_weights = {'balete': 50, 'mahogany': 30, 'supernatural': 10, 'narra': 10}
+        else:
+            biome = 'clearing'
+            tree_weights = {'akasya': 40, 'narra': 30, 'banana': 20, 'palm': 10}
+
+        # Generate rivers/water in swamp or low elevation
+        if biome == 'swamp' or (cx + cy) % 7 == 0:
+            stream_y = rng.randint(5, self.chunk_size - 6)
+            for x in range(self.chunk_size):
+                for dy in (-1, 0, 1):
+                    ny = stream_y + dy
+                    if 0 <= ny < self.chunk_size:
+                        tiles[ny][x] = WATER
+
+        # Tree generation inside chunk
+        tree_types = list(tree_weights.keys())
+        weights = list(tree_weights.values())
+        tree_count = rng.randint(12, 24) if biome != 'clearing' else rng.randint(3, 8)
+
+        for _ in range(tree_count):
+            local_x = rng.uniform(2.0, float(self.chunk_size - 2))
+            local_y = rng.uniform(2.0, float(self.chunk_size - 2))
+            world_x = cx * self.chunk_size + local_x
+            world_y = cy * self.chunk_size + local_y
+
+            if tiles[int(local_y)][int(local_x)] == WATER:
+                continue
+
+            t_type = rng.choices(tree_types, weights=weights, k=1)[0]
+            scale = rng.uniform(0.7, 1.8) if biome != 'ancient_grove' else rng.uniform(1.4, 2.3)
+            trunk_fraction = 0.18 if t_type in ('bamboo', 'tree_fern', 'banana', 'palm') else 0.22
+            radius = max(0.18, scale * trunk_fraction + 0.08)
+
+            trees.append({
+                'x': world_x, 'y': world_y, 'type': t_type,
+                'scale': scale, 'tint': rng.randint(180, 255),
+                'radius': radius, 'canopy_seed': rng.randint(0, 99999),
+                'lean': rng.uniform(-0.08, 0.08), 'biome': biome
+            })
+
+        # Undergrowth generation
+        plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
+        plant_count = rng.randint(10, 25)
+        for _ in range(plant_count):
+            local_x = rng.uniform(1.0, float(self.chunk_size - 1))
+            local_y = rng.uniform(1.0, float(self.chunk_size - 1))
+            world_x = cx * self.chunk_size + local_x
+            world_y = cy * self.chunk_size + local_y
+
+            if tiles[int(local_y)][int(local_x)] == WATER:
+                continue
+
+            p_type = rng.choice(plant_types)
+            undergrowth.append({
+                'x': world_x, 'y': world_y, 'type': p_type,
+                'scale': rng.uniform(0.6, 1.3), 'tint': rng.randint(170, 255)
+            })
+
+        return {
+            'cx': cx, 'cy': cy, 'biome': biome,
+            'tiles': tiles, 'trees': trees, 'undergrowth': undergrowth
+        }
+
+    def update_world_chunks(self, player_x, player_y, game_map):
+        """Dynamically load and populate chunks around the player for infinite exploration."""
+        p_cx = int(player_x // self.chunk_size)
+        p_cy = int(player_y // self.chunk_size)
+        
+        # Load chunks within CHUNK_LOAD_RADIUS
+        needed_chunks = set()
+        for dcx in range(-CHUNK_LOAD_RADIUS, CHUNK_LOAD_RADIUS + 1):
+            for dcy in range(-CHUNK_LOAD_RADIUS, CHUNK_LOAD_RADIUS + 1):
+                needed_chunks.add((p_cx + dcx, p_cy + dcy))
+
+        # Check if surrounding trees need update
+        current_loaded_keys = set(self.loaded_chunk_keys) if hasattr(self, 'loaded_chunk_keys') else set()
+        if needed_chunks != current_loaded_keys:
+            self.loaded_chunk_keys = needed_chunks
+            game_map.trees = []
+            game_map.undergrowth = []
+            
+            for (cx, cy) in needed_chunks:
+                chunk = self.get_chunk(cx, cy)
+                game_map.trees.extend(chunk['trees'])
+                game_map.undergrowth.extend(chunk['undergrowth'])
+
+            # Rebuild spatial hash for efficient O(1) collision queries
+            game_map.spatial_hash.clear()
+            for t in game_map.trees:
+                game_map.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
+
+
+
 class GameMap:
     """Outdoor forest map system with advanced biomes, trails, stream, ponds, ruins, spatial hashing, and reachability validation."""
 
@@ -61,6 +201,9 @@ class GameMap:
         self.width = MAP_WIDTH
         self.height = MAP_HEIGHT
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
+        # Minecraft-style procedural world engine instance
+        self.world_engine = ProceduralWorldEngine(world_seed=ACTIVE_WORLD_SEED, chunk_size=CHUNK_SIZE)
+
         self.trees = []
         self.undergrowth = []
         self.pickups = []

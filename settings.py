@@ -185,6 +185,12 @@ WALL_HEIGHT_SCALE = INTERNAL_HEIGHT * TILE_SIZE
 # Outdoor Forest Settings (Phases 1-4)
 # Large open forest world: 384x128 wide horizontal world with open left/right sides
 # and a natural tree-line boundary on top and bottom.
+# World Seed & Procedural Chunk Generation Settings
+ACTIVE_WORLD_SEED = 1337
+CHUNK_SIZE = 32
+CHUNK_LOAD_RADIUS = 3  # Load chunks within 3x3 radius around player chunk
+
+# Outdoor Forest Settings (Phases 1-4)
 MAP_WIDTH = 384
 MAP_HEIGHT = 128
 MAP_SIZE = 128
