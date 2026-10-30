@@ -105,7 +105,8 @@ class Flashlight:
         pygame.surfarray.blit_array(self.glow_mask, rgb)
 
         self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
-        self.dark_off.fill((0, 0, 0, 255))
+        self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
+                            int((1.0 - 0.05) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 70))
 
@@ -149,7 +150,6 @@ class Flashlight:
     def draw(self, surf, player):
         """Draw the darkness overlay (called ONCE per frame)."""
         if not player.flashlight_on or player.flashlight_battery <= 0:
-            surf.fill((0, 0, 0))
             surf.blit(self.dark_off, (0, 0))
             return
 
