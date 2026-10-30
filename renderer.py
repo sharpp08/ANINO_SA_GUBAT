@@ -78,6 +78,59 @@ class Flashlight:
         self._init_mask()
 
     def _init_mask(self):
+        """Precompute multi-layered cinematic flashlight beam masks (Hotspot, Main Beam, Penumbra, Spill)."""
+        w, h = self.w, self.h
+        mw, mh = w * 2, h * 2
+        ys, xs = np.ogrid[:mh, :mw]
+        
+        dx = (xs - w).astype(np.float32)
+        dy = (ys - h).astype(np.float32)
+        
+        R = float(w * BEAM_RADIUS * 1.3)
+        k = 1.73205080757  # sqrt(3)
+        px = abs(dx)
+        py = dy
+        
+        dist_slope = (px * 0.8660254 + py * 0.5)
+        dist_base = py
+        dist_top = -py - R * 0.7
+        
+        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.55, dist_base - R * 0.6), dist_top)
+        r = np.clip((dist_tri + R * 0.25) / (R * 0.95), 0.0, 1.0)
+
+        penumbra = np.clip((r - 0.02) / 0.98, 0.0, 1.0)
+        penumbra = penumbra * penumbra * (3.0 - 2.0 * penumbra)
+        dark_alpha = int((1.0 - AMBIENT) * 255)
+        self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
+        self.dark_mask.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 255))
+        av = pygame.surfarray.pixels_alpha(self.dark_mask)
+        av[:, :] = (penumbra * dark_alpha).T.astype(np.uint8)
+        del av
+
+        hotspot_factor = np.exp(-(px * px * 0.008 + py * py * 0.004)) * (1.0 - np.clip(py / R, 0.0, 1.0))
+        hotspot_factor = np.maximum(0.0, hotspot_factor)
+        main_beam = np.clip(1.0 - r, 0.0, 1.0) ** 1.8
+        spill = np.clip(1.0 - (r * 1.3), 0.0, 1.0) * 0.35
+
+        rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
+        for c in range(3):
+            ch_val = (
+                hotspot_factor * HOTSPOT_GLOW[c] * 0.85 +
+                main_beam * BEAM_GLOW[c] * 0.65 +
+                spill * PERIPHERAL_SPILL[c] * 0.40
+            )
+            rgb[:, :, c] = np.clip(ch_val, 0, 255).T.astype(np.uint8)
+        self.glow_mask = pygame.Surface((mw, mh))
+        pygame.surfarray.blit_array(self.glow_mask, rgb)
+
+        self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
+        self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
+                            int((1.0 - 0.10) * 255)))
+        self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
+        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 85))
+
+
+    def _init_mask(self):
         """Precompute everything once at startup (Triangular/Prismatic beam shape)."""
         w, h = self.w, self.h
         mw, mh = w * 2, h * 2
@@ -121,7 +174,7 @@ class Flashlight:
         self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
                             int((1.0 - 0.10) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
-        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 70))
+        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 85))
 
     def toggle(self):
         self.on = not self.on

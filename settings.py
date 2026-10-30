@@ -328,8 +328,10 @@ SANITY_PURPLE = (140, 80, 200)
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
 AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
 DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
-BEAM_RADIUS = 0.45        # beam radius as a fraction of screen width
-BEAM_GLOW = (52, 42, 22)  # warm additive light inside the beam
+BEAM_RADIUS = 0.48        # beam radius as a fraction of screen width
+BEAM_GLOW = (245, 235, 210) # warm high-intensity LED light color
+HOTSPOT_GLOW = (255, 255, 240) # blindingly bright central LED hotspot
+PERIPHERAL_SPILL = (30, 40, 60) # faint blue-green peripheral spill in forest haze
 FOG_DISTANCE = 35.0
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
