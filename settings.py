@@ -327,12 +327,25 @@ SANITY_PURPLE = (140, 80, 200)
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
 AMBIENT_LIGHT_OFF = 0.20  # brightness when the flashlight is off / dead
-DARK_TINT = (6, 10, 24)   # cool moonlit blue for the dark overlay
-BEAM_RADIUS = 0.48        # beam radius as a fraction of screen width
-BEAM_GLOW = (245, 235, 210) # warm high-intensity LED light color
-HOTSPOT_GLOW = (255, 255, 240) # blindingly bright central LED hotspot
-PERIPHERAL_SPILL = (30, 40, 60) # faint blue-green peripheral spill in forest haze
+# Tactical Flashlight Tuning Constants (Narrow, Focused, High-Intensity)
+FLASHLIGHT_BEAM_ANGLE = 12.0
+FLASHLIGHT_PENUMBRA_ANGLE = 3.0
+FLASHLIGHT_HOTSPOT_ANGLE = 3.0
+FLASHLIGHT_SPILL_ANGLE = 22.0
+FLASHLIGHT_SPILL_INTENSITY = 0.10
+FLASHLIGHT_RANGE = 20.0
+FLASHLIGHT_HOTSPOT_INTENSITY = 1.0
+FLASHLIGHT_AMBIENT_LEVEL = 0.06
+
+DARK_TINT = (4, 8, 18)   # near-black cool midnight tint for deep forest
+BEAM_RADIUS = 0.28        # narrower beam width for tactical profile
+BEAM_GLOW = (240, 240, 235)  # neutral white 5000K LED main beam
+HOTSPOT_GLOW = (255, 255, 250) # intense neutral white hotspot
+PERIPHERAL_SPILL = (35, 45, 65) # faint 10% spill in atmospheric haze
 FOG_DISTANCE = 35.0
+AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
+AMBIENT_LIGHT_OFF = 0.02
+ENEMY_EYE_GLOW = True
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
 DANGER_RANGE = 7.0        # enemies closer than this trigger the horror effects
