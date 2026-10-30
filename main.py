@@ -648,6 +648,7 @@ class Game:
     # ── Update (playing) ──────────────────────────────────────────────────
     def update_playing(self, dt, mouse_dx, mouse_dy):
         p   = self.player
+        setattr(p, '_last_mouse_dx', mouse_dx)
         keys = pygame.key.get_pressed()
         p.update(dt, keys, mouse_dx, mouse_dy, self.game_map)
 

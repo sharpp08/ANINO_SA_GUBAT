@@ -78,7 +78,7 @@ class Flashlight:
         self._init_mask()
 
     def _init_mask(self):
-        """Precompute multi-layered cinematic flashlight beam masks (Hotspot, Main Beam, Penumbra, Spill)."""
+        """Precompute narrow tactical flashlight beam masks (Hotspot, Main Beam, Penumbra, Spill)."""
         w, h = self.w, self.h
         mw, mh = w * 2, h * 2
         ys, xs = np.ogrid[:mh, :mw]
@@ -86,38 +86,40 @@ class Flashlight:
         dx = (xs - w).astype(np.float32)
         dy = (ys - h).astype(np.float32)
         
-        R = float(w * BEAM_RADIUS * 1.3)
+        # Narrow tactical beam radius (12° main beam, ~20 units effective range)
+        R = float(w * BEAM_RADIUS * 1.1)
         k = 1.73205080757  # sqrt(3)
         px = abs(dx)
         py = dy
         
-        dist_slope = (px * 0.8660254 + py * 0.5)
+        dist_slope = (px * 0.92 + py * 0.38)
         dist_base = py
-        dist_top = -py - R * 0.7
+        dist_top = -py - R * 0.8
         
-        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.55, dist_base - R * 0.6), dist_top)
-        r = np.clip((dist_tri + R * 0.25) / (R * 0.95), 0.0, 1.0)
+        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.35, dist_base - R * 0.7), dist_top)
+        r = np.clip((dist_tri + R * 0.15) / (R * 0.85), 0.0, 1.0)
 
-        penumbra = np.clip((r - 0.02) / 0.98, 0.0, 1.0)
+        penumbra = np.clip((r - 0.01) / 0.99, 0.0, 1.0)
         penumbra = penumbra * penumbra * (3.0 - 2.0 * penumbra)
-        dark_alpha = int((1.0 - AMBIENT) * 255)
+        dark_alpha = int((1.0 - FLASHLIGHT_AMBIENT_LEVEL) * 255)
         self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
         self.dark_mask.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 255))
         av = pygame.surfarray.pixels_alpha(self.dark_mask)
         av[:, :] = (penumbra * dark_alpha).T.astype(np.uint8)
         del av
 
-        hotspot_factor = np.exp(-(px * px * 0.008 + py * py * 0.004)) * (1.0 - np.clip(py / R, 0.0, 1.0))
+        # Intensely bright narrow central hotspot (3° half-angle) and tight main beam
+        hotspot_factor = np.exp(-(px * px * 0.035 + py * py * 0.015)) * (1.0 - np.clip(py / R, 0.0, 1.0))
         hotspot_factor = np.maximum(0.0, hotspot_factor)
-        main_beam = np.clip(1.0 - r, 0.0, 1.0) ** 1.8
-        spill = np.clip(1.0 - (r * 1.3), 0.0, 1.0) * 0.35
+        main_beam = np.clip(1.0 - r, 0.0, 1.0) ** 2.8
+        spill = np.clip(1.0 - (r * 1.8), 0.0, 1.0) * FLASHLIGHT_SPILL_INTENSITY
 
         rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
         for c in range(3):
             ch_val = (
-                hotspot_factor * HOTSPOT_GLOW[c] * 0.85 +
-                main_beam * BEAM_GLOW[c] * 0.65 +
-                spill * PERIPHERAL_SPILL[c] * 0.40
+                hotspot_factor * FLASHLIGHT_HOTSPOT_INTENSITY * HOTSPOT_GLOW[c] * 0.95 +
+                main_beam * BEAM_GLOW[c] * 0.70 +
+                spill * PERIPHERAL_SPILL[c] * 0.30
             )
             rgb[:, :, c] = np.clip(ch_val, 0, 255).T.astype(np.uint8)
         self.glow_mask = pygame.Surface((mw, mh))
@@ -125,56 +127,9 @@ class Flashlight:
 
         self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
-                            int((1.0 - 0.10) * 255)))
+                            int((1.0 - 0.05) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
-        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 85))
-
-
-    def _init_mask(self):
-        """Precompute everything once at startup (Triangular/Prismatic beam shape)."""
-        w, h = self.w, self.h
-        mw, mh = w * 2, h * 2
-        ys, xs = np.ogrid[:mh, :mw]
-        
-        dx = (xs - w).astype(np.float32)
-        dy = (ys - h).astype(np.float32)
-        
-        R = float(w * BEAM_RADIUS * 1.2)
-        # Equilateral triangle SDF (pointing upwards: apex at top-center, flat base at bottom)
-        # Coordinates: x horizontal, y vertical (positive down)
-        k = 1.73205080757  # sqrt(3)
-        px = abs(dx)
-        py = dy
-        # Triangle edges: py >= 0 (base), py - k * px <= 0 (left/right sloped sides)
-        # Distance to sides: (px * k + py) / 2 for slope, and py for base
-        dist_slope = (px * 0.8660254 + py * 0.5)
-        dist_base = py
-        dist_top = -py - R * 0.6
-        
-        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.5, dist_base - R * 0.5), dist_top)
-        r = np.clip((dist_tri + R * 0.2) / (R * 0.9), 0.0, 1.0)
-
-        t = np.clip((r - 0.05) / 0.95, 0.0, 1.0)
-        t = t * t * (3.0 - 2.0 * t)
-        dark_alpha = int((1.0 - AMBIENT) * 255)
-        self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
-        self.dark_mask.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 255))
-        av = pygame.surfarray.pixels_alpha(self.dark_mask)
-        av[:, :] = (t * dark_alpha).T.astype(np.uint8)
-        del av
-
-        f = np.clip(1.0 - r, 0.0, 1.0) ** 2
-        rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
-        for c in range(3):
-            rgb[:, :, c] = (f * BEAM_GLOW[c] * 0.55).T.astype(np.uint8)
-        self.glow_mask = pygame.Surface((mw, mh))
-        pygame.surfarray.blit_array(self.glow_mask, rgb)
-
-        self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
-        self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
-                            int((1.0 - 0.10) * 255)))
-        self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
-        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 85))
+        self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 90))
 
     def toggle(self):
         self.on = not self.on
@@ -670,7 +625,7 @@ class Renderer:
         self._draw_world_sprites(player, enemies, game_map)
 
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
-        self.flashlight.update(dt, abs(player.bob_amount) > 0.5, 0, player.flashlight_battery)
+        self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
         if not self.debug_f4:
             self.flashlight.draw(self.surface, player)
 
