@@ -78,7 +78,7 @@ class Flashlight:
         self._init_mask()
 
     def _init_mask(self):
-        """Precompute narrow tactical flashlight beam masks (Hotspot, Main Beam, Penumbra, Spill)."""
+        """Precompute perfectly circular tactical flashlight beam masks (Hotspot, Main Beam, Penumbra, Spill)."""
         w, h = self.w, self.h
         mw, mh = w * 2, h * 2
         ys, xs = np.ogrid[:mh, :mw]
@@ -86,42 +86,46 @@ class Flashlight:
         dx = (xs - w).astype(np.float32)
         dy = (ys - h).astype(np.float32)
         
-        # Narrow tactical beam radius (12° main beam, ~20 units effective range)
-        R = float(w * BEAM_RADIUS * 1.1)
-        k = 1.73205080757  # sqrt(3)
-        px = abs(dx)
-        py = dy
+        # Euclidean distance from the exact center of the beam
+        dist_px = np.sqrt(dx * dx + dy * dy)
         
-        dist_slope = (px * 0.92 + py * 0.38)
-        dist_base = py
-        dist_top = -py - R * 0.8
+        # Radi1 based on tactical tuning targets (Main beam 12 deg ~ radius R, Hotspot ~ R * 0.25, Spill ~ R * 1.8)
+        R_main = float(w * BEAM_RADIUS * 0.9)
+        R_hotspot = R_main * 0.25
+        R_spill = R_main * 1.8
         
-        dist_tri = np.maximum(np.maximum(dist_slope - R * 0.35, dist_base - R * 0.7), dist_top)
-        r = np.clip((dist_tri + R * 0.15) / (R * 0.85), 0.0, 1.0)
-
-        penumbra = np.clip((r - 0.01) / 0.99, 0.0, 1.0)
+        # Normalized radial distance [0, 1] for main beam & penumbra
+        r = np.clip(dist_px / R_main, 0.0, 1.0)
+        
+        # Smooth penumbra transition using smoothstep
+        penumbra = np.clip((dist_px - (R_main - w * 0.04)) / (w * 0.08), 0.0, 1.0)
         penumbra = penumbra * penumbra * (3.0 - 2.0 * penumbra)
+        
         dark_alpha = int((1.0 - FLASHLIGHT_AMBIENT_LEVEL) * 255)
         self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
         self.dark_mask.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 255))
         av = pygame.surfarray.pixels_alpha(self.dark_mask)
-        av[:, :] = (penumbra * dark_alpha).T.astype(np.uint8)
+        # Outside main beam + penumbra, reach full dark alpha; inside, clear to transparent
+        mask_t = np.clip(penumbra, 0.0, 1.0)
+        av[:, :] = (mask_t * dark_alpha).T.astype(np.uint8)
         del av
 
-        # Intensely bright narrow central hotspot (3° half-angle) and tight main beam
-        hotspot_factor = np.exp(-(px * px * 0.035 + py * py * 0.015)) * (1.0 - np.clip(py / R, 0.0, 1.0))
-        hotspot_factor = np.maximum(0.0, hotspot_factor)
-        main_beam = np.clip(1.0 - r, 0.0, 1.0) ** 2.8
-        spill = np.clip(1.0 - (r * 1.8), 0.0, 1.0) * FLASHLIGHT_SPILL_INTENSITY
+        # Perfectly circular main beam and outer spill (hotspot circle removed for uniform illumination)
+        main_beam = (1.0 - r * r) ** 1.8
+        main_beam = np.where(dist_px <= R_main, main_beam, 0.0)
+        
+        spill_r = np.clip(dist_px / R_spill, 0.0, 1.0)
+        spill = (1.0 - spill_r) * FLASHLIGHT_SPILL_INTENSITY
+        spill = np.where(dist_px <= R_spill, spill, 0.0)
 
         rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
         for c in range(3):
             ch_val = (
-                hotspot_factor * FLASHLIGHT_HOTSPOT_INTENSITY * HOTSPOT_GLOW[c] * 0.95 +
-                main_beam * BEAM_GLOW[c] * 0.70 +
-                spill * PERIPHERAL_SPILL[c] * 0.30
+                main_beam * BEAM_GLOW[c] * 0.85 +
+                spill * PERIPHERAL_SPILL[c] * 0.35
             )
             rgb[:, :, c] = np.clip(ch_val, 0, 255).T.astype(np.uint8)
+            
         self.glow_mask = pygame.Surface((mw, mh))
         pygame.surfarray.blit_array(self.glow_mask, rgb)
 
