@@ -78,17 +78,20 @@ class Flashlight:
         self._init_mask()
 
     def _init_mask(self):
-        """Precompute everything once at startup."""
+        """Precompute everything once at startup (Triangular/Prismatic beam shape)."""
         w, h = self.w, self.h
         mw, mh = w * 2, h * 2
-        rx = max(1.0, w * BEAM_RADIUS)
-        ry = rx * 0.85
         ys, xs = np.ogrid[:mh, :mw]
-        r = np.sqrt(((xs - w) / rx) ** 2 + ((ys - h) / ry) ** 2)   # shape (mh, mw)
+        
+        dx = (xs - w).astype(np.float32)
+        dy = (ys - h).astype(np.float32)
+        
+        R = float(w * BEAM_RADIUS * 1.1)
+        dist_tri = np.maximum(abs(dx) * 0.866 + (dy + R * 0.3) * 0.5, -dy - R * 0.4)
+        r = np.clip(dist_tri / R, 0.0, 1.0)
 
-        # Darkness: 0 in the beam centre -> full darkness outside the beam
-        t = np.clip((r - 0.15) / 0.85, 0.0, 1.0)
-        t = t * t * (3.0 - 2.0 * t)                                # smoothstep
+        t = np.clip((r - 0.1) / 0.9, 0.0, 1.0)
+        t = t * t * (3.0 - 2.0 * t)
         dark_alpha = int((1.0 - AMBIENT) * 255)
         self.dark_mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
         self.dark_mask.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 255))
@@ -96,7 +99,6 @@ class Flashlight:
         av[:, :] = (t * dark_alpha).T.astype(np.uint8)
         del av
 
-        # Warm glow (additive)
         f = np.clip(1.0 - r, 0.0, 1.0) ** 2
         rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
         for c in range(3):
