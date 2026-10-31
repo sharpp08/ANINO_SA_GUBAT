@@ -186,9 +186,43 @@ def test_two_close_trees():
     assert p.y > 9.1, f"Player trapped between trees (y={p.y:.3f})"
     print(f"[PASS] Player passed between two trees (y={p.y:.3f})")
 
+
+def test_player_circle_cannot_clip_wall_corner():
+    print("--- Testing Circle-vs-Wall Collision ---")
+    gm = GameMap(1)
+    # Isolated wall tile, with the player approaching its corner diagonally.
+    gm.grid[20][20] = WALL_WOOD
+    gm.trees = []
+    gm.spatial_hash.clear()
+    p = _make_player(19.55, 19.55, math.pi / 4)
+    for _ in range(30):
+        p.update(0.016, _fake_keys(forward=True), 0.0, 0.0, gm)
+    nearest_x = max(20.0, min(p.x, 21.0))
+    nearest_y = max(20.0, min(p.y, 21.0))
+    distance = math.hypot(p.x - nearest_x, p.y - nearest_y)
+    assert distance >= PLAYER_SIZE - 0.02, (
+        f"Player clipped wall corner: distance={distance:.3f}"
+    )
+    print(f"[PASS] Player remains outside wall corner (distance={distance:.3f})")
+
+
+def test_outer_boundary_uses_tree_ring_not_stone_plane():
+    print("--- Testing Natural Tree Boundary ---")
+    gm = GameMap(1)
+    assert gm._edge_ring, "Perimeter tree ring was not generated"
+    assert all(t in gm.trees for t in gm._edge_ring), "Perimeter trees missing from world"
+    assert gm.get_tile(10.0, -0.1) == EMPTY
+    assert gm.get_tile(10.0, gm.height + 0.1) == EMPTY
+    assert not gm.is_wall(10.0, -0.1)
+    assert not gm.is_wall(10.0, gm.height + 0.1)
+    # The actual tree colliders still block movement at the perimeter.
+    edge_tree = gm._edge_ring[0]
+    assert gm.is_tree_solid(edge_tree["x"], edge_tree["y"], radius=PLAYER_SIZE)
+    print("[PASS] No synthetic outer stone wall; tree boundary remains collidable")
+
 def run_all():
     print("=== STARTING COLLISION TEST SUITE ===")
-    tests = [test_spatial_hash_neighbor_query, test_spatial_hash_dedup, test_pushout_resolves_overlap, test_slide_along_trunk, test_diagonal_no_extra_speed, test_release_after_collision, test_no_permanent_stick, test_trees_block_movement, test_two_close_trees]
+    tests = [test_spatial_hash_neighbor_query, test_spatial_hash_dedup, test_pushout_resolves_overlap, test_slide_along_trunk, test_diagonal_no_extra_speed, test_release_after_collision, test_no_permanent_stick, test_trees_block_movement, test_two_close_trees, test_player_circle_cannot_clip_wall_corner, test_outer_boundary_uses_tree_ring_not_stone_plane]
     passed = 0; failed = 0
     for test in tests:
         try:
