@@ -50,6 +50,11 @@ class JumpscareManager:
         'sigbin':      {'skin': (52, 30, 26),  'glow': (255, 90, 25),  'eye': (255, 220, 160), 'mouth': (110, 20, 8)},
     }
 
+    # enemy_type -> file in enemy_animations_pack/ used instead of the generic scream
+    CUSTOM_SOUNDS = {
+        'multo': 'multo_jumpscare.mp3',
+    }
+
     def __init__(self):
         self.active = False
         self.timer = 0.0
@@ -58,6 +63,7 @@ class JumpscareManager:
         self.theme = self.THEMES['aswang']
         self.scream_sound = None
         self.stinger_sound = None
+        self.enemy_sounds = {}    # enemy_type -> custom jumpscare Sound
         self._noise_frames = {}   # (w,h) -> [surface, ...]
         self._fx = None           # reusable fx surface
         self._rng = random.Random()
@@ -87,6 +93,16 @@ class JumpscareManager:
                 except Exception as e:
                     print(f"[Jumpscare] Failed to load {name}: {e}")
 
+        # Enemy-specific jumpscare audio (replaces the generic scream for that enemy)
+        for etype, fname in self.CUSTOM_SOUNDS.items():
+            path = os.path.join(pack_dir, fname)
+            if os.path.exists(path):
+                try:
+                    self.enemy_sounds[etype] = pygame.mixer.Sound(path)
+                    print(f"[Jumpscare] Loaded {etype} audio: {path}")
+                except Exception as e:
+                    print(f"[Jumpscare] Failed to load {fname}: {e}")
+
     def _play(self, snd, volume):
         if snd is None:
             return
@@ -111,13 +127,18 @@ class JumpscareManager:
         proximity = max(0.0, min(1.0, 1.0 - distance / 10.0))
         self._proximity = proximity
 
-        self._play(self.scream_sound, 1.0)
-        self._play(self.stinger_sound, 0.9)
-        try:
-            from audio_synth import audio_mgr
-            audio_mgr.play('creature_call', volume=1.0)
-        except Exception:
-            pass
+        custom = self.enemy_sounds.get(self.enemy_type)
+        if custom is not None:
+            # Enemy-specific jumpscare sound (e.g. multo) replaces the generic audio
+            self._play(custom, 1.0)
+        else:
+            self._play(self.scream_sound, 1.0)
+            self._play(self.stinger_sound, 0.9)
+            try:
+                from audio_synth import audio_mgr
+                audio_mgr.play('creature_call', volume=1.0)
+            except Exception:
+                pass
 
         print(f"[Jumpscare] TRIGGERED ({self.enemy_type}, proximity={proximity:.2f})")
         return 2.0
