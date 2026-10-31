@@ -191,12 +191,12 @@ CHUNK_SIZE = 32
 CHUNK_LOAD_RADIUS = 5  # Expanded chunk load radius for massive forest density (5x5 chunks around player)
 
 # Outdoor Forest Settings (Phases 1-4)
-MAP_WIDTH = 384
-MAP_HEIGHT = 128
-MAP_SIZE = 128
-WORLD_SEED = 1337          # master world seed (deterministic terrain)
-TREE_COUNT_CH1 = 6500      # massively increased tree population for dense wilderness
-TREE_COUNT_CH2 = 9000      # massively increased tree population for chapter 2
+MAP_WIDTH = 256
+MAP_HEIGHT = 256
+MAP_SIZE = 256
+WORLD_SEED = 1337          # master seed for deterministic hybrid terrain and landmarks
+TREE_COUNT_CH1 = 5200      # target regular-tree population; perimeter trees are additional
+TREE_COUNT_CH2 = 6500      # denser chapter-two variant
 MAX_RENDER_TREES = 750     # increased render limit for Intel UHD optimization
 GROUND_TEX_SIZE = 1024
 # Dense, Ancient, Wet & Alive Forest Overhaul Tunables
@@ -206,7 +206,7 @@ ENHANCED_GROUND_DETAIL = True
 GROUND_CACHE_FILENAME = 'world_ground_knoll_v1.npy'
 
 
-UNDERGROWTH_DENSITY = 1600
+UNDERGROWTH_DENSITY = 1300
 EDGE_RING_TREES = 420      # dense natural tree-line around all four edges
 EDGE_RING_PLAYABLE_MARGIN = 5.5  # hard clamp box inset: invisible wall position
 
