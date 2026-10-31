@@ -126,7 +126,7 @@ class Player:
             speed *= 0.5
         # Water slowdown: check if player is standing in water
         tile_at_feet = game_map.get_tile(self.x, self.y)
-        if tile_at_feet == WATER:
+        if tile_at_feet == WATER or (hasattr(game_map, 'is_water') and game_map.is_water(self.x, self.y)):
             speed *= WATER_SPEED_MULTIPLIER
         move_x = 0
         move_y = 0
