@@ -90,9 +90,21 @@ class JumpscareManager:
                     print(f"[Jumpscare] Failed to load {name}: {e}")
 
     def _play(self, snd, volume):
+        """Play once on a free channel, stopping any earlier copy of the same
+        sound so retriggers never overlap or stack repeats."""
         if snd is None:
             return
         try:
+            # Stop every channel still bound to this exact Sound object
+            # (find_channel() in pygame-ce returns a Channel, not an index,
+            # and cannot locate a channel by sound, so scan explicitly).
+            for i in range(pygame.mixer.get_num_channels()):
+                try:
+                    ch = pygame.mixer.Channel(i)
+                    if ch.get_sound() is snd:
+                        ch.stop()
+                except Exception:
+                    continue
             snd.set_volume(volume)
             snd.play()
         except Exception:
@@ -113,18 +125,21 @@ class JumpscareManager:
         proximity = max(0.0, min(1.0, 1.0 - distance / 10.0))
         self._proximity = proximity
 
-        # Multo uses the user's dedicated sound; all other enemies keep the
-        # existing shared scream. The multo sound is optional and fails safely.
+        # Multo uses the dedicated multo_jumpscare.mp3 exclusively (no shared
+        # stinger / creature layer, so it never overlaps the general audio).
+        # If that file is missing or undecodable, fall back to the legacy
+        # shared scream layers so the jumpscare is never silent.  All other
+        # enemies keep their original shared scream + stinger + creature_call.
         if self.enemy_type == 'multo' and self.multo_sound is not None:
-            self._play(self.mult o_sound, 1.0)
+            self._play(self.multo_sound, 1.0)
         else:
             self._play(self.scream_sound, 1.0)
-        self._play(self.stinger_sound, 0.9)
-        try:
-            from audio_synth import audio_mgr
-            audio_mgr.play('creature_call', volume=1.0)
-        except Exception:
-            pass
+            self._play(self.stinger_sound, 0.9)
+            try:
+                from audio_synth import audio_mgr
+                audio_mgr.play('creature_call', volume=1.0)
+            except Exception:
+                pass
 
         print(f"[Jumpscare] TRIGGERED ({self.enemy_type}, proximity={proximity:.2f})")
         return 2.0
