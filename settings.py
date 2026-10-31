@@ -17,7 +17,7 @@ TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
 FULLSCREEN = True
 
 # Performance & Effect Toggles
-DEBUG = False
+DEBUG = True
 ENABLE_BLOOM = True
 ENABLE_FILM_GRAIN = True
 ENABLE_FOG = True
