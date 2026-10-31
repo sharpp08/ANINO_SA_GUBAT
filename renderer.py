@@ -270,6 +270,15 @@ class Renderer:
         }
         self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
         self._ground_arr = pygame.surfarray.array3d(self.world_ground_tex)
+        # Multipliers tint the shared procedural ground texture by map terrain.
+        # IDs match GameMap.terrain_grid: forest, trail, village, swamp,
+        # grove, limestone, shallow water.
+        self._terrain_tint_lut = np.asarray([
+            (0.72, 0.88, 0.70), (1.05, 0.88, 0.68),
+            (0.96, 0.80, 0.64), (0.56, 0.72, 0.68),
+            (0.68, 0.80, 0.66), (0.78, 0.77, 0.72),
+            (0.48, 0.72, 0.82),
+        ], dtype=np.float32)
         self.frame_counter = 0
 
         self.floor_surf = pygame.Surface((self.w, self.h // 2))
@@ -606,6 +615,16 @@ class Renderer:
                 ty = np.clip(np.abs((wy * 8.0) % gh).astype(np.int32), 0, gh - 1)
                 
                 tex_cols = self._ground_arr[tx, ty] # shape (w, 3)
+                terrain_grid = getattr(game_map, 'terrain_grid', None)
+                if terrain_grid is not None:
+                    map_x = np.clip(np.floor(wx).astype(np.int32), 0, game_map.width - 1)
+                    map_y = np.clip(np.floor(wy).astype(np.int32), 0, game_map.height - 1)
+                    terrain_ids = np.clip(terrain_grid[map_y, map_x], 0,
+                                          len(self._terrain_tint_lut) - 1)
+                    tex_cols = np.clip(
+                        tex_cols.astype(np.float32) * self._terrain_tint_lut[terrain_ids],
+                        0, 255
+                    ).astype(np.uint8)
                 
                 fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
                 shade = max(0.08, 1.0 - fog)
