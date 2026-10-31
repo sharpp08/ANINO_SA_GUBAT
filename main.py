@@ -99,6 +99,16 @@ def draw_hud(surf, player, font_sm, font_tiny):
     surf.blit(fe_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
 
+    # Survival objective and night clock
+    pages = min(5, getattr(player, 'pages_this_chapter', 0))
+    clock_left = max(0, getattr(player, 'survival_time_left', 420.0))
+    minutes_left = int(clock_left // 60)
+    seconds_left = int(clock_left % 60)
+    objective = font_sm.render(f'BIBLE PAGES  {pages}/5     SURVIVE UNTIL 7:00 AM', True, SACRED_GOLD)
+    surf.blit(objective, (sw // 2 - objective.get_width() // 2, 12))
+    clock_text = font_tiny.render(f'{minutes_left:02d}:{seconds_left:02d} UNTIL SUNRISE', True, WHITE)
+    surf.blit(clock_text, (sw // 2 - clock_text.get_width() // 2, 32))
+
     # ── Right Column (Weapon & Ammo Panel) ───────────────────────────────────
     panel_w, panel_h = 140, 65
     px = sw - panel_w - 12
@@ -213,10 +223,10 @@ def draw_win(surf, font_lg, font_sm, chapter, final=False):
     surf.fill((5, 10, 5))
     sw, sh = surf.get_size()
     if final:
-        # The last chapter is done: this is the real ending, not a "continue" prompt.
-        t = font_lg.render("THE END", True, SACRED_GOLD)
+        # Survival ending after collecting all five pages and reaching sunrise.
+        t = font_lg.render("YOU SURVIVED UNTIL 7:00 AM", True, SACRED_GOLD)
         surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 70))
-        sub = font_sm.render("You escaped Anino sa Gubat.", True, WHITE)
+        sub = font_sm.render("You found all five Bible pages and endured the night.", True, WHITE)
         surf.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 2 - 10))
         lt = font_sm.render("ENTER  -  Main Menu", True, (200, 200, 200))
         surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 40))
@@ -437,6 +447,11 @@ class Game:
         self.player = Player(sx, sy, self.game_map.player_start_angle)
         self.player.current_chapter = chapter_num
         self.player.pages_this_chapter = 0
+        self.player.survival_time_left = 7 * 60.0
+        self.survival_spawn_timer = 18.0
+        self.survival_spawn_count = 0
+        self.pages_complete_notified = False
+        self.sunrise_missed_notified = False
         self.player.set_checkpoint(sx, sy)
         self.enemy_manager.spawn_enemies(self.game_map.enemies)
         self.effects = []
@@ -691,6 +706,24 @@ class Game:
                 self.notify("Checkpoint saved!")
                 break
 
+    def _spawn_survival_enemy(self):
+        """Spawn a hunter at a valid point away from the player."""
+        p = self.player
+        enemy_types = ('aswang', 'multo', 'sigbin', 'white_lady', 'tikbalang', 'kapre')
+        for _ in range(40):
+            angle = random.uniform(0.0, math.tau)
+            distance = random.uniform(13.0, 28.0)
+            x = max(2.5, min(self.game_map.width - 2.5, p.x + math.cos(angle) * distance))
+            y = max(2.5, min(self.game_map.height - 2.5, p.y + math.sin(angle) * distance))
+            if not self.game_map.is_solid(x, y) and math.hypot(x - p.x, y - p.y) >= 10.0:
+                from enemies import Enemy
+                enemy = Enemy(random.choice(enemy_types), x, y)
+                self.enemy_manager.enemies.append(enemy)
+                self.survival_spawn_count += 1
+                self.notify('Something is hunting you in the forest...', 2.0)
+                return True
+        return False
+
     # ── Update (playing) ──────────────────────────────────────────────────
     def update_playing(self, dt, mouse_dx, mouse_dy):
         p   = self.player
@@ -777,39 +810,29 @@ class Game:
                 audio_mgr.play('pickup')
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
-        # Check level completion (Exit reached requires sufficient pages collected this chapter; enemy defeat optional per config)
-        total = getattr(self, 'level_enemy_total', 0)
-        alive_now = len(self.enemy_manager.get_alive_enemies())
-        all_enemies_defeated = total > 0 and alive_now == 0
-        exit_reached = False
-        if self.game_map.exit_pos:
-            ex, ey = self.game_map.exit_pos
-            if math.sqrt((ex - p.x)**2 + (ey - p.y)**2) < 1.2:
-                exit_reached = True
+        # Survival objective: collect all five pages, then endure the night until 7 AM.
+        self.player.survival_time_left = max(0.0, self.player.survival_time_left - dt)
+        self.survival_spawn_timer -= dt
+        if self.survival_spawn_timer <= 0.0:
+            self._spawn_survival_enemy()
+            # The forest grows more aggressive as sunrise approaches.
+            interval = max(10.0, 30.0 - self.survival_spawn_count * 1.2)
+            self.survival_spawn_timer = interval + random.uniform(-4.0, 5.0)
 
-        pages_needed = PAGES_REQUIRED_CH1 if self.chapter == 1 else PAGES_REQUIRED_CH2
-        pages_have = getattr(p, 'pages_this_chapter', p.bible_pages)
-        pages_met = (not REQUIRE_PAGES_FOR_EXIT) or (pages_have >= pages_needed)
+        if self.player.pages_this_chapter >= 5 and not getattr(self, 'pages_complete_notified', False):
+            self.pages_complete_notified = True
+            self.notify('All 5 Bible pages found. Survive until 7:00 AM!', 4.0)
 
-        cleared = False
-        if exit_reached:
-            if pages_met or (ALLOW_ENEMY_CLEAR_EXIT and all_enemies_defeated):
-                cleared = True
-            else:
-                msg = f"The way is sealed. Pages: {pages_have}/{pages_needed}."
-                pg = nearest_page(p.x, p.y, self.game_map.pickups)
-                if pg is not None:
-                    where = direction_word(relative_bearing(p.x, p.y, p.angle, pg['x'], pg['y']))
-                    msg += f" Nearest page: {int(pg['dist'])}m {where}."
-                self.notify(msg, 2.0)
-        elif all_enemies_defeated and not REQUIRE_PAGES_FOR_EXIT:
-            cleared = True
-
-        if cleared:
-            print(f"[CHAPTER COMPLETE] Chapter {self.chapter} cleared! (enemies defeated: {all_enemies_defeated}, exit reached: {exit_reached})")
-            self.notify(f"CHAPTER {self.chapter} CLEARED!", 3.0)
-            self.advance_chapter()
-            return
+        if self.player.survival_time_left <= 0.0:
+            if self.player.pages_this_chapter >= 5:
+                self.state = STATE_WIN
+                safe_set_relative_mouse(False)
+                self.notify('The sun has risen. You survived!', 4.0)
+                return
+            self.player.survival_time_left = 0.0
+            if not getattr(self, 'sunrise_missed_notified', False):
+                self.sunrise_missed_notified = True
+                self.notify('Sunrise came, but you still need all 5 Bible pages!', 4.0)
 
         # Death check
         if not p.alive:
