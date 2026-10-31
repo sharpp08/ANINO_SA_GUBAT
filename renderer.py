@@ -208,12 +208,6 @@ class Renderer:
         self.weapon_sprites = weapon_sprites
         self.enemy_sprites = enemy_sprites
         self.pickup_sprites = pickup_sprites
-        # The revolver art is a side view (barrel points left).  Rotate it once
-        # at startup so the muzzle faces up/forward like a held gun; the HUD
-        # icons keep the original side-view sprite.
-        rev = self.weapon_sprites.get('revolver')
-        self._revolver_forward = (
-            pygame.transform.rotate(rev, -90) if rev is not None else None)
         self.crosshair = None
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
@@ -1441,8 +1435,7 @@ class Renderer:
         # screen height (works at any internal resolution); other weapons keep 3x.
         from asset_generator import SHOTGUN_ANCHORS
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
-        # Revolver: use the pre-rotated forward-facing sprite (muzzle up)
-        sprite = self._revolver_forward if (wname == 'revolver' and self._revolver_forward is not None) else self.weapon_sprites.get(wname)
+        sprite = self.weapon_sprites.get(wname)
         scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
@@ -1451,11 +1444,12 @@ class Renderer:
         # Base screen position (shifted to right arm perspective)
         base_x = self.w // 2 - sw // 3 + 50
         base_y = self.h - sh + 30
-        # Forward-facing revolver: nudge it toward screen center so the muzzle
-        # aims up toward the crosshair instead of hanging at the right edge.
+        # The revolver art is drawn as a three-quarter view (front of the
+        # cylinder and bore visible, barrel up toward the crosshair).  Anchor
+        # its grip near bottom-center so it reads as a held gun.
         if wname == 'revolver':
-            base_x = self.w // 2 - sw // 2 + 30
-            base_y = self.h - sh + 10
+            base_x = self.w // 2 - sw // 2 + 8
+            base_y = self.h - int(sh * 0.82)
 
         # Animation calculations
         t_ticks = pygame.time.get_ticks()
@@ -1651,7 +1645,13 @@ class Renderer:
                 pygame.draw.circle(self.surface, skin_color, (int(lh_x + 10), int(lh_y + 20)), 7)
                 pygame.draw.circle(self.surface, glove_color, (int(lh_x + 8), int(lh_y + 22)), 5)
             elif wname == 'revolver':
-                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 20), int(lh_y + 25)), 6)
+                # Three-quarter art: hands track relative to the scaled sprite
+                # so they stay on the grip / frame at any internal resolution.
+                gy_x = int(rh_x + sh * 0.10)
+                gy_y = int(rh_y + sh * 0.36)
+                pygame.draw.circle(self.surface, skin_color, (gy_x, gy_y), 8)
+                pygame.draw.circle(self.surface, glove_color, (gy_x - 4, gy_y + 4), 6)
+                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 20), int(lh_y + 18)), 6)
 
     def _draw_muzzle_flash(self):
         """Draw muzzle flash effect."""

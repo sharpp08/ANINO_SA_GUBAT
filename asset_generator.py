@@ -115,8 +115,9 @@ def generate_weapon_sprite(weapon_type='bolo', width=128, height=128):
         pygame.draw.rect(surf, (70, 45, 25), (46, 78, 22, 6))
 
     elif weapon_type == 'revolver':
-        # Chunky voxel/pixel revolver based on the user's supplied STL preview.
-        # Barrel points left; wooden grip drops toward the lower-right.
+        # Three-quarter view revolver: the side profile is still readable, but the
+        # gun is canted so its front (cylinder face, bore, top strap) is visible.
+        # Barrel points up-and-toward-the-viewer; the wooden grip drops down.
         steel = (66, 70, 78)
         steel_mid = (91, 96, 105)
         steel_light = (157, 163, 173)
@@ -124,49 +125,57 @@ def generate_weapon_sprite(weapon_type='bolo', width=128, height=128):
         wood = (105, 58, 29)
         wood_mid = (137, 78, 39)
         wood_light = (166, 102, 55)
-        # Long squared barrel and top rail
-        pygame.draw.rect(surf, steel_dark, (5, 43, 83, 31))
-        pygame.draw.rect(surf, steel, (8, 35, 78, 25))
-        pygame.draw.rect(surf, steel_mid, (8, 35, 78, 8))
-        pygame.draw.rect(surf, steel_light, (10, 35, 68, 4))
-        pygame.draw.rect(surf, steel_dark, (5, 43, 5, 31))
-        # Barrel muzzle block
-        pygame.draw.rect(surf, (25, 28, 34), (3, 43, 8, 29))
-        pygame.draw.rect(surf, steel_mid, (8, 39, 7, 5))
-        # Receiver and cylinder housing
-        pygame.draw.rect(surf, steel_dark, (37, 58, 43, 33))
-        pygame.draw.rect(surf, steel, (40, 55, 38, 31))
-        pygame.draw.rect(surf, steel_mid, (42, 56, 30, 6))
-        pygame.draw.rect(surf, (47, 51, 59), (43, 66, 31, 17))
-        # Cylinder face and voxel chambers
-        pygame.draw.rect(surf, steel_dark, (49, 63, 25, 25))
-        pygame.draw.rect(surf, (111, 117, 127), (52, 65, 19, 19))
-        for yy in (67, 73, 79):
-            for xx in (54, 62, 68):
-                pygame.draw.rect(surf, (45, 49, 57), (xx, yy, 4, 4))
-                pygame.draw.rect(surf, (171, 176, 184), (xx, yy, 2, 1))
-        # Trigger guard and trigger
-        pygame.draw.rect(surf, steel_dark, (59, 84, 19, 4))
-        pygame.draw.rect(surf, steel_mid, (63, 86, 12, 3))
-        pygame.draw.rect(surf, steel_dark, (65, 88, 4, 8))
-        # Rear hammer and sights
-        pygame.draw.rect(surf, steel_dark, (76, 31, 9, 12))
-        pygame.draw.rect(surf, steel_mid, (78, 28, 7, 5))
-        pygame.draw.rect(surf, steel_light, (79, 28, 4, 2))
-        pygame.draw.rect(surf, steel_dark, (84, 39, 6, 8))
-        # Angled wooden grip with blocky facets
-        pygame.draw.polygon(surf, steel_dark, [(68, 82), (88, 80), (104, 119), (91, 127), (72, 105)])
-        pygame.draw.polygon(surf, wood, [(70, 82), (87, 82), (101, 116), (91, 124), (75, 103)])
-        pygame.draw.polygon(surf, wood_mid, [(73, 84), (85, 84), (97, 115), (89, 119), (78, 101)])
-        pygame.draw.polygon(surf, wood_light, [(74, 85), (80, 85), (89, 101), (82, 103)])
-        for yy in (91, 99, 107, 115):
-            pygame.draw.rect(surf, (75, 42, 25), (78 + (yy-91)//3, yy, 14, 3))
-            pygame.draw.rect(surf, wood_light, (80 + (yy-91)//3, yy, 7, 2))
-        # Hard voxel highlights and seams
-        for x in range(15, 77, 8):
-            pygame.draw.line(surf, (48, 52, 60), (x, 62), (x, 70), 1)
-        pygame.draw.rect(surf, steel_light, (12, 47, 58, 2))
-        pygame.draw.rect(surf, (24, 27, 32), (3, 71, 84, 4))
+        # Barrel: a near-vertical square tube tilted toward the viewer.  The left
+        # edge is the lit side face; the right edge catches top light.
+        pygame.draw.polygon(surf, steel_dark,
+                            [(49, 18), (92, 27), (85, 62), (54, 55)])
+        pygame.draw.polygon(surf, steel,
+                            [(51, 20), (90, 28), (84, 59), (55, 53)])
+        pygame.draw.polygon(surf, steel_mid,
+                            [(52, 24), (86, 31), (84, 38), (54, 31)])
+        # Front-facing muzzle: squashed top surface with the dark bore
+        pygame.draw.polygon(surf, (25, 28, 34),
+                            [(51, 13), (85, 21), (90, 28), (56, 19)])
+        pygame.draw.ellipse(surf, (14, 15, 19), (59, 14, 22, 8))
+        pygame.draw.ellipse(surf, (74, 78, 86), (62, 16, 16, 4))
+        # Cylinder: the front face reads as a tilted oval with 6 chambers,
+        # flanked by the darker side of the cylinder housing
+        pygame.draw.rect(surf, steel_dark, (55, 55, 38, 28), border_radius=4)
+        pygame.draw.rect(surf, steel, (58, 57, 34, 25), border_radius=3)
+        pygame.draw.ellipse(surf, (111, 117, 127), (62, 59, 20, 19))
+        for dx, dy in ((0, 0), (7, -2), (7, 6), (0, 8), (-7, 6), (-7, -2)):
+            pygame.draw.circle(surf, (45, 49, 57), (71 + dx, 67 + dy), 3)
+            pygame.draw.line(surf, (171, 176, 184),
+                             (71 + dx, 67 + dy - 2), (71 + dx + 2, 67 + dy - 2), 1)
+        # Frame / top strap along the right side of the barrel
+        pygame.draw.rect(surf, steel_dark, (84, 40, 11, 44), border_radius=2)
+        pygame.draw.rect(surf, steel, (86, 42, 8, 40), border_radius=2)
+        pygame.draw.rect(surf, steel_mid, (86, 42, 8, 6))
+        # Rear sight notch and hammer
+        pygame.draw.rect(surf, steel_dark, (92, 36, 7, 8))
+        pygame.draw.rect(surf, steel_mid, (93, 33, 5, 5))
+        pygame.draw.rect(surf, steel_dark, (90, 82, 8, 10))
+        pygame.draw.rect(surf, steel_mid, (91, 82, 6, 4))
+        # Trigger guard loop (front view of the loop) and trigger
+        pygame.draw.ellipse(surf, steel_dark, (66, 84, 17, 11))
+        pygame.draw.ellipse(surf, (47, 51, 59), (69, 86, 11, 7))
+        pygame.draw.rect(surf, steel_mid, (74, 87, 6, 4))
+        # Wooden grip: drops down-right with blocky facets and grip lines
+        pygame.draw.polygon(surf, steel_dark,
+                            [(60, 90), (88, 93), (83, 124), (64, 127), (55, 104)])
+        pygame.draw.polygon(surf, wood,
+                            [(62, 92), (86, 95), (81, 121), (66, 124), (58, 104)])
+        pygame.draw.polygon(surf, wood_mid,
+                            [(65, 95), (82, 98), (78, 115), (68, 117), (63, 104)])
+        pygame.draw.polygon(surf, wood_light,
+                            [(67, 98), (74, 99), (73, 111), (69, 112)])
+        for y in range(101, 121, 4):
+            pygame.draw.line(surf, (75, 42, 25), (64, y), (82, y + 2), 2)
+            pygame.draw.line(surf, wood_light, (68, y + 1), (74, y + 2), 1)
+        # Hard voxel highlights: lit left edge of the barrel, bright top rail
+        pygame.draw.line(surf, steel_light, (52, 22), (55, 51), 2)
+        pygame.draw.line(surf, steel_light, (54, 21), (86, 29), 2)
+        pygame.draw.line(surf, (24, 27, 32), (56, 80), (94, 83), 3)
 
     return surf
 
