@@ -709,6 +709,9 @@ class Game:
     def _spawn_survival_enemy(self):
         """Spawn a hunter at a valid point away from the player."""
         p = self.player
+        # Keep the active hunt challenging without allowing an unbounded AI crowd.
+        if len(self.enemy_manager.get_alive_enemies()) >= 12:
+            return False
         enemy_types = ('aswang', 'multo', 'sigbin', 'white_lady', 'tikbalang', 'kapre')
         for _ in range(40):
             angle = random.uniform(0.0, math.tau)
