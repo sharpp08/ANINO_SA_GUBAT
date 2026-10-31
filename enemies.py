@@ -219,21 +219,22 @@ class Enemy:
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
                 return
 
-        # Path recalculation: repath when player moves far or timer expires
-        if self.state in (EnemyState.INVESTIGATE, EnemyState.STALK, EnemyState.ATTACK):
-            self._repath_timer -= dt
-            dx = player_x - self._last_player_pos[0]
-            dy = player_y - self._last_player_pos[1]
-            player_moved = math.sqrt(dx*dx + dy*dy) > self._last_repath_dist
-            if self._repath_timer <= 0 or player_moved:
-                self._repath_timer = 3.0
-                self._last_player_pos = (player_x, player_y)
-                try:
-                    from pathfinder import NavGrid
-                    nav = NavGrid(game_map)
-                    self._path = nav.find_path((self.x, self.y), (player_x, player_y))
-                except Exception:
-                    self._path = None
+        # Relentless pursuit: refresh the route frequently, regardless of
+        # distance, visibility, or the enemy's previous state.
+        self._repath_timer -= dt
+        dx = player_x - self._last_player_pos[0]
+        dy = player_y - self._last_player_pos[1]
+        player_moved = math.sqrt(dx*dx + dy*dy) > 0.8
+        if self._repath_timer <= 0 or player_moved or not self._path:
+            self._repath_timer = 0.65
+            self._last_player_pos = (player_x, player_y)
+            try:
+                from pathfinder import NavGrid
+                nav = NavGrid(game_map)
+                self._path = nav.find_path((self.x, self.y), (player_x, player_y))
+                self._path_index = 0
+            except Exception:
+                self._path = None
 
         if self.shield_debuff:
             self.shield_debuff_timer -= dt
@@ -248,8 +249,12 @@ class Enemy:
 
         dist = self.distance_to(player_x, player_y)
         self.state_timer -= dt
-        # Reset flag at start of each frame so it's only set on actual transition
+        # Every living enemy is permanently hostile. No detection cutoff,
+        # passive patrol, stalking at range, or low-health retreat.
         prev_state = self.state
+        if self.state != EnemyState.ATTACK:
+            self.just_entered_chase = True
+        self.state = EnemyState.ATTACK
 
         self.anim_time += dt
         
@@ -294,143 +299,23 @@ class Enemy:
         else:
             self.animation_state = 'idle'
 
-        if self.state == EnemyState.IDLE:
-            if dist < self.detect_range:
-                if self.type == 'aswang':
-                    self.state = EnemyState.STALK
-                    self.state_timer = 3.0 + random.random() * 2
-                    self.just_entered_chase = True
-                else:
-                    self.state = EnemyState.INVESTIGATE
-                    self.state_timer = 2.0
-                    self.just_entered_chase = True
-            elif self.state_timer <= 0:
-                self.state = EnemyState.PATROL
-                self.patrol_angle = random.uniform(0, math.pi * 2)
-                self.state_timer = 3.0 + random.random() * 3
-
-        elif self.state == EnemyState.PATROL:
-            move_speed = self.speed * 0.3 * dt
-            new_x = self.x + math.cos(self.patrol_angle) * move_speed
-            new_y = self.y + math.sin(self.patrol_angle) * move_speed
-            if not self._try_move(game_map, new_x, new_y, self.patrol_angle, move_speed):
-                self.patrol_angle = random.uniform(0, math.pi * 2)
-
-            if dist < self.detect_range:
-                self.state = EnemyState.INVESTIGATE
-                self.state_timer = 1.5
-                self.just_entered_chase = True
-            elif self.state_timer <= 0:
-                self.state = EnemyState.IDLE
-                self.state_timer = 2.0 + random.random() * 3
-
-        elif self.state == EnemyState.INVESTIGATE:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-            # Use pathfinding if available and path is stale
-            if hasattr(self, '_path') and self._path:
-                if not self._move_along_path(game_map, self._path, dt, self.speed * 0.6):
-                    pass  # still following path
-                elif dist < self.attack_range:
-                    self.state = EnemyState.ATTACK
-                    self.state_timer = 0.5
-                    self.just_entered_chase = True
-                elif dist > self.detect_range * 1.5:
-                    self.state = EnemyState.IDLE
-                    self.state_timer = 3.0
-                return
-            # Fallback to direct movement
-            move_speed = self.speed * 0.6 * dt
-            new_x = self.x + math.cos(angle) * move_speed
-            new_y = self.y + math.sin(angle) * move_speed
-            self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if dist < self.attack_range:
-                self.state = EnemyState.ATTACK
-                self.state_timer = 0.5
-                self.just_entered_chase = True
-            elif dist > self.detect_range * 1.5:
-                self.state = EnemyState.IDLE
-                self.state_timer = 3.0
-
-        elif self.state == EnemyState.STALK:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-            # Stalk: move toward but try to stay at medium range
-            desired_dist = self.detect_range * 0.5
-            if dist > desired_dist + 1:
-                move_speed = self.speed * 0.4 * dt
+        # Aggressive pursuit: keep closing distance from anywhere on the map.
+        angle = self.angle_to(player_x, player_y)
+        self.facing_angle = angle
+        if dist > self.attack_range * 0.82:
+            chase_speed = self.speed * 1.45
+            following_path = False
+            if self._path:
+                following_path = self._move_along_path(
+                    game_map, self._path, dt, chase_speed)
+            if not following_path:
+                # Direct movement is a fallback for open ground or unavailable
+                # pathfinding; _try_move still slides along collision geometry.
+                move_speed = chase_speed * dt
                 new_x = self.x + math.cos(angle) * move_speed
                 new_y = self.y + math.sin(angle) * move_speed
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
-            elif dist < desired_dist - 1:
-                move_speed = self.speed * 0.3 * dt
-                new_x = self.x - math.cos(angle) * move_speed
-                new_y = self.y - math.sin(angle) * move_speed
-                self._try_move(game_map, new_x, new_y, angle, move_speed)
-            else:
-                # Strafe around player
-                strafe_angle = angle + math.pi / 2
-                move_speed = self.speed * 0.3 * dt
-                new_x = self.x + math.cos(strafe_angle) * move_speed
-                new_y = self.y + math.sin(strafe_angle) * move_speed
-                self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            self.stalk_timer += dt
-            if self.stalk_timer > 5.0 or dist < self.attack_range * 1.5:
-                self.state = EnemyState.ATTACK if dist < self.attack_range * 2 else EnemyState.INVESTIGATE
-                self.stalk_timer = 0
-                self.state_timer = 0.5
-                self.just_entered_chase = True
-
-        elif self.state == EnemyState.ATTACK:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-
-            if dist > self.attack_range:
-                # Use pathfinding for chase
-                if hasattr(self, '_path') and self._path:
-                    if not self._move_along_path(game_map, self._path, dt, self.speed):
-                        pass  # still following
-                    else:
-                        pass  # reached end of path
-                else:
-                    # Fallback direct chase
-                    move_speed = self.speed * dt
-                    new_x = self.x + math.cos(angle) * move_speed
-                    new_y = self.y + math.sin(angle) * move_speed
-                    self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if dist > self.detect_range * 2:
-                self.state = EnemyState.IDLE
-                self.state_timer = 3.0
-
-            # Check for retreat if low health
-            if self.health < self.max_health * 0.25 and self.type in ('aswang', 'sigbin'):
-                self.state = EnemyState.RETREAT
-                self.state_timer = 3.0
-        elif self.state == EnemyState.RECOVER:
-            if self.state_timer <= 0:
-                prev_state = self.state
-                self.state = EnemyState.ATTACK if dist < self.detect_range else EnemyState.IDLE
-                self.state_timer = 1.0
-                if prev_state != self.state:
-                    self.just_entered_chase = True
-
-        elif self.state == EnemyState.RETREAT:
-            angle = self.angle_to(player_x, player_y) + math.pi
-            move_speed = self.speed * dt
-            new_x = self.x + math.cos(angle) * move_speed
-            new_y = self.y + math.sin(angle) * move_speed
-            self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if self.state_timer <= 0 or dist > self.detect_range * 2:
-                if self.type == 'aswang':
-                    self.state = EnemyState.STALK
-                    self.stalk_timer = 0
-                else:
-                    self.state = EnemyState.IDLE
-                self.state_timer = 3.0
+        self.state = EnemyState.ATTACK
 
     def can_attack(self, player_x, player_y):
         """Check if enemy can attack the player."""
