@@ -315,6 +315,11 @@ class GameMap:
         target_tree_count = (5200 if chapter_num == 1 else 6500)
         step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
         cell_step = 2 if chapter_num == 2 else max(2, int(step))
+        tree_clearings = (
+            (15, 128, 10.0), (65, 70, 8.5), (83, 70, 8.5),
+            (75, 91, 8.5), (69, 202, 8.5), (130, 130, 12.0),
+            (241, 128, 9.0),
+        )
         for gy in range(8, self.height - 8, cell_step):
             for gx in range(8, self.width - 8, cell_step):
                 tx = gx + rng_map.uniform(0.25, cell_step - 0.25)
@@ -325,13 +330,8 @@ class GameMap:
                     continue
                 # Keep the camp, village doors, cave mouth, grove entrance
                 # and shrine approach clear of trunk colliders.
-                clearings = (
-                    (15, 128, 10.0), (65, 70, 8.5), (83, 70, 8.5),
-                    (75, 91, 8.5), (69, 202, 8.5), (130, 130, 12.0),
-                    (241, 128, 9.0),
-                )
                 if any(math.hypot(tx - cx, ty - cy) < radius
-                       for cx, cy, radius in clearings):
+                       for cx, cy, radius in tree_clearings):
                     continue
                 choices, weights = tree_types_by_terrain.get(terrain, tree_types_by_terrain[0])
                 t_type = rng_map.choices(choices, weights=weights, k=1)[0]
@@ -369,6 +369,11 @@ class GameMap:
         self.undergrowth = []
         plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
         desired_plants = UNDERGROWTH_DENSITY
+        plant_clearings = (
+            (15, 128, 7.0), (65, 70, 5.0), (83, 70, 5.0),
+            (75, 91, 5.0), (69, 202, 5.0), (130, 130, 9.0),
+            (241, 128, 6.0),
+        )
         attempts = 0
         while len(self.undergrowth) < desired_plants and attempts < desired_plants * 24:
             attempts += 1
@@ -377,11 +382,6 @@ class GameMap:
             ix, iy = int(px), int(py)
             if self.terrain_grid[iy, ix] in (1, 6) or self.grid[iy][ix] != EMPTY:
                 continue
-            plant_clearings = (
-                (15, 128, 7.0), (65, 70, 5.0), (83, 70, 5.0),
-                (75, 91, 5.0), (69, 202, 5.0), (130, 130, 9.0),
-                (241, 128, 6.0),
-            )
             if any(math.hypot(px - cx, py - cy) < radius
                    for cx, cy, radius in plant_clearings):
                 continue
