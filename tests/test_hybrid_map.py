@@ -35,8 +35,10 @@ def test_handcrafted_buildings_and_doorways():
     # All doors can be opened through the existing map API.
     doors = [(x, y) for y, row in enumerate(gm.grid) for x, tile in enumerate(row) if tile == DOOR]
     for x, y in doors:
+        assert gm.is_solid(x + 0.5, y + 0.5), "Closed doorway should block movement"
         assert gm.open_door(x, y)
         assert gm.grid[y][x] == EMPTY
+        assert not gm.is_solid(x + 0.5, y + 0.5), "Opened doorway should be passable"
 
 
 def test_hybrid_chunk_loader_does_not_erase_map():
