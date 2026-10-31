@@ -687,12 +687,27 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         if bbox.width == 0 or bbox.height == 0:
             return None
         img = img.subsurface(bbox).copy()
+        # The pack art has the handle at the top-left and the blade pointing
+        # down-right. A first-person viewmodel needs the handle at the bottom
+        # and the blade pointing up (leaning slightly toward screen center).
+        img = pygame.transform.rotate(img, 140)
+        bbox = img.get_bounding_rect()
+        img = img.subsurface(bbox).copy()
         k = min(size / img.get_width(), size / img.get_height())
         new_w = max(1, int(img.get_width() * k))
         new_h = max(1, int(img.get_height() * k))
-        img = pygame.transform.scale(img, (new_w, new_h))
+        # smoothscale keeps the 2px-wide blade from breaking up when shrunk
+        img = pygame.transform.smoothscale(img, (new_w, new_h))
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        surf.blit(img, ((size - new_w) // 2, (size - new_h) // 2))
+        ox, oy = (size - new_w) // 2, size - new_h
+        # The blade is near-black art; add a steel-colored edge behind it so it
+        # stays readable against the dark forest.
+        glow = pygame.mask.from_surface(img, 20).to_surface(
+            setcolor=(165, 175, 190, 255), unsetcolor=(0, 0, 0, 0))
+        for gx, gy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            surf.blit(glow, (ox + gx, oy + gy))
+        # Anchor to the bottom so the handle sits where the hand grips it
+        surf.blit(img, (ox, oy))
         return surf
     except Exception:
         return None

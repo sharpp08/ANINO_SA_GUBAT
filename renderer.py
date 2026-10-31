@@ -279,6 +279,7 @@ class Renderer:
         self.weapon_bob = 0
         self.weapon_recoil = 0
         self.muzzle_flash = 0
+        self.bolo_swing_timer = 0.0   # >0 while the bolo slash is playing
 
         # Screen effects
         self.screen_shake = 0
@@ -1358,6 +1359,30 @@ class Renderer:
         else:
             draw_surf = scaled
 
+        # Bolo: rotate about the handle (bottom-center of the sprite) so the
+        # blade sweeps while the grip stays in the hand.
+        bolo_grip = None
+        if wname == 'bolo':
+            swing_angle = 0.0
+            swing_dx = swing_dy = 0.0
+            if self.bolo_swing_timer > 0:
+                prog = 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN
+                swing_angle, swing_dx, swing_dy = self._bolo_swing_pose(max(0.0, min(1.0, prog)))
+                self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
+            theta = math.radians(swing_angle + total_rot)
+            sin_t, cos_t = math.sin(theta), math.cos(theta)
+            pivot_x = final_x + sw // 2 + swing_dx
+            pivot_y = final_y + sh + swing_dy
+            draw_surf = pygame.transform.rotate(scaled, swing_angle + total_rot)
+            # pivot offset from sprite center is (0, sh/2); rotate it to find the blit origin
+            off_x = (sh / 2) * sin_t
+            off_y = (sh / 2) * cos_t
+            final_x = int(pivot_x - off_x - draw_surf.get_width() / 2)
+            final_y = int(pivot_y - off_y - draw_surf.get_height() / 2)
+            # grip point ~15% up the handle, rotated with the blade
+            grip_d = sh * 0.15
+            bolo_grip = (int(pivot_x - grip_d * sin_t), int(pivot_y - grip_d * cos_t))
+
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)
         sleeve_color = (45, 52, 62)
@@ -1382,7 +1407,11 @@ class Renderer:
         self.surface.blit(draw_surf, (final_x, final_y))
 
         # Draw visible gripping hands / knuckles
-        if player.alive:
+        if player.alive and bolo_grip is not None:
+            # Right hand wraps the bolo handle and follows the swing
+            pygame.draw.circle(self.surface, skin_color, bolo_grip, 9)
+            pygame.draw.circle(self.surface, glove_color, (bolo_grip[0] - 3, bolo_grip[1] + 3), 6)
+        elif player.alive:
             # Right hand knuckles / fingers on grip
             pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)
             pygame.draw.circle(self.surface, glove_color, (int(rh_x - 18), int(rh_y + 12)), 6)
@@ -1406,6 +1435,33 @@ class Renderer:
     def trigger_muzzle_flash(self):
         self.muzzle_flash = 1.0
         self.weapon_recoil = 1.0
+
+    def trigger_bolo_swing(self):
+        """Start the bolo slash animation (lasts as long as the bolo cooldown)."""
+        self.bolo_swing_timer = BOLO_COOLDOWN
+
+    @staticmethod
+    def _bolo_swing_pose(p):
+        """Return (angle_deg, dx, dy) for swing progress p in [0, 1].
+
+        Windup (pull back to the right) -> fast slash across to the left -> recover.
+        Positive angle rotates the blade counter-clockwise (toward the left).
+        """
+        def smooth(u):
+            return u * u * (3 - 2 * u)
+
+        def lerp(a, b, u):
+            return a + (b - a) * u
+
+        if p < 0.25:                      # windup
+            u = 1 - (1 - p / 0.25) ** 2
+            return lerp(0, -40, u), lerp(0, 30, u), lerp(0, 10, u)
+        if p < 0.60:                      # slash
+            u = smooth((p - 0.25) / 0.35)
+            return (lerp(-40, 60, u), lerp(30, -70, u),
+                    lerp(10, 0, u) - math.sin(math.pi * u) * 15)
+        u = smooth((p - 0.60) / 0.40)     # recover
+        return lerp(60, 0, u), lerp(-70, 0, u), 0.0
 
     def trigger_ward_effect(self, ward_type, duration=1.5):
         self.ward_effect_timer = duration

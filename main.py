@@ -561,7 +561,10 @@ class Game:
         p  = self.player
         wi = p.fire_weapon()
         if wi:
-            self.renderer.trigger_muzzle_flash()
+            if wi['type'] == 'bolo':
+                self.renderer.trigger_bolo_swing()
+            else:
+                self.renderer.trigger_muzzle_flash()
             if wi['type'] in ('shotgun', 'revolver', 'bolo'):
                 audio_mgr.play(wi['type'])
                 if wi['type'] in ('shotgun', 'revolver'):
