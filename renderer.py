@@ -208,6 +208,12 @@ class Renderer:
         self.weapon_sprites = weapon_sprites
         self.enemy_sprites = enemy_sprites
         self.pickup_sprites = pickup_sprites
+        # The revolver art is a side view (barrel points left).  Rotate it once
+        # at startup so the muzzle faces up/forward like a held gun; the HUD
+        # icons keep the original side-view sprite.
+        rev = self.weapon_sprites.get('revolver')
+        self._revolver_forward = (
+            pygame.transform.rotate(rev, -90) if rev is not None else None)
         self.crosshair = None
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
@@ -1435,6 +1441,8 @@ class Renderer:
         # screen height (works at any internal resolution); other weapons keep 3x.
         from asset_generator import SHOTGUN_ANCHORS
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
+        # Revolver: use the pre-rotated forward-facing sprite (muzzle up)
+        sprite = self._revolver_forward if (wname == 'revolver' and self._revolver_forward is not None) else self.weapon_sprites.get(wname)
         scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
@@ -1443,6 +1451,11 @@ class Renderer:
         # Base screen position (shifted to right arm perspective)
         base_x = self.w // 2 - sw // 3 + 50
         base_y = self.h - sh + 30
+        # Forward-facing revolver: nudge it toward screen center so the muzzle
+        # aims up toward the crosshair instead of hanging at the right edge.
+        if wname == 'revolver':
+            base_x = self.w // 2 - sw // 2 + 30
+            base_y = self.h - sh + 10
 
         # Animation calculations
         t_ticks = pygame.time.get_ticks()
