@@ -851,7 +851,6 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
-            draw_objective(self.internal, self.player, self.game_map, self.font_tiny)
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
                             self.font_tiny, pygame.time.get_ticks())
 
@@ -878,8 +877,7 @@ class Game:
             draw_gameover(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_WIN:
-            draw_win(self.internal, self.font_lg, self.font_sm, self.chapter,
-                     final=(self.chapter >= self.max_chapter()))
+            draw_win(self.internal, self.font_lg, self.font_sm, self.chapter, final=True)
         
         # Jumpscare rendering (plays on top of scene during death sequence)
         try:
@@ -983,14 +981,7 @@ class Game:
 
                 elif self.state == STATE_WIN:
                     if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_RETURN:
-                            if self.chapter + 1 <= self.max_chapter():
-                                self.advance_chapter()
-                                if self.state == STATE_PLAYING:
-                                    safe_set_relative_mouse(True)
-                            else:
-                                self.state = STATE_MENU
-                        elif event.key == pygame.K_m:
+                        if event.key in (pygame.K_RETURN, pygame.K_m):
                             self.state = STATE_MENU
 
             entered_intro = (prev_state != STATE_INTRO and self.state == STATE_INTRO)
