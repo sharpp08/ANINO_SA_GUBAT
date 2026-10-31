@@ -184,6 +184,11 @@ class Player:
         # slide around trunks instead of getting stuck.
         self.x, self.y = game_map.resolve_circle_collision(self.x, self.y, pad)
 
+        # Invisible wall: the dense perimeter tree-line normally blocks
+        # movement naturally, but this hard clamp is the backstop guarantee
+        # that the player can never exit the playable area.
+        self.x, self.y = game_map.clamp_position(self.x, self.y, pad)
+
         # Head bob & footsteps noise
         moving = abs(move_x) > 0.001 or abs(move_y) > 0.001
         if moving:

@@ -162,6 +162,8 @@ class Enemy:
         # Last resort: push out of any overlapping tree so the enemy never gets
         # permanently embedded in a trunk (mirrors the player's collision fix).
         self.x, self.y = game_map.resolve_circle_collision(self.x, self.y, self.size)
+        # Keep enemies inside the playable area (perimeter tree-line wall)
+        self.x, self.y = game_map.clamp_position(self.x, self.y, self.size)
         return False
 
     def _move_along_path(self, game_map, path, dt, speed):

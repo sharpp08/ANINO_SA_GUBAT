@@ -197,6 +197,11 @@ class ProceduralWorldEngine:
                 game_map.trees.extend(chunk['trees'])
                 game_map.undergrowth.extend(chunk['undergrowth'])
 
+            # Preserve the perimeter tree-line (invisible wall) across
+            # chunk rebuilds so the border never disappears.
+            if hasattr(game_map, '_edge_ring'):
+                game_map.trees.extend(game_map._edge_ring)
+
             # Rebuild spatial hash for efficient O(1) collision queries
             game_map.spatial_hash.clear()
             for t in game_map.trees:
@@ -602,6 +607,18 @@ class GameMap:
                 break
         return x, y
 
+    def clamp_position(self, x, y, radius):
+        """Hard invisible-wall clamp: keep a circle fully inside the playable box.
+
+        Backstop for the perimeter tree-line — even if a gap ever appears in
+        the forest ring, the entity can never leave the intended map.
+        The margin leaves the tree-line visible in front of the player.
+        """
+        m = EDGE_RING_PLAYABLE_MARGIN + radius
+        cx = max(m, min(x, self.width - m))
+        cy = max(m, min(y, self.height - m))
+        return cx, cy
+
     def is_wall(self, x, y):
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
@@ -613,8 +630,8 @@ class GameMap:
     def is_solid(self, x, y, doors_block=True):
         """True if (x, y) blocks movement. Closed doors block unless doors_block=False;
         opened doors become EMPTY tiles and are always passable.
-        Left/right boundaries are open/continuous (no invisible walls);
-        top/bottom remain bounded natural terrain."""
+        All four boundaries are bounded: a dense perimeter tree-line plus the
+        hard clamp_position() backstop keep entities inside the playable area."""
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
             return True
@@ -633,7 +650,8 @@ class GameMap:
         return False
 
     def get_tile(self, x, y):
-        """Return tile at position. Left/right out-of-bounds are open forest (no stone wall);
+        """Return tile at position. Out-of-bounds left/right still resolves to
+        forest (the perimeter tree-line + clamp keep entities inside);
         top/bottom out-of-bounds are bounded by natural canopy."""
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
