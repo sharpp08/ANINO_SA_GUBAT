@@ -671,10 +671,37 @@ def generate_all_textures():
     return textures
 
 
+def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
+    """Load assets/sprites/weapons/bolo/bolo_hero.png as the bolo viewmodel.
+
+    The image is cropped to its visible pixels, scaled with nearest-neighbor to
+    fit a size x size surface (aspect preserved), and centered. Returns None if
+    the file is missing or can't be loaded so the procedural bolo is used.
+    """
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'bolo', 'bolo_hero.png')
+    try:
+        if not os.path.exists(path):
+            return None
+        img = pygame.image.load(path).convert_alpha()
+        bbox = img.get_bounding_rect()
+        if bbox.width == 0 or bbox.height == 0:
+            return None
+        img = img.subsurface(bbox).copy()
+        k = min(size / img.get_width(), size / img.get_height())
+        new_w = max(1, int(img.get_width() * k))
+        new_h = max(1, int(img.get_height() * k))
+        img = pygame.transform.scale(img, (new_w, new_h))
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        surf.blit(img, ((size - new_w) // 2, (size - new_h) // 2))
+        return surf
+    except Exception:
+        return None
+
+
 def generate_all_weapons():
     """Generate all weapon sprites."""
     return {
-        'bolo': generate_weapon_sprite('bolo', 128, 128),
+        'bolo': _load_custom_bolo_sprite(128) or generate_weapon_sprite('bolo', 128, 128),
         'shotgun': generate_weapon_sprite('shotgun', 128, 128),
         'revolver': generate_weapon_sprite('revolver', 128, 128),
     }
