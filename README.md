@@ -4,7 +4,7 @@
 > A first-person raycasting horror-shooter set in Philippine folklore, built entirely in Python with **Pygame-CE** and **NumPy**.  
 > Survive the haunted forest. Resist the creatures of the night. Trust in faith — and your bolo.
 
-**Current build:** `BUILD 2026.10.27-FOREST` (shown in the F3 debug overlay and the console at startup)
+**Current build:** `BUILD 2026.10.31-HYBRID-MAP` (shown in the F3 debug overlay and the console at startup)
 
 ---
 
