@@ -24,6 +24,7 @@ FIXED in this version
 import os
 import math
 import random
+import heapq
 import pygame
 import numpy as np
 from settings import *
@@ -244,6 +245,16 @@ class Renderer:
         for i in range(self.num_rays):
             angle_offset = (i / self.num_rays - 0.5) * self.fov_rad
             self.ray_angles.append(angle_offset)
+        # Cached ray vectors avoid rebuilding NumPy arrays every frame.
+        self._ray_angle_array = np.asarray(self.ray_angles, dtype=np.float32)
+        self._ray_cos = np.cos(self._ray_angle_array)
+        self._ray_sin = np.sin(self._ray_angle_array)
+
+        # Coarse spatial buckets avoid scanning the entire forest each frame.
+        self._sprite_bucket_size = 8.0
+        self._sprite_bucket_cache_key = None
+        self._tree_buckets = {}
+        self._plant_buckets = {}
 
         # Z-buffer for sprite occlusion (one entry per ray)
         self.z_buffer = [0.0] * self.num_rays
@@ -338,7 +349,7 @@ class Renderer:
         self._particle_cache = {}
 
         # Debug overlay (F3)
-        self.show_debug = True
+        self.show_debug = False
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
         self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
@@ -600,8 +611,10 @@ class Renderer:
             gw, gh, _ = self._ground_arr.shape
             px, py, pa = player.x, player.y, player.angle
             
-            ray_dx = np.cos(pa + np.array(self.ray_angles, dtype=np.float32) if hasattr(self, 'ray_angles') else np.linspace(-0.5, 0.5, self.w))
-            ray_dy = np.sin(pa + np.array(self.ray_angles, dtype=np.float32) if hasattr(self, 'ray_angles') else np.linspace(-0.5, 0.5, self.w))
+            cos_pa = math.cos(pa)
+            sin_pa = math.sin(pa)
+            ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
+            ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
             
             for y in range(horizon_y, self.h):
                 row_y = y - half_h - pitch_offset
@@ -1036,8 +1049,41 @@ class Renderer:
         img.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
         return img
 
+    def _get_sprite_candidates(self, game_map, px, py, max_dist):
+        """Query cached coarse buckets instead of scanning every forest object."""
+        trees = getattr(game_map, 'trees', [])
+        plants = (getattr(game_map, 'undergrowth', None)
+                  or getattr(game_map, 'plants', None) or [])
+        cache_key = (id(trees), len(trees), id(plants), len(plants))
+        if cache_key != self._sprite_bucket_cache_key:
+            size = self._sprite_bucket_size
+            tree_buckets = {}
+            plant_buckets = {}
+            for obj in trees:
+                key = (int(obj['x'] // size), int(obj['y'] // size))
+                tree_buckets.setdefault(key, []).append(obj)
+            for obj in plants:
+                key = (int(obj['x'] // size), int(obj['y'] // size))
+                plant_buckets.setdefault(key, []).append(obj)
+            self._tree_buckets = tree_buckets
+            self._plant_buckets = plant_buckets
+            self._sprite_bucket_cache_key = cache_key
+        size = self._sprite_bucket_size
+        min_cx = int(math.floor((px - max_dist) / size))
+        max_cx = int(math.floor((px + max_dist) / size))
+        min_cy = int(math.floor((py - max_dist) / size))
+        max_cy = int(math.floor((py + max_dist) / size))
+        nearby_trees = []
+        nearby_plants = []
+        for cy in range(min_cy, max_cy + 1):
+            for cx in range(min_cx, max_cx + 1):
+                key = (cx, cy)
+                nearby_trees.extend(self._tree_buckets.get(key, ()))
+                nearby_plants.extend(self._plant_buckets.get(key, ()))
+        return nearby_trees, nearby_plants
+
     def _draw_world_sprites(self, player, enemies, game_map):
-        """Collect everything billboarded, sort far -> near, and draw."""
+        """Collect nearby billboards, sort far -> near, and draw."""
         items = []
         stats = {'trees': 0, 'enemies_view': 0, 'pickups_view': 0, 'drawn': 0}
         margin = self.half_fov + 0.5
@@ -1045,27 +1091,23 @@ class Renderer:
         def consider(kind, obj, x, y, max_dist):
             dx = x - player.x
             dy = y - player.y
-            dist = math.sqrt(dx * dx + dy * dy)
-            # Only cull when dist < 0.05 (essentially on top of the object).
-            # The old 0.3 threshold was too aggressive: with PLAYER_SIZE=0.3 and
-            # tree radii around 0.2-0.5, the player naturally stands within 0.3
-            # units of a trunk, causing trees to vanish on approach.
-            if dist < 0.05 or dist > max_dist:
+            dist_sq = dx * dx + dy * dy
+            if dist_sq < 0.0025 or dist_sq > max_dist * max_dist:
                 return False
+            dist = math.sqrt(dist_sq)
             angle = self._norm_angle(math.atan2(dy, dx) - player.angle)
             if abs(angle) > margin:
                 return False
             items.append((dist, angle, kind, obj))
             return True
 
-        for t in getattr(game_map, 'trees', []):
-            if consider('tree', t, t['x'], t['y'], MAX_DEPTH):
+        tree_candidates, plant_candidates = self._get_sprite_candidates(
+            game_map, player.x, player.y, MAX_DEPTH)
+        for tree in tree_candidates:
+            if consider('tree', tree, tree['x'], tree['y'], MAX_DEPTH):
                 stats['trees'] += 1
-        for u in (getattr(game_map, 'undergrowth', None) or getattr(game_map, 'plants', None) or []):
-            try:
-                consider('plant', u, u['x'], u['y'], MAX_DEPTH * 0.6)
-            except Exception:
-                pass
+        for plant in plant_candidates:
+            consider('plant', plant, plant['x'], plant['y'], MAX_DEPTH * 0.6)
         for enemy in enemies:
             if not enemy.alive:
                 continue
@@ -1077,13 +1119,13 @@ class Renderer:
             if consider('pickup', pickup, pickup['x'], pickup['y'], MAX_DEPTH):
                 stats['pickups_view'] += 1
 
-        # limit trees to the nearest MAX_RENDER_TREES
-        trees_only = sorted((it for it in items if it[2] == 'tree'), key=lambda s: s[0])
-        if len(trees_only) > MAX_RENDER_TREES:
-            drop = set(id(it) for it in trees_only[MAX_RENDER_TREES:])
-            items = [it for it in items if id(it) not in drop]
-
-        items.sort(key=lambda s: s[0], reverse=True)
+        # Select only the nearest visible trees without sorting the full list.
+        trees_only = heapq.nsmallest(MAX_RENDER_TREES,
+                                     (it for it in items if it[2] == 'tree'),
+                                     key=lambda item: item[0])
+        if len(trees_only) < stats['trees']:
+            items = [it for it in items if it[2] != 'tree'] + trees_only
+        items.sort(key=lambda item: item[0], reverse=True)
 
         pitch_offset = int(player.pitch * self.h)
         horizon = self.h // 2 + pitch_offset
