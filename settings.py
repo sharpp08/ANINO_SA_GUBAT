@@ -207,7 +207,8 @@ GROUND_CACHE_FILENAME = 'world_ground_knoll_v1.npy'
 
 
 UNDERGROWTH_DENSITY = 1600
-EDGE_RING_TREES = 420      # dense natural tree-line around top/bottom edges
+EDGE_RING_TREES = 420      # dense natural tree-line around all four edges
+EDGE_RING_PLAYABLE_MARGIN = 5.5  # hard clamp box inset: invisible wall position
 
 
 # Player

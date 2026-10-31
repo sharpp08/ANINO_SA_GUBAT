@@ -337,9 +337,13 @@ class GameMap:
                     'tint': rng_map.randint(180, 255)
                 })
 
-        # Natural tree-line boundary ONLY on top and bottom (left/right fully open)
+        # Dense forest tree-line boundary on ALL FOUR edges (invisible wall)
         self._spawn_edge_ring(rng_map)
-        for t in self._edge_ring:
+        # Keep the ring in self.trees so the renderer sees it and chunk
+        # rebuilds (update_world_chunks) preserve it.
+        self.trees.extend(self._edge_ring)
+        self.spatial_hash.clear()
+        for t in self.trees:
             self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
 
         if chapter_num == 1:
@@ -354,25 +358,73 @@ class GameMap:
         self._validate_and_fix_reachability()
 
     def _spawn_edge_ring(self, rng_map):
-        # Boundary on top and bottom rows of the wide horizontal forest.
-        # Left and right remain completely open/continuous for seamless traversal.
+        """Dense full-perimeter tree line: the forest acts as an invisible wall.
+
+        Three staggered tiers per side plus reinforced corners:
+          * margin 1.5  — outer "wall" tier: oversized balete trunks, 1.0
+            spacing, 95% fill.  Trunk radius 0.48–0.61, so two neighbours'
+            collider circles (sum ≥ 0.96 + player diameter 0.6 = 1.56
+            guaranteed block) span every gap in the row (max gap 1.3):
+            the outer tier alone mathematically blocks the player.
+          * margin 3.0  — mid tier: mixed species, 1.0 spacing, 85% fill.
+          * margin 4.5  — inner tier: smaller trunks, 1.2 spacing, 75%
+            fill, backfilling visual gaps so the wall reads as a natural
+            forest edge rather than a row of hedges.
+        Left/right edges are ringed the same as top/bottom, closing the
+        previously open world borders.
+        """
         self._edge_ring = []
         w, h = self.width, self.height
-        step = 1.0
-        for x in range(2, w - 2, int(step)):
-            for y_off in (1.2, 2.8, 5.0):
-                for edge_y in (y_off, h - y_off):
-                    if rng_map.random() < 0.9:
-                        tx = x + rng_map.uniform(-0.4, 0.4)
-                        ty = edge_y + rng_map.uniform(-0.4, 0.4)
-                        scale = rng_map.uniform(1.3, 2.2)
-                        self._edge_ring.append({
-                            'x': tx, 'y': ty, 'type': 'balete',
-                            'scale': scale, 'tint': rng_map.randint(170, 220),
-                            'radius': max(0.25, scale * 0.22 + 0.08),
-                            'canopy_seed': rng_map.randint(0, 99999),
-                            'lean': rng_map.uniform(-0.05, 0.05),
-                        })
+        mix_types = ['balete', 'mahogany', 'akasya', 'banana', 'bamboo', 'dead']
+        mix_weights = [30, 22, 18, 12, 10, 8]
+
+        def add_tree(x, y, t_type, scale):
+            trunk_fraction = 0.18 if t_type in ('bamboo', 'banana', 'palm', 'tree_fern') else 0.22
+            radius = max(0.25, scale * trunk_fraction + 0.08)
+            self._edge_ring.append({
+                'x': x, 'y': y, 'type': t_type,
+                'scale': scale, 'tint': rng_map.randint(170, 220),
+                'radius': radius,
+                'canopy_seed': rng_map.randint(0, 99999),
+                'lean': rng_map.uniform(-0.05, 0.05),
+                'biome': 'edge_ring',
+            })
+
+        def tier_sides(margin, step, fill, type_fn, scale_fn, jitter):
+            # horizontal sides (top / bottom)
+            for x in range(2, w - 1, int(step)):
+                for ty in (margin, h - margin):
+                    if rng_map.random() < fill:
+                        add_tree(x + rng_map.uniform(-jitter, jitter),
+                                 ty + rng_map.uniform(-jitter, jitter),
+                                 type_fn(), scale_fn())
+            # vertical sides (left / right)
+            for y in range(2, h - 1, int(step)):
+                for tx in (margin, w - margin):
+                    if rng_map.random() < fill:
+                        add_tree(tx + rng_map.uniform(-jitter, jitter),
+                                 y + rng_map.uniform(-jitter, jitter),
+                                 type_fn(), scale_fn())
+
+        # Outer wall tier — dense, oversized balete
+        tier_sides(1.5, 1.0, 0.95, lambda: 'balete',
+                   lambda: rng_map.uniform(1.9, 2.4), 0.15)
+        # Mid tier — mixed species
+        tier_sides(3.0, 1.0, 0.85,
+                   lambda: rng_map.choices(mix_types, weights=mix_weights, k=1)[0],
+                   lambda: rng_map.uniform(1.2, 1.9), 0.3)
+        # Inner tier — backfill depth
+        tier_sides(4.5, 1.2, 0.75,
+                   lambda: rng_map.choices(mix_types, weights=mix_weights, k=1)[0],
+                   lambda: rng_map.uniform(0.9, 1.5), 0.4)
+
+        # Corner reinforcement — 2x2 clusters at each corner
+        for cx in (2.5, 4.0):
+            for cy in (2.5, 4.0):
+                for (px, py) in ((cx, cy), (w - cx, cy), (cx, h - cy), (w - cx, h - cy)):
+                    add_tree(px + rng_map.uniform(-0.2, 0.2),
+                             py + rng_map.uniform(-0.2, 0.2),
+                             'balete', rng_map.uniform(2.0, 2.4))
 
     def _place_chapter1_entities(self):
         self.pickups = [
