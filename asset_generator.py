@@ -671,14 +671,22 @@ def generate_all_textures():
     return textures
 
 
-def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
-    """Load assets/sprites/weapons/bolo/bolo_hero.png as the bolo viewmodel.
+# Where the bolo's handle sits inside its 128x128 viewmodel surface, as fractions
+# of the surface. The renderer pivots the swing on `pivot` and draws the hand at
+# `grip`. Defaults match the procedural bolo; the custom sprite overrides them.
+BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
 
-    The image is cropped to its visible pixels, scaled with nearest-neighbor to
-    fit a size x size surface (aspect preserved), and centered. Returns None if
-    the file is missing or can't be loaded so the procedural bolo is used.
+
+def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
+    """Load assets/sprites/weapons/bolo/bolo_fpv.png as the bolo viewmodel.
+
+    The art is already drawn for a right-handed first-person view (handle at the
+    bottom-right, blade pointing up-left), so it is only cropped to its visible
+    pixels, smooth-scaled to fit size x size (aspect preserved) and anchored to
+    the bottom-right. Returns None if the file is missing or can't be loaded so
+    the procedural bolo is used instead.
     """
-    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'bolo', 'bolo_hero.png')
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'bolo', 'bolo_fpv.png')
     try:
         if not os.path.exists(path):
             return None
@@ -687,27 +695,27 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         if bbox.width == 0 or bbox.height == 0:
             return None
         img = img.subsurface(bbox).copy()
-        # The pack art has the handle at the top-left and the blade pointing
-        # down-right. A first-person viewmodel needs the handle at the bottom
-        # and the blade pointing up (leaning slightly toward screen center).
-        img = pygame.transform.rotate(img, 140)
-        bbox = img.get_bounding_rect()
-        img = img.subsurface(bbox).copy()
         k = min(size / img.get_width(), size / img.get_height())
         new_w = max(1, int(img.get_width() * k))
         new_h = max(1, int(img.get_height() * k))
         # smoothscale keeps the 2px-wide blade from breaking up when shrunk
         img = pygame.transform.smoothscale(img, (new_w, new_h))
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        ox, oy = (size - new_w) // 2, size - new_h
+        # Anchor bottom-right so the handle sits at the corner the hand grips
+        ox, oy = size - new_w, size - new_h
         # The blade is near-black art; add a steel-colored edge behind it so it
         # stays readable against the dark forest.
         glow = pygame.mask.from_surface(img, 20).to_surface(
             setcolor=(165, 175, 190, 255), unsetcolor=(0, 0, 0, 0))
         for gx, gy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             surf.blit(glow, (ox + gx, oy + gy))
-        # Anchor to the bottom so the handle sits where the hand grips it
         surf.blit(img, (ox, oy))
+        # Handle end / grip positions measured on the 640px source art
+        # (handle end ~ (585, 520), grip ~ (520, 480) inside the 40..600 x 85..555 bbox)
+        def frac(sx, sy):
+            return ((ox + (sx - bbox.x) * k) / size, (oy + (sy - bbox.y) * k) / size)
+        BOLO_ANCHORS['pivot'] = frac(585, 520)
+        BOLO_ANCHORS['grip'] = frac(520, 480)
         return surf
     except Exception:
         return None

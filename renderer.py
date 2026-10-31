@@ -1299,9 +1299,11 @@ class Renderer:
         if sprite is None:
             return
 
-        scale = 3
-        sw = sprite.get_width() * scale
-        sh = sprite.get_height() * scale
+        # The bolo art fills its whole surface, so size it to the screen height
+        # (works at any internal resolution); other weapons keep the old 3x scale.
+        scale = (self.h * 0.85 / sprite.get_height()) if wname == 'bolo' else 3
+        sw = int(sprite.get_width() * scale)
+        sh = int(sprite.get_height() * scale)
         scaled = pygame.transform.scale(sprite, (sw, sh))
 
         # Base screen position (shifted to right arm perspective)
@@ -1368,20 +1370,32 @@ class Renderer:
             if self.bolo_swing_timer > 0:
                 prog = 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN
                 swing_angle, swing_dx, swing_dy = self._bolo_swing_pose(max(0.0, min(1.0, prog)))
+                hk = self.h / 360.0   # pose offsets are authored for a 360px-tall view
+                swing_dx *= hk
+                swing_dy *= hk
                 self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
+            from asset_generator import BOLO_ANCHORS
             theta = math.radians(swing_angle + total_rot)
             sin_t, cos_t = math.sin(theta), math.cos(theta)
-            pivot_x = final_x + sw // 2 + swing_dx
-            pivot_y = final_y + sh + swing_dy
+
+            def _rot(vx, vy):
+                # rotate a vector counter-clockwise by theta (screen coords, y down)
+                return vx * cos_t + vy * sin_t, -vx * sin_t + vy * cos_t
+
+            # handle end (pivot) and grip positions within the sprite, in pixels
+            piv_x, piv_y = BOLO_ANCHORS['pivot'][0] * sw, BOLO_ANCHORS['pivot'][1] * sh
+            grp_x, grp_y = BOLO_ANCHORS['grip'][0] * sw, BOLO_ANCHORS['grip'][1] * sh
+            pivot_x = final_x + piv_x + swing_dx
+            pivot_y = final_y + piv_y + swing_dy
             draw_surf = pygame.transform.rotate(scaled, swing_angle + total_rot)
-            # pivot offset from sprite center is (0, sh/2); rotate it to find the blit origin
-            off_x = (sh / 2) * sin_t
-            off_y = (sh / 2) * cos_t
+            # the pivot sits (piv - center) from the sprite center; rotate that
+            # offset to find where the rotated surface must be blitted
+            off_x, off_y = _rot(piv_x - sw / 2, piv_y - sh / 2)
             final_x = int(pivot_x - off_x - draw_surf.get_width() / 2)
             final_y = int(pivot_y - off_y - draw_surf.get_height() / 2)
-            # grip point ~15% up the handle, rotated with the blade
-            grip_d = sh * 0.15
-            bolo_grip = (int(pivot_x - grip_d * sin_t), int(pivot_y - grip_d * cos_t))
+            # grip point rotates with the blade around the pivot
+            g_x, g_y = _rot(grp_x - piv_x, grp_y - piv_y)
+            bolo_grip = (int(pivot_x + g_x), int(pivot_y + g_y))
 
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)
@@ -1453,15 +1467,14 @@ class Renderer:
         def lerp(a, b, u):
             return a + (b - a) * u
 
-        if p < 0.25:                      # windup
+        if p < 0.25:                      # windup: blade rises, pulled back right
             u = 1 - (1 - p / 0.25) ** 2
-            return lerp(0, -40, u), lerp(0, 30, u), lerp(0, 10, u)
-        if p < 0.60:                      # slash
+            return lerp(0, -15, u), lerp(0, 20, u), lerp(0, 15, u)
+        if p < 0.60:                      # slash: handle lifts so the blade sweeps mid-screen
             u = smooth((p - 0.25) / 0.35)
-            return (lerp(-40, 60, u), lerp(30, -70, u),
-                    lerp(10, 0, u) - math.sin(math.pi * u) * 15)
-        u = smooth((p - 0.60) / 0.40)     # recover
-        return lerp(60, 0, u), lerp(-70, 0, u), 0.0
+            return lerp(-15, 25, u), lerp(20, -60, u), lerp(15, -60, u)
+        u = smooth((p - 0.60) / 0.40)     # recover to the rest pose
+        return lerp(25, 0, u), lerp(-60, 0, u), lerp(-60, 0, u)
 
     def trigger_ward_effect(self, ward_type, duration=1.5):
         self.ward_effect_timer = duration
