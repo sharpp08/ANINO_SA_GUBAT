@@ -50,6 +50,11 @@ class JumpscareManager:
         'sigbin':      {'skin': (52, 30, 26),  'glow': (255, 90, 25),  'eye': (255, 220, 160), 'mouth': (110, 20, 8)},
     }
 
+    # enemy_type -> file in enemy_animations_pack/ used instead of the generic scream
+    CUSTOM_SOUNDS = {
+        'multo': ('multo_jumpscare.wav', 'multo_jumpscare.mp3'),
+    }
+
     def __init__(self):
         self.active = False
         self.timer = 0.0
@@ -57,8 +62,8 @@ class JumpscareManager:
         self.enemy_type = 'aswang'
         self.theme = self.THEMES['aswang']
         self.scream_sound = None
-        self.multo_sound = None
         self.stinger_sound = None
+        self.enemy_sounds = {}    # enemy_type -> custom jumpscare Sound
         self._noise_frames = {}   # (w,h) -> [surface, ...]
         self._fx = None           # reusable fx surface
         self._rng = random.Random()
@@ -78,7 +83,6 @@ class JumpscareManager:
     def _load_assets(self):
         pack_dir = os.path.join(BASE_PATH, 'enemy_animations_pack')
         for name, attr in (('jumpscare_scream.wav', 'scream_sound'),
-                           ('multo_jumpscare.mp3', 'multo_sound'),
                            ('jumpscare_stinger.wav', 'stinger_sound')):
             path = os.path.join(pack_dir, name)
             if os.path.exists(path):
@@ -89,22 +93,25 @@ class JumpscareManager:
                 except Exception as e:
                     print(f"[Jumpscare] Failed to load {name}: {e}")
 
+        # Enemy-specific jumpscare audio (replaces the generic scream for that enemy)
+        for etype, fnames in self.CUSTOM_SOUNDS.items():
+            for fname in fnames:
+                path = os.path.join(pack_dir, fname)
+                if not os.path.exists(path):
+                    continue
+                try:
+                    self.enemy_sounds[etype] = pygame.mixer.Sound(path)
+                    print(f"[Jumpscare] Loaded {etype} audio: {path}")
+                    break
+                except Exception as e:
+                    print(f"[Jumpscare] Failed to load {fname}: {e}")
+            else:
+                print(f"[Jumpscare] No usable audio found for {etype} in {pack_dir}")
+
     def _play(self, snd, volume):
-        """Play once on a free channel, stopping any earlier copy of the same
-        sound so retriggers never overlap or stack repeats."""
         if snd is None:
             return
         try:
-            # Stop every channel still bound to this exact Sound object
-            # (find_channel() in pygame-ce returns a Channel, not an index,
-            # and cannot locate a channel by sound, so scan explicitly).
-            for i in range(pygame.mixer.get_num_channels()):
-                try:
-                    ch = pygame.mixer.Channel(i)
-                    if ch.get_sound() is snd:
-                        ch.stop()
-                except Exception:
-                    continue
             snd.set_volume(volume)
             snd.play()
         except Exception:
@@ -125,13 +132,18 @@ class JumpscareManager:
         proximity = max(0.0, min(1.0, 1.0 - distance / 10.0))
         self._proximity = proximity
 
-        # Multo uses the dedicated multo_jumpscare.mp3 exclusively (no shared
-        # stinger / creature layer, so it never overlaps the general audio).
-        # If that file is missing or undecodable, fall back to the legacy
-        # shared scream layers so the jumpscare is never silent.  All other
-        # enemies keep their original shared scream + stinger + creature_call.
-        if self.enemy_type == 'multo' and self.multo_sound is not None:
-            self._play(self.multo_sound, 1.0)
+        custom = self.enemy_sounds.get(self.enemy_type)
+        if custom is not None:
+            # Enemy-specific jumpscare sound (e.g. multo) replaces the generic audio
+            try:
+                custom.set_volume(1.0)
+                ch = pygame.mixer.find_channel(True)   # force: never dropped if channels are full
+                if ch is not None:
+                    ch.play(custom)
+                else:
+                    custom.play()
+            except Exception as e:
+                print(f"[Jumpscare] Could not play {self.enemy_type} audio: {e}")
         else:
             self._play(self.scream_sound, 1.0)
             self._play(self.stinger_sound, 0.9)
