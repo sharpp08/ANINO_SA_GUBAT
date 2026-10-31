@@ -620,18 +620,22 @@ class GameMap:
         return cx, cy
 
     def is_wall(self, x, y):
+        """Return actual map-wall geometry only.
+
+        The forest perimeter is formed by the visible tree ring, not an
+        artificial stone plane beyond the north/south map edge.  Keep
+        out-of-range rows visually open; movement remains protected by the
+        perimeter trees and the player clamp.
+        """
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
-            return True
+            return False
         if ix < 0 or ix >= self.width:
             return False
-        return self.grid[iy][ix] != EMPTY
+        return self.grid[iy][ix] not in (EMPTY, WATER)
 
     def is_solid(self, x, y, doors_block=True):
-        """True if (x, y) blocks movement. Closed doors block unless doors_block=False;
-        opened doors become EMPTY tiles and are always passable.
-        All four boundaries are bounded: a dense perimeter tree-line plus the
-        hard clamp_position() backstop keep entities inside the playable area."""
+        """Point collision query retained for legacy callers."""
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
             return True
@@ -642,6 +646,41 @@ class GameMap:
             return True
         return self.is_tree_solid(x, y, radius=0.25)
 
+    def is_circle_solid(self, x, y, radius, doors_block=True):
+        """Test the player's full circular footprint against solid tile AABBs
+        and tree trunks. This prevents corner/edge clipping that point-only
+        movement checks allow.
+        """
+        if y - radius < 0.0 or y + radius >= self.height:
+            return True
+
+        min_x = int(math.floor(x - radius))
+        max_x = int(math.floor(x + radius))
+        min_y = int(math.floor(y - radius))
+        max_y = int(math.floor(y + radius))
+
+        for ty in range(min_y, max_y + 1):
+            if ty < 0 or ty >= self.height:
+                return True
+            for tx in range(min_x, max_x + 1):
+                # Left/right are procedurally streamed world space, not
+                # synthetic stone boundary tiles.
+                if tx < 0 or tx >= self.width:
+                    continue
+                tile = self.grid[ty][tx]
+                blocked = (tile == DOOR and doors_block) or (
+                    tile not in (EMPTY, WATER, DOOR)
+                )
+                if not blocked:
+                    continue
+                nearest_x = max(float(tx), min(x, float(tx + 1)))
+                nearest_y = max(float(ty), min(y, float(ty + 1)))
+                dx, dy = x - nearest_x, y - nearest_y
+                if dx * dx + dy * dy < radius * radius:
+                    return True
+
+        return self.is_tree_solid(x, y, radius=radius)
+
     def is_water(self, x, y):
         """Check if the given world position is on a water tile."""
         ix, iy = int(x), int(y)
@@ -650,12 +689,11 @@ class GameMap:
         return False
 
     def get_tile(self, x, y):
-        """Return tile at position. Out-of-bounds left/right still resolves to
-        forest (the perimeter tree-line + clamp keep entities inside);
-        top/bottom out-of-bounds are bounded by natural canopy."""
+        """Return the actual tile. The natural tree-line is the world edge;
+        do not synthesize a stone wall outside the north/south map rows."""
         ix, iy = int(x), int(y)
         if iy < 0 or iy >= self.height:
-            return WALL_STONE
+            return EMPTY
         if ix < 0 or ix >= self.width:
             return EMPTY
         return self.grid[iy][ix]
