@@ -53,7 +53,7 @@ The game features:
 | Feature | Details |
 |---|---|
 | 🎮 Raycasting 3D | Pseudo-3D first-person view; internal resolution scales with the quality preset (320×180 on low, 640×360 on medium/high), upscaled to 1280×720 |
-| 🌲 Outdoor Forest | 384×128 open world with 2000 (Ch. 1) / 2800 (Ch. 2) procedurally placed trees, dense undergrowth, a tree-line on the top and bottom edges, left/right edges that continue as endless forest, and an abandoned cabin |
+| 🌲 Outdoor Forest | 256×256 hybrid forest with biome-tinted terrain, 5,200 / 6,500 procedural trees, handcrafted village, cave, ancient ruins, swamp and shrine, connected trails, and a natural perimeter tree-line |
 | 🌿 Legit Forest | 1200 procedural plants (ferns, mushrooms, rocks, bushes, logs, stumps, boulders, saplings) with wind physics and player proximity reactions |
 | 🌀 Physics Animation | Spring-driven systems for camera, weapon sway, head bob; NumPy particle physics for casings/smoke/sparks |
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
@@ -269,10 +269,10 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 | Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
 |---|---|---|---|---|---|---|
-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | 2000 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
-| **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | 2800 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 9 |
+| **Chapter 1** | Forgotten Forest & Abandoned Village | (15.5, 128.5) | (242.5, 128.5) | ~5,200 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
+| **Chapter 2** | Sunken Swamp & Cursed Grove | (15.5, 128.5) | (242.5, 128.5) | ~6,500 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 11 |
 
-Both chapters have a checkpoint and a Bible page inside the cabin near the map centre. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
+Both chapters share the hybrid landmark layout and use the central ancient ruins as a checkpoint. The chapter-specific enemy and pickup placements differ. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
 
 After the final chapter, the win screen is shown. Completing Chapter 1 loads Chapter 2 directly with a "CHAPTER 1 CLEARED!" notification.
 
