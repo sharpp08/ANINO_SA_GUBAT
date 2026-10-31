@@ -1465,7 +1465,7 @@ class Renderer:
 
         # Revolver reload: lower and cant the gun as the cylinder is serviced.
         if wname == 'revolver' and player.reloading:
-            reload_p = max(0.0, min(1.0, 1.0 - player.reload_timer / max(0.01, RELOAD_TIME)))
+            reload_p = max(0.0, min(1.0, 1.0 - player.reload_timer / max(0.01, REVOLVER_RELOAD_TIME)))
             reload_wave = math.sin(reload_p * math.pi)
             final_y += int(22 * reload_wave)
             reload_rot -= 18.0 * reload_wave
