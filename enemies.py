@@ -459,7 +459,7 @@ class EnemyManager:
             self.enemies.append(enemy)
 
     def update_drops(self, game_map):
-        \"\"\"Create one randomized, type-aware loot drop for each defeated enemy.\"\"\"
+        """Create one randomized, type-aware loot drop for each defeated enemy."""
         drop_tables = {
             'aswang': [('health', 0.28, 15), ('ammo_revolver', 0.48, 4), ('garlic', 0.24, 1)],
             'manananggal': [('faith', 0.42, 12), ('ammo_revolver', 0.38, 5), ('battery', 0.20, 18)],
