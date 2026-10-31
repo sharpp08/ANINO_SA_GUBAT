@@ -226,7 +226,7 @@ class Enemy:
         dx = player_x - self._last_player_pos[0]
         dy = player_y - self._last_player_pos[1]
         player_moved = math.sqrt(dx*dx + dy*dy) > 0.8
-        if self._repath_timer <= 0 or player_moved or not self._path:
+        if self._repath_timer <= 0 or player_moved:
             self._repath_timer = 0.65
             self._last_player_pos = (player_x, player_y)
             try:
