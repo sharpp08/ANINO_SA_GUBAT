@@ -739,6 +739,9 @@ def _load_custom_shotgun_sprite(size=128) -> Optional[pygame.Surface]:
             return None
         img = pygame.image.load(path).convert_alpha()
         img = pygame.transform.rotate(img, 180)
+        # Full source canvas (640px) BEFORE cropping: the fire sheet is drawn on this
+        # same canvas, so its frames must be scaled relative to it, not to the crop.
+        src_canvas = img.get_width()
         bbox = img.get_bounding_rect()
         if bbox.width == 0 or bbox.height == 0:
             return None
@@ -757,7 +760,7 @@ def _load_custom_shotgun_sprite(size=128) -> Optional[pygame.Surface]:
             return ((ox + (sx - bbox.x) * k) / size, (oy + (sy - bbox.y) * k) / size)
         SHOTGUN_ANCHORS['right'] = frac(425, 365)
         SHOTGUN_ANCHORS['left'] = frac(300, 320)
-        SHOTGUN_GEOM.update({'canvas': img.get_width(), 'bbox': bbox, 'k': k, 'ox': ox, 'oy': oy})
+        SHOTGUN_GEOM.update({'canvas': src_canvas, 'bbox': bbox, 'k': k, 'ox': ox, 'oy': oy})
         return surf
     except Exception:
         return None

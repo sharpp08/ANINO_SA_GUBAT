@@ -1335,8 +1335,11 @@ class Renderer:
             sprint_off_x = 25
             bob_y += int(math.sin(t_ticks * 0.015) * 8)
 
-        # Recoil
-        recoil_y = int(self.weapon_recoil * 18)
+        # Recoil (the shotgun's own fire frames already carry the kick, so skip the
+        # procedural offset while they play to avoid a double kick)
+        shotgun_anim_playing = (wname == 'shotgun' and self.shotgun_fire_timer > 0
+                                and bool(SHOTGUN_ANCHORS))
+        recoil_y = 0 if shotgun_anim_playing else int(self.weapon_recoil * 18)
         if self.weapon_recoil > 0:
             self.weapon_recoil -= dt * 6
 
