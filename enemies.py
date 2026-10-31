@@ -86,6 +86,10 @@ class Enemy:
         self.patrol_angle = random.uniform(0, math.pi * 2)
         self.size = 0.3
         self.alive = True
+        self.death_timer = 0.0
+        self.death_duration = 1.9
+        self.death_drop_created = False
+        self.death_variant = random.random()
         self.hit_flash = 0
         self.stalk_timer = 0
 
@@ -198,6 +202,13 @@ class Enemy:
     def update(self, dt, player_x, player_y, game_map):
         """Update enemy AI state machine."""
         if not self.alive:
+            if self.death_timer > 0:
+                self.death_timer = max(0.0, self.death_timer - dt)
+                self.anim_time += dt
+                if self.anim_time >= 1.0 / 10.0:
+                    self.anim_time -= 1.0 / 10.0
+                    self.anim_frame = min(5, self.anim_frame + 1)
+                self.animation_state = 'death'
             return
 
         # Update effects
@@ -351,6 +362,9 @@ class Enemy:
             self.health = 0
             self.alive = False
             self.state = EnemyState.DEFEATED
+            self.death_timer = self.death_duration
+            self.animation_state = 'death'
+            self.anim_frame = 0
         else:
             # Stagger
             if self.state != EnemyState.RETREAT:
@@ -443,6 +457,45 @@ class EnemyManager:
         for edata in enemy_list:
             enemy = Enemy(edata['type'], edata['x'], edata['y'])
             self.enemies.append(enemy)
+
+    def update_drops(self, game_map):
+        \"\"\"Create one randomized, type-aware loot drop for each defeated enemy.\"\"\"
+        drop_tables = {
+            'aswang': [('health', 0.28, 15), ('ammo_revolver', 0.48, 4), ('garlic', 0.24, 1)],
+            'manananggal': [('faith', 0.42, 12), ('ammo_revolver', 0.38, 5), ('battery', 0.20, 18)],
+            'tikbalang': [('ammo_shotgun', 0.48, 4), ('salt', 0.32, 1), ('health', 0.20, 12)],
+            'kapre': [('health', 0.40, 25), ('ammo_shotgun', 0.40, 6), ('faith', 0.20, 15)],
+            'white_lady': [('faith', 0.48, 18), ('battery', 0.30, 25), ('health', 0.22, 15)],
+            'multo': [('faith', 0.45, 12), ('ammo_revolver', 0.35, 4), ('battery', 0.20, 15)],
+            'sigbin': [('ammo_revolver', 0.45, 3), ('ammo_shotgun', 0.35, 3), ('health', 0.20, 10)],
+        }
+        for enemy in self.enemies:
+            if enemy.alive or enemy.death_drop_created:
+                continue
+            enemy.death_drop_created = True
+            if random.random() > 0.82:
+                continue
+            choices = drop_tables.get(enemy.type, [('health', 0.4, 10), ('ammo_revolver', 0.6, 3)])
+            total = sum(item[1] for item in choices)
+            roll = random.random() * total
+            chosen = choices[-1]
+            for item in choices:
+                roll -= item[1]
+                if roll <= 0:
+                    chosen = item
+                    break
+            ptype, _weight, amount = chosen
+            angle = random.uniform(0, math.tau)
+            radius = random.uniform(0.25, 0.55)
+            x = enemy.x + math.cos(angle) * radius
+            y = enemy.y + math.sin(angle) * radius
+            try:
+                if game_map.is_solid(x, y):
+                    x, y = enemy.x, enemy.y
+            except Exception:
+                x, y = enemy.x, enemy.y
+            game_map.pickups.append({'type': ptype, 'x': x, 'y': y,
+                                     'amount': amount, 'active': True, 'dropped': True})
 
     def update(self, dt, player_x, player_y, game_map, player=None):
         """Update all enemies with noise sensing, flashlight reaction, and sanity drain."""
