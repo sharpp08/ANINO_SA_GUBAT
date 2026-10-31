@@ -1361,60 +1361,51 @@ class Renderer:
         else:
             draw_surf = scaled
 
-        # Bolo: rotate about the handle (bottom-center of the sprite) so the
-        # blade sweeps while the grip stays in the hand.
+        # Bolo: rotate about the handle end so the blade sweeps while the grip
+        # stays in the hand. Faded ghost copies of the blade give the slash a trail.
         bolo_grip = None
+        bolo_ghosts = []
         if wname == 'bolo':
-            from asset_generator import BOLO_SWING_FRAMES
-            swing_angle = 0.0
-            swing_dx = swing_dy = 0.0
-            frame_data = None
-            pre_x, pre_y = final_x, final_y
-            if self.bolo_swing_timer > 0:
-                prog = max(0.0, min(1.0, 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN))
-                if BOLO_SWING_FRAMES:
-                    # Play the animation sheet: one frame per slice of the cooldown
-                    fi = min(len(BOLO_SWING_FRAMES) - 1, int(prog * len(BOLO_SWING_FRAMES)))
-                    frame_data = BOLO_SWING_FRAMES[fi]
-                else:
-                    swing_angle, swing_dx, swing_dy = self._bolo_swing_pose(prog)
-                hk = self.h / 360.0   # pose offsets are authored for a 360px-tall view
-                swing_dx *= hk
-                swing_dy *= hk
-                self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
             from asset_generator import BOLO_ANCHORS
-            theta = math.radians(swing_angle + total_rot)
-            sin_t, cos_t = math.sin(theta), math.cos(theta)
-
-            def _rot(vx, vy):
-                # rotate a vector counter-clockwise by theta (screen coords, y down)
-                return vx * cos_t + vy * sin_t, -vx * sin_t + vy * cos_t
-
-            # handle end (pivot) and grip positions within the sprite, in pixels
+            hk = self.h / 360.0   # pose offsets are authored for a 360px-tall view
+            pre_x, pre_y = final_x, final_y
             piv_x, piv_y = BOLO_ANCHORS['pivot'][0] * sw, BOLO_ANCHORS['pivot'][1] * sh
             grp_x, grp_y = BOLO_ANCHORS['grip'][0] * sw, BOLO_ANCHORS['grip'][1] * sh
-            pivot_x = final_x + piv_x + swing_dx
-            pivot_y = final_y + piv_y + swing_dy
-            draw_surf = pygame.transform.rotate(scaled, swing_angle + total_rot)
-            # the pivot sits (piv - center) from the sprite center; rotate that
-            # offset to find where the rotated surface must be blitted
-            off_x, off_y = _rot(piv_x - sw / 2, piv_y - sh / 2)
-            final_x = int(pivot_x - off_x - draw_surf.get_width() / 2)
-            final_y = int(pivot_y - off_y - draw_surf.get_height() / 2)
-            # grip point rotates with the blade around the pivot
-            g_x, g_y = _rot(grp_x - piv_x, grp_y - piv_y)
-            bolo_grip = (int(pivot_x + g_x), int(pivot_y + g_y))
-            if frame_data is not None:
-                # Sheet frames already contain the motion, so draw the frame as-is
-                # (registered to the rest sprite) and put the hand on its handle.
-                f_surf, f_grip, f_dest = frame_data
-                kx = sw / sprite.get_width()
-                ky = sh / sprite.get_height()
-                draw_surf = pygame.transform.scale(
-                    f_surf, (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
-                final_x = pre_x + int(f_dest[0] * kx)
-                final_y = pre_y + int(f_dest[1] * ky)
-                bolo_grip = (int(pre_x + f_grip[0] * sw), int(pre_y + f_grip[1] * sh))
+
+            def place(angle, dx, dy):
+                """Surface + blit position + grip point for the bolo at a given pose."""
+                theta = math.radians(angle + total_rot)
+                sin_t, cos_t = math.sin(theta), math.cos(theta)
+
+                def rot(vx, vy):
+                    # rotate a vector counter-clockwise by theta (screen coords, y down)
+                    return vx * cos_t + vy * sin_t, -vx * sin_t + vy * cos_t
+
+                pivot_x = pre_x + piv_x + dx * hk
+                pivot_y = pre_y + piv_y + dy * hk
+                surf = pygame.transform.rotate(scaled, angle + total_rot)
+                # the pivot sits (piv - center) from the sprite center; rotate that
+                # offset to find where the rotated surface must be blitted
+                off_x, off_y = rot(piv_x - sw / 2, piv_y - sh / 2)
+                bx = int(pivot_x - off_x - surf.get_width() / 2)
+                by = int(pivot_y - off_y - surf.get_height() / 2)
+                g_x, g_y = rot(grp_x - piv_x, grp_y - piv_y)
+                return surf, bx, by, (int(pivot_x + g_x), int(pivot_y + g_y))
+
+            swing_pose = (0.0, 0.0, 0.0)
+            if self.bolo_swing_timer > 0:
+                prog = max(0.0, min(1.0, 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN))
+                swing_pose = self._bolo_swing_pose(prog)
+                # trail: older poses of the slash, progressively fainter
+                if 0.25 <= prog < 0.75:
+                    for lag, alpha in ((0.035, 110), (0.07, 70), (0.105, 38)):
+                        gp = max(0.25, prog - lag)
+                        g_surf, gx_, gy_, _ = place(*self._bolo_swing_pose(gp))
+                        g_surf = g_surf.copy()
+                        g_surf.set_alpha(alpha)
+                        bolo_ghosts.append((g_surf, gx_, gy_))
+                self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
+            draw_surf, final_x, final_y, bolo_grip = place(*swing_pose)
 
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)
@@ -1436,7 +1427,9 @@ class Renderer:
             (-10, self.h + 10), (80, self.h - 30), (40, self.h + 10)
         ])
 
-        # Draw weapon viewmodel surface
+        # Draw weapon viewmodel surface (slash trail first, then the bolo itself)
+        for g_surf, gx_, gy_ in bolo_ghosts:
+            self.surface.blit(g_surf, (gx_, gy_))
         self.surface.blit(draw_surf, (final_x, final_y))
 
         # Draw visible gripping hands / knuckles
@@ -1477,8 +1470,11 @@ class Renderer:
     def _bolo_swing_pose(p):
         """Return (angle_deg, dx, dy) for swing progress p in [0, 1].
 
-        Windup (pull back to the right) -> fast slash across to the left -> recover.
-        Positive angle rotates the blade counter-clockwise (toward the left).
+        Offsets are authored for a 360px-tall view. The bolo pivots on its handle:
+        a high windup pulled back to the right, a fast slash that carries the blade
+        across the screen to the left with the handle lifting to mid-screen, a short
+        follow-through, then a recovery to the rest pose. Positive angle rotates the
+        blade counter-clockwise (toward the left).
         """
         def smooth(u):
             return u * u * (3 - 2 * u)
@@ -1486,14 +1482,18 @@ class Renderer:
         def lerp(a, b, u):
             return a + (b - a) * u
 
-        if p < 0.25:                      # windup: blade rises, pulled back right
+        if p < 0.25:                      # windup: blade rises, hand pulls back right
             u = 1 - (1 - p / 0.25) ** 2
-            return lerp(0, -15, u), lerp(0, 20, u), lerp(0, 15, u)
-        if p < 0.60:                      # slash: handle lifts so the blade sweeps mid-screen
-            u = smooth((p - 0.25) / 0.35)
-            return lerp(-15, 25, u), lerp(20, -60, u), lerp(15, -60, u)
-        u = smooth((p - 0.60) / 0.40)     # recover to the rest pose
-        return lerp(25, 0, u), lerp(-60, 0, u), lerp(-60, 0, u)
+            return lerp(0, -35, u), lerp(0, 35, u), lerp(0, 25, u)
+        if p < 0.55:                      # slash: fast, accelerating across the screen
+            u = ((p - 0.25) / 0.30) ** 1.6
+            return (lerp(-35, 45, u), lerp(35, -90, u),
+                    lerp(25, -140, u) - math.sin(math.pi * u) * 20)
+        if p < 0.68:                      # follow-through: a little overshoot
+            u = smooth((p - 0.55) / 0.13)
+            return lerp(45, 52, u), lerp(-90, -100, u), lerp(-140, -135, u)
+        u = smooth((p - 0.68) / 0.32)     # recover to the rest pose
+        return lerp(52, 0, u), lerp(-100, 0, u), lerp(-135, 0, u)
 
     def trigger_ward_effect(self, ward_type, duration=1.5):
         self.ward_effect_timer = duration
