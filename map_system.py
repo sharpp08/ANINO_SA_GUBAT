@@ -176,6 +176,10 @@ class ProceduralWorldEngine:
 
     def update_world_chunks(self, player_x, player_y, game_map):
         """Dynamically load and populate chunks around the player for infinite exploration."""
+        # The hybrid map is a fixed 256x256 authored world. Never replace its
+        # handcrafted landmark layout with the legacy infinite-chunk contents.
+        if getattr(game_map, 'hybrid_layout', False):
+            return
         p_cx = int(player_x // self.chunk_size)
         p_cy = int(player_y // self.chunk_size)
         
@@ -234,133 +238,258 @@ class GameMap:
         self.load_chapter(chapter_num)
 
     def load_chapter(self, chapter_num):
+        """Build the large hybrid map: handcrafted landmarks on procedural forest terrain."""
         self.chapter_num = chapter_num
         self.validation_errors = []
         self.checkpoints = []
-
-        # Open forest world (no stone perimeter walls)
+        self.hybrid_layout = True
+        self.width = MAP_WIDTH
+        self.height = MAP_HEIGHT
         self.grid = [[EMPTY for _ in range(self.width)] for _ in range(self.height)]
+        self.terrain_grid = np.zeros((self.height, self.width), dtype=np.uint8)
+        self.world_engine = ProceduralWorldEngine(world_seed=ACTIVE_WORLD_SEED + chapter_num * 1009,
+                                                  chunk_size=CHUNK_SIZE)
+        self.world_engine.loaded_chunk_keys = set()
 
-        # Central ruins at world center
-        cs_x, cs_y = self.width // 2, self.height // 2
-        for y in range(cs_y - 5, cs_y + 6):
-            for x in range(cs_x - 5, cs_x + 6):
-                if (x == cs_x or x == cs_x + 1) and y == cs_y + 5:
-                    self.grid[y][x] = DOOR
-                elif x == cs_x - 5 or x == cs_x + 5 or y == cs_y - 5 or y == cs_y + 5:
-                    self.grid[y][x] = WALL_WOOD
+        rng_map = random.Random(ACTIVE_WORLD_SEED + chapter_num * 7919)
+        yy, xx = np.mgrid[0:self.height, 0:self.width]
 
-        seed_val = 42 + chapter_num
-        rng_map = random.Random(seed_val)
-        np.random.seed(seed_val)
+        # Terrain palette IDs: 0 forest floor, 1 dirt trail, 2 village earth,
+        # 3 wet swamp, 4 ancient grove, 5 rocky cave ground, 6 shallow water.
+        def paint_ellipse(code, cx, cy, rx, ry):
+            mask = (((xx - cx) / float(rx)) ** 2 + ((yy - cy) / float(ry)) ** 2) <= 1.0
+            self.terrain_grid[mask] = code
 
-        density_noise = np.random.rand(self.height, self.width)
+        # Broad natural clearings and biome pockets.
+        paint_ellipse(2, 72, 78, 27, 23)       # abandoned village
+        paint_ellipse(3, 194, 76, 35, 31)      # swamp basin
+        paint_ellipse(4, 130, 130, 30, 29)     # ancient balete grove
+        paint_ellipse(5, 69, 202, 27, 22)      # limestone cave ridge
+        paint_ellipse(2, 15, 128, 15, 14)      # survivor's camp
+        paint_ellipse(4, 241, 128, 18, 19)     # exit clearing
 
-        for y in range(2, self.height - 2):
-            fx = int(25.0 + 12.0 * math.sin(y * 0.12) + 6.0 * math.cos(y * 0.05))
-            fx = max(3, min(self.width - 4, fx))
-            for dx in range(-1, 2):
-                nx = fx + dx
-                if 0 < nx < self.width - 1:
-                    self.grid[y][nx] = WATER
+        # Winding, connected dirt paths. Distance-to-segment gives smooth
+        # corridors without turning the forest into a square grid of lanes.
+        trails = [
+            ((15, 128), (42, 113)), ((42, 113), (58, 94)),
+            ((58, 94), (72, 78)), ((72, 78), (96, 93)),
+            ((96, 93), (113, 112)), ((113, 112), (130, 130)),
+            ((130, 130), (153, 112)), ((153, 112), (174, 92)),
+            ((174, 92), (194, 76)), ((194, 76), (216, 93)),
+            ((216, 93), (241, 128)),
+            ((69, 202), (83, 176)), ((83, 176), (105, 151)),
+            ((105, 151), (130, 130)),
+            ((72, 78), (91, 54)), ((91, 54), (119, 43)),
+            ((119, 43), (145, 48)),
+        ]
+        trail_mask = np.zeros((self.height, self.width), dtype=bool)
+        for (ax, ay), (bx, by) in trails:
+            vx, vy = bx - ax, by - ay
+            denom = float(vx * vx + vy * vy)
+            t = np.clip(((xx - ax) * vx + (yy - ay) * vy) / max(1.0, denom), 0.0, 1.0)
+            dist_sq = (xx - (ax + t * vx)) ** 2 + (yy - (ay + t * vy)) ** 2
+            trail_mask |= dist_sq <= 3.2 ** 2
+        self.terrain_grid[trail_mask] = 1
 
-        if chapter_num == 2:
-            pond_centers = [(15, 15), (48, 48), (20, 50)]
-            for (px, py) in pond_centers:
-                for dy in range(-4, 5):
-                    for dx in range(-4, 5):
-                        nx, ny = px + dx, py + dy
-                        if 1 <= nx < self.width - 1 and 1 <= ny < self.height - 1:
-                            if dx*dx + dy*dy <= 16:
-                                self.grid[ny][nx] = WATER
+        # Shallow pools and a meandering marsh channel are floor terrain,
+        # not raycast wall tiles, so the player can wade through them.
+        swamp_mask = self.terrain_grid == 3
+        channel_y = 76 + 8 * np.sin((xx - 165) * 0.11) + 3 * np.sin((xx - 165) * 0.29)
+        channel = swamp_mask & (np.abs(yy - channel_y) < 2.2)
+        self.terrain_grid[channel] = 6
+        for px, py, rx, ry in ((181, 64, 7, 5), (205, 91, 8, 6), (217, 61, 5, 4)):
+            pond = (((xx - px) / rx) ** 2 + ((yy - py) / ry) ** 2) <= 1.0
+            self.terrain_grid[pond] = 6
 
+        # Handcrafted landmark geometry is deliberately authored before trees.
+        self._build_hybrid_landmarks()
         self.trees = []
-        if chapter_num == 2:
-            tree_types = ['balete', 'mahogany', 'bamboo', 'dead', 'banana', 'palm', 'akasya', 'narra', 'tree_fern', 'strangler', 'supernatural']
-            weights    = [14,       14,         9,        8,      8,        8,     11,       9,         9,           8,           2]
-        else:
-            tree_types = ['balete', 'mahogany', 'bamboo', 'dead', 'akasya', 'narra', 'tree_fern', 'supernatural']
-            weights    = [18,       18,         14,       10,     14,       10,      13,          3]
-        count = TREE_COUNT_CH1 if chapter_num == 1 else TREE_COUNT_CH2
-
-        grid_step = max(2.2, math.sqrt((self.width * self.height) / max(1, count)))
-        for gy in range(2, self.height - 2, int(grid_step)):
-            for gx in range(2, self.width - 2, int(grid_step)):
-                if len(self.trees) >= count:
+        tree_types_by_terrain = {
+            0: (['balete', 'mahogany', 'bamboo', 'akasya', 'narra', 'tree_fern', 'strangler', 'dead'],
+                [18, 17, 13, 13, 12, 11, 9, 7]),
+            2: (['akasya', 'narra', 'banana', 'mahogany', 'bamboo'], [28, 24, 20, 18, 10]),
+            3: (['balete', 'tree_fern', 'bamboo', 'dead', 'strangler'], [28, 25, 20, 15, 12]),
+            4: (['balete', 'strangler', 'mahogany', 'supernatural', 'narra'], [38, 24, 17, 8, 13]),
+            5: (['dead', 'balete', 'mahogany', 'bamboo'], [35, 25, 25, 15]),
+        }
+        target_tree_count = (5200 if chapter_num == 1 else 6500)
+        step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
+        cell_step = max(2, int(step))
+        for gy in range(8, self.height - 8, cell_step):
+            if len(self.trees) >= target_tree_count:
+                break
+            for gx in range(8, self.width - 8, cell_step):
+                if len(self.trees) >= target_tree_count:
                     break
-                tx = gx + rng_map.uniform(0.1, grid_step - 0.1)
-                ty = gy + rng_map.uniform(0.1, grid_step - 0.1)
-                if math.hypot(tx - 4.5, ty - 4.5) < 6.0:
+                tx = gx + rng_map.uniform(0.25, cell_step - 0.25)
+                ty = gy + rng_map.uniform(0.25, cell_step - 0.25)
+                ix, iy = int(tx), int(ty)
+                terrain = int(self.terrain_grid[iy, ix])
+                if terrain in (1, 6) or self.grid[iy][ix] != EMPTY:
                     continue
-                if cs_x - 10 <= tx <= cs_x + 10 and cs_y - 10 <= ty <= cs_y + 10:
+                # Keep all important clearings and the spawn approach readable.
+                if math.hypot(tx - 15, ty - 128) < 10.0:
                     continue
-                if self.grid[int(ty)][int(tx)] == WATER:
+                if math.hypot(tx - 130, ty - 130) < 12.0:
                     continue
-
-                t_type = rng_map.choices(tree_types, weights=weights, k=1)[0]
-                layer_roll = rng_map.random()
-                if layer_roll < 0.45:
-                    scale = rng_map.uniform(1.2, 1.8)
-                elif layer_roll < 0.80:
-                    scale = rng_map.uniform(0.7, 1.1)
+                if math.hypot(tx - 72, ty - 78) < 7.0:
+                    continue
+                choices, weights = tree_types_by_terrain.get(terrain, tree_types_by_terrain[0])
+                t_type = rng_map.choices(choices, weights=weights, k=1)[0]
+                roll = rng_map.random()
+                if terrain == 4:
+                    scale = rng_map.uniform(1.35, 2.25) if roll < 0.72 else rng_map.uniform(0.8, 1.25)
+                elif terrain == 3:
+                    scale = rng_map.uniform(0.8, 1.7)
                 else:
-                    scale = rng_map.uniform(0.4, 0.7)
-
+                    scale = rng_map.uniform(0.75, 1.9) if roll < 0.82 else rng_map.uniform(0.45, 0.72)
                 trunk_fraction = 0.18 if t_type in ('bamboo', 'tree_fern', 'banana', 'palm') else 0.22
                 radius = max(0.18, scale * trunk_fraction + 0.08)
-                canopy_seed = rng_map.randint(0, 99999)
                 self.trees.append({
-                    'x': tx, 'y': ty, 'type': t_type,
-                    'scale': scale, 'tint': rng_map.randint(200, 255),
-                    'radius': radius,
-                    'canopy_seed': canopy_seed,
+                    'x': tx, 'y': ty, 'type': t_type, 'scale': scale,
+                    'tint': rng_map.randint(178, 255), 'radius': radius,
+                    'canopy_seed': rng_map.randint(0, 99999),
                     'lean': rng_map.uniform(-0.08, 0.08),
+                    'biome': {0: 'dense_forest', 2: 'village_edge', 3: 'swamp',
+                              4: 'ancient_grove', 5: 'limestone_ridge'}.get(terrain, 'dense_forest')
                 })
-        self.spatial_hash.clear()
-        for t in self.trees:
-            self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
 
+        # Natural understory is denser near the forest edge and biome borders,
+        # but never covers the main trail, shallow pools, buildings or spawn.
         self.undergrowth = []
         plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
-        p_count = UNDERGROWTH_DENSITY
-        while len(self.undergrowth) < p_count:
-            px = rng_map.uniform(2.0, float(self.width - 2))
-            py = rng_map.uniform(2.0, float(self.height - 2))
-            if math.hypot(px - 4.5, py - 4.5) < 3.0:
+        desired_plants = UNDERGROWTH_DENSITY
+        attempts = 0
+        while len(self.undergrowth) < desired_plants and attempts < desired_plants * 24:
+            attempts += 1
+            px = rng_map.uniform(7.0, self.width - 7.0)
+            py = rng_map.uniform(7.0, self.height - 7.0)
+            ix, iy = int(px), int(py)
+            if self.terrain_grid[iy, ix] in (1, 6) or self.grid[iy][ix] != EMPTY:
                 continue
-            if cs_x - 8 <= px <= cs_x + 8 and cs_y - 8 <= py <= cs_y + 8:
+            if math.hypot(px - 15, py - 128) < 7.0:
                 continue
-            if self.grid[int(py)][int(px)] == WATER:
+            if math.hypot(px - 130, py - 130) < 9.0:
                 continue
+            if self.spatial_hash.query(px, py, radius=0.5) if self.spatial_hash.cells else False:
+                continue
+            self.undergrowth.append({
+                'x': px, 'y': py, 'type': rng_map.choice(plant_types),
+                'scale': rng_map.uniform(0.55, 1.35),
+                'tint': rng_map.randint(165, 255)
+            })
 
-            near_trees = self.spatial_hash.query(px, py, radius=0.4)
-            if near_trees:
-                p_type = rng_map.choice(plant_types)
-                self.undergrowth.append({
-                    'x': px, 'y': py, 'type': p_type,
-                    'scale': rng_map.uniform(0.6, 1.3),
-                    'tint': rng_map.randint(180, 255)
-                })
-
-        # Dense forest tree-line boundary on ALL FOUR edges (invisible wall)
         self._spawn_edge_ring(rng_map)
-        # Keep the ring in self.trees so the renderer sees it and chunk
-        # rebuilds (update_world_chunks) preserve it.
         self.trees.extend(self._edge_ring)
         self.spatial_hash.clear()
-        for t in self.trees:
-            self.spatial_hash.insert(t, t['x'], t['y'], t['radius'])
+        for tree in self.trees:
+            self.spatial_hash.insert(tree, tree['x'], tree['y'], tree['radius'])
 
+        self.player_start = (15.5, 128.5)
+        self.player_start_angle = 0.0
+        self.landmarks = [
+            {'name': 'Survivor Camp', 'x': 15.5, 'y': 128.5, 'radius': 13},
+            {'name': 'Abandoned Village', 'x': 72.0, 'y': 78.0, 'radius': 25},
+            {'name': 'Ancient Balete Grove', 'x': 130.0, 'y': 130.0, 'radius': 30},
+            {'name': 'Sunken Swampland', 'x': 194.0, 'y': 76.0, 'radius': 34},
+            {'name': 'Limestone Cave', 'x': 69.0, 'y': 202.0, 'radius': 25},
+            {'name': 'Forgotten Shrine', 'x': 241.0, 'y': 128.0, 'radius': 18},
+        ]
         if chapter_num == 1:
-            self.player_start = (4.5, 4.5)
-            self.player_start_angle = 0.785
             self._place_chapter1_entities()
         else:
-            self.player_start = (4.5, 4.5)
-            self.player_start_angle = 0.785
             self._place_chapter2_entities()
 
         self._validate_and_fix_reachability()
+        self.world_engine.loaded_chunk_keys = set()
+
+    def _build_hybrid_landmarks(self):
+        """Place handcrafted village huts, cave entrance and central ancient ruins."""
+        def building(cx, cy, half_w, half_h, wall_tile, door_side='south'):
+            x0, x1 = int(cx - half_w), int(cx + half_w)
+            y0, y1 = int(cy - half_h), int(cy + half_h)
+            for x in range(x0, x1 + 1):
+                self.grid[y0][x] = wall_tile
+                self.grid[y1][x] = wall_tile
+            for y in range(y0, y1 + 1):
+                self.grid[y][x0] = wall_tile
+                self.grid[y][x1] = wall_tile
+            if door_side == 'south':
+                self.grid[y1][int(cx)] = DOOR
+            elif door_side == 'north':
+                self.grid[y0][int(cx)] = DOOR
+            elif door_side == 'east':
+                self.grid[int(cy)][x1] = DOOR
+            else:
+                self.grid[int(cy)][x0] = DOOR
+
+        # Three weathered village houses, each with a usable doorway.
+        building(65, 70, 4, 3, WALL_WOOD, 'south')
+        building(83, 70, 4, 3, WALL_WOOD, 'south')
+        building(75, 91, 4, 3, WALL_WOOD, 'north')
+
+        # A stone-ringed limestone cave mouth with a single openable entrance.
+        building(69, 202, 5, 4, WALL_STONE, 'east')
+
+        # Main ruin complex at the heart of the ancient grove.
+        building(130, 130, 8, 7, WALL_STONE, 'south')
+        # Broken outer ruin fragments create a larger landmark silhouette.
+        for x, y in ((116, 124), (144, 124), (116, 138), (144, 138)):
+            self.grid[y][x] = WALL_STONE
+            self.grid[y + 1][x] = WALL_STONE
+        self.checkpoints.append({'x': 130.5, 'y': 129.5})
+
+    def _place_chapter1_entities(self):
+        self.pickups = [
+            {'type': 'ammo_shotgun', 'x': 35.5, 'y': 121.5, 'amount': 6, 'active': True},
+            {'type': 'ammo_revolver', 'x': 60.5, 'y': 104.5, 'amount': 6, 'active': True},
+            {'type': 'health', 'x': 91.5, 'y': 91.5, 'amount': 25, 'active': True},
+            {'type': 'bible_page', 'x': 53.5, 'y': 100.5, 'amount': 1, 'active': True},
+            {'type': 'battery', 'x': 106.5, 'y': 111.5, 'amount': 30, 'active': True},
+            {'type': 'salt', 'x': 102.5, 'y': 169.5, 'amount': 3, 'active': True},
+            {'type': 'bible_page', 'x': 151.5, 'y': 151.5, 'amount': 1, 'active': True},
+            {'type': 'faith', 'x': 171.5, 'y': 105.5, 'amount': 20, 'active': True},
+            {'type': 'ammo_shotgun', 'x': 181.5, 'y': 112.5, 'amount': 4, 'active': True},
+            {'type': 'bible_page', 'x': 211.5, 'y': 101.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 223.5, 'y': 148.5, 'amount': 20, 'active': True},
+            {'type': 'garlic', 'x': 82.5, 'y': 188.5, 'amount': 2, 'active': True},
+            {'type': 'ammo_revolver', 'x': 117.5, 'y': 49.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 227.5, 'y': 190.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 42.5, 'y': 172.5, 'amount': 25, 'active': True},
+        ]
+        self.enemies = [
+            {'type': 'aswang', 'x': 48.5, 'y': 112.5},
+            {'type': 'multo', 'x': 103.5, 'y': 83.5},
+            {'type': 'aswang', 'x': 168.5, 'y': 145.5},
+            {'type': 'sigbin', 'x': 208.5, 'y': 86.5},
+            {'type': 'white_lady', 'x': 224.5, 'y': 178.5},
+        ]
+        self.exit_pos = (242.5, 128.5)
+
+    def _place_chapter2_entities(self):
+        self.pickups = [
+            {'type': 'ammo_shotgun', 'x': 36.5, 'y': 121.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 53.5, 'y': 100.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 91.5, 'y': 91.5, 'amount': 30, 'active': True},
+            {'type': 'garlic', 'x': 82.5, 'y': 188.5, 'amount': 3, 'active': True},
+            {'type': 'bible_page', 'x': 151.5, 'y': 151.5, 'amount': 1, 'active': True},
+            {'type': 'faith', 'x': 171.5, 'y': 105.5, 'amount': 25, 'active': True},
+            {'type': 'battery', 'x': 205.5, 'y': 108.5, 'amount': 40, 'active': True},
+            {'type': 'bible_page', 'x': 211.5, 'y': 101.5, 'amount': 1, 'active': True},
+            {'type': 'ammo_revolver', 'x': 183.5, 'y': 54.5, 'amount': 6, 'active': True},
+            {'type': 'bible_page', 'x': 227.5, 'y': 190.5, 'amount': 1, 'active': True},
+            {'type': 'health', 'x': 225.5, 'y': 149.5, 'amount': 25, 'active': True},
+        ]
+        self.enemies = [
+            {'type': 'aswang', 'x': 48.5, 'y': 112.5},
+            {'type': 'aswang', 'x': 103.5, 'y': 83.5},
+            {'type': 'manananggal', 'x': 166.5, 'y': 82.5},
+            {'type': 'multo', 'x': 116.5, 'y': 171.5},
+            {'type': 'sigbin', 'x': 210.5, 'y': 86.5},
+            {'type': 'tikbalang', 'x': 85.5, 'y': 205.5},
+            {'type': 'kapre', 'x': 220.5, 'y': 181.5},
+        ]
+        self.exit_pos = (242.5, 128.5)
 
     def _spawn_edge_ring(self, rng_map):
         """Dense full-perimeter tree line: the forest acts as an invisible wall.
@@ -682,10 +811,13 @@ class GameMap:
         return self.is_tree_solid(x, y, radius=radius)
 
     def is_water(self, x, y):
-        """Check if the given world position is on a water tile."""
+        """Check shallow water in either legacy tile maps or hybrid terrain."""
         ix, iy = int(x), int(y)
         if 0 <= ix < self.width and 0 <= iy < self.height:
-            return self.grid[iy][ix] == WATER
+            if self.grid[iy][ix] == WATER:
+                return True
+            terrain = getattr(self, 'terrain_grid', None)
+            return bool(terrain is not None and int(terrain[iy, ix]) == 6)
         return False
 
     def get_tile(self, x, y):
