@@ -21,6 +21,7 @@ from radar import Radar
 from audio_synth import audio_mgr
 from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
+from objective import next_objective, nearest_page, relative_bearing, direction_word
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
@@ -208,13 +209,53 @@ def draw_gameover(surf, font_lg, font_sm):
         surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + i * 40))
 
 
-def draw_win(surf, font_lg, font_sm, chapter):
+def draw_win(surf, font_lg, font_sm, chapter, final=False):
     surf.fill((5, 10, 5))
     sw, sh = surf.get_size()
+    if final:
+        # The last chapter is done: this is the real ending, not a "continue" prompt.
+        t = font_lg.render("THE END", True, SACRED_GOLD)
+        surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 70))
+        sub = font_sm.render("You escaped Anino sa Gubat.", True, WHITE)
+        surf.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 2 - 10))
+        lt = font_sm.render("ENTER  -  Main Menu", True, (200, 200, 200))
+        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 40))
+        return
     t = font_lg.render(f"CHAPTER {chapter} COMPLETE", True, SACRED_GOLD)
     surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 60))
     lt = font_sm.render("ENTER  -  Continue   M  -  Menu", True, WHITE)
     surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 30))
+
+
+def draw_objective(surf, player, game_map, font_tiny):
+    """Top-centre line telling the player what to do next, with an arrow pointing at it."""
+    needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
+    have = getattr(player, 'pages_this_chapter', 0)
+    obj = next_objective(player.x, player.y, game_map.pickups, game_map.exit_pos,
+                         have, needed, REQUIRE_PAGES_FOR_EXIT)
+    if obj is None:
+        return
+    if obj['kind'] == 'page':
+        text = f"FIND BIBLE PAGES {have}/{needed}  -  {int(obj['dist'])}m"
+    else:
+        text = f"REACH THE EXIT  -  {int(obj['dist'])}m"
+    label = font_tiny.render(text, True, SACRED_GOLD)
+    sw = surf.get_width()
+    lh = label.get_height()
+    total_w = label.get_width() + 22
+    x0 = sw // 2 - total_w // 2
+    y0 = 8 + font_tiny.get_height() + 6      # sits just below the notification line
+    bg = pygame.Surface((total_w + 8, lh + 6), pygame.SRCALPHA)
+    bg.fill((10, 10, 15, 170))
+    surf.blit(bg, (x0 - 4, y0 - 3))
+    # Arrow: up = straight ahead, rotating towards the right as the target moves right
+    rel = relative_bearing(player.x, player.y, player.angle, obj['x'], obj['y'])
+    acx, acy = x0 + 8, y0 + lh // 2
+    tip = (acx + math.sin(rel) * 7, acy - math.cos(rel) * 7)
+    lft = (acx + math.sin(rel + 2.5) * 6, acy - math.cos(rel + 2.5) * 6)
+    rgt = (acx + math.sin(rel - 2.5) * 6, acy - math.cos(rel - 2.5) * 6)
+    pygame.draw.polygon(surf, SACRED_GOLD, [tip, lft, rgt])
+    surf.blit(label, (x0 + 20, y0))
 
 
 # ─── Save / Load ─────────────────────────────────────────────────────────────
@@ -755,7 +796,12 @@ class Game:
             if pages_met or (ALLOW_ENEMY_CLEAR_EXIT and all_enemies_defeated):
                 cleared = True
             else:
-                self.notify(f"The way is sealed. Pages: {pages_have}/{pages_needed}", 2.0)
+                msg = f"The way is sealed. Pages: {pages_have}/{pages_needed}."
+                pg = nearest_page(p.x, p.y, self.game_map.pickups)
+                if pg is not None:
+                    where = direction_word(relative_bearing(p.x, p.y, p.angle, pg['x'], pg['y']))
+                    msg += f" Nearest page: {int(pg['dist'])}m {where}."
+                self.notify(msg, 2.0)
         elif all_enemies_defeated and not REQUIRE_PAGES_FOR_EXIT:
             cleared = True
 
@@ -782,6 +828,7 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            draw_objective(self.internal, self.player, self.game_map, self.font_tiny)
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
                             self.font_tiny, pygame.time.get_ticks())
 
@@ -808,7 +855,8 @@ class Game:
             draw_gameover(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_WIN:
-            draw_win(self.internal, self.font_lg, self.font_sm, self.chapter)
+            draw_win(self.internal, self.font_lg, self.font_sm, self.chapter,
+                     final=(self.chapter >= self.max_chapter()))
         
         # Jumpscare rendering (plays on top of scene during death sequence)
         try:

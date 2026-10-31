@@ -191,7 +191,7 @@ Debug keys (`F3`, `F4`, `F6`, `F7`) are listed under [Debug Tools](#debug-tools)
 - **Combat:** Use your bolo for silent close-quarters melee, the shotgun for powerful spread damage, or the revolver for precise ranged shots. Firearms are loud and draw enemies.
 - **Sacred Wards & Items:** Cast wards using Faith energy to repel, shield, banish or bind creatures. Scatter Salt or throw Garlic to create protective zones. Collect Bible pages for lore and strength.
 - **Pickups:** Walk over an item to collect it. Pickups glow softly so you can spot them in the dark. Types: Health, Shotgun Ammo, Revolver Ammo, Salt, Garlic, Flashlight Battery, Faith, Bible Page.
-- **Progression:** A chapter is completed when you **defeat every enemy** or **reach the exit** (within about 1.2 tiles of it). Health, ammo, items and wards carry over to the next chapter.
+- **Progression:** The exit (about 1.2 tiles to trigger) stays **sealed until you hold 3 Bible pages for the chapter** (`PAGES_REQUIRED_CH1` / `PAGES_REQUIRED_CH2` in `settings.py`); killing every enemy does **not** open it (`ALLOW_ENEMY_CLEAR_EXIT = False`). Each chapter has 4 pages spread along the forest, so one can be missed. The objective line at the top of the screen shows the nearest page (or the exit once you have enough) with an arrow and distance. Health, ammo, items and wards carry over to the next chapter. Clearing the last chapter shows the ending screen.
 - **Checkpoints:** Stand next to the checkpoint inside the cabin and press `E` to save your respawn point.
 
 ### Ward Reference
