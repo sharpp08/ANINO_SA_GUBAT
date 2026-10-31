@@ -677,18 +677,6 @@ def generate_all_textures():
 BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
 
 
-def _add_steel_edge(surf):
-    """The bolo blade is near-black art; add a steel-colored edge behind it so it
-    stays readable against the dark forest."""
-    glow = pygame.mask.from_surface(surf, 20).to_surface(
-        setcolor=(165, 175, 190, 255), unsetcolor=(0, 0, 0, 0))
-    out = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-    for gx, gy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-        out.blit(glow, (gx, gy))
-    out.blit(surf, (0, 0))
-    return out
-
-
 def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
     """Load assets/sprites/weapons/bolo/bolo_fpv.png as the bolo viewmodel.
 
@@ -716,7 +704,6 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         # Anchor bottom-right so the handle sits at the corner the hand grips
         ox, oy = size - new_w, size - new_h
         surf.blit(img, (ox, oy))
-        surf = _add_steel_edge(surf)
         # Handle end / grip positions measured on the 640px source art
         # (handle end ~ (585, 520), grip ~ (520, 480) inside the 40..600 x 85..555 bbox)
         def frac(sx, sy):
