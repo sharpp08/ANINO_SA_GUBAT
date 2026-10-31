@@ -349,7 +349,7 @@ class Renderer:
         self._particle_cache = {}
 
         # Debug overlay (F3)
-        self.show_debug = False
+        self.show_debug = True
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
         self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
