@@ -316,11 +316,7 @@ class GameMap:
         step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
         cell_step = 2 if chapter_num == 2 else max(2, int(step))
         for gy in range(8, self.height - 8, cell_step):
-            if len(self.trees) >= target_tree_count:
-                break
             for gx in range(8, self.width - 8, cell_step):
-                if len(self.trees) >= target_tree_count:
-                    break
                 tx = gx + rng_map.uniform(0.25, cell_step - 0.25)
                 ty = gy + rng_map.uniform(0.25, cell_step - 0.25)
                 ix, iy = int(tx), int(ty)
@@ -353,6 +349,11 @@ class GameMap:
                     'biome': {0: 'dense_forest', 2: 'village_edge', 3: 'swamp',
                               4: 'ancient_grove', 5: 'limestone_ridge'}.get(terrain, 'dense_forest')
                 })
+
+        # Sample across the complete map instead of stopping at the first
+        # N candidates; this prevents chapter-two trees clustering in the north.
+        if len(self.trees) > target_tree_count:
+            self.trees = rng_map.sample(self.trees, target_tree_count)
 
         # Index the generated trunks before placing understory so plants
         # cluster naturally around trees without occupying their collision discs.
