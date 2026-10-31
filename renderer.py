@@ -261,13 +261,19 @@ class Renderer:
 
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
+        # Tree billboards are generated lazily: only a species/variant that
+        # enters the camera view is built. Generated surfaces remain cached.
         self.tree_sprites = {}
-        for tname in ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm', 'supernatural', 'akasya', 'narra', 'tree_fern', 'strangler']:
-            self.tree_sprites[tname] = [generate_tree_billboard(tname, 64, 256, seed=42 + v * 333) for v in range(5)]
+        self._tree_sprite_types = (
+            'balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm',
+            'supernatural', 'akasya', 'narra', 'tree_fern', 'strangler'
+        )
+        self._tree_sprite_generator = generate_tree_billboard
+        self._tree_sprite_size = (64, 256)
         self._TREE_HEIGHT_MULT = {
-            'balete': 3.6, 'mahogany': 4.2, 'bamboo': 3.4, 'dead': 3.0,
-            'banana': 2.8, 'palm': 3.6, 'supernatural': 3.8,
-            'akasya': 3.9, 'narra': 4.0, 'tree_fern': 2.5, 'strangler': 3.7,
+            'balete': 4.5, 'mahogany': 5.25, 'bamboo': 4.25, 'dead': 3.75,
+            'banana': 3.5, 'palm': 4.5, 'supernatural': 4.75,
+            'akasya': 4.9, 'narra': 5.0, 'tree_fern': 3.1, 'strangler': 4.6,
         }
         self.undergrowth_sprites = {
             'fern': generate_undergrowth_sprite('fern', 32, 32),
@@ -1049,6 +1055,22 @@ class Renderer:
         img.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
         return img
 
+    def _get_tree_sprite(self, tree_type, variant_idx):
+        """Build and cache one tree variant only after it enters the POV."""
+        if tree_type not in self._tree_sprite_types:
+            tree_type = 'balete'
+        variant_idx = int(variant_idx) % 5
+        variants = self.tree_sprites.setdefault(tree_type, {})
+        sprite = variants.get(variant_idx)
+        if sprite is None:
+            width, height = self._tree_sprite_size
+            seed = 42 + variant_idx * 333
+            sprite = self._tree_sprite_generator(
+                tree_type, width, height, seed=seed
+            )
+            variants[variant_idx] = sprite
+        return sprite
+
     def _get_sprite_candidates(self, game_map, px, py, max_dist):
         """Query cached coarse buckets instead of scanning every forest object."""
         trees = getattr(game_map, 'trees', [])
@@ -1086,7 +1108,9 @@ class Renderer:
         """Collect nearby billboards, sort far -> near, and draw."""
         items = []
         stats = {'trees': 0, 'enemies_view': 0, 'pickups_view': 0, 'drawn': 0}
-        margin = self.half_fov + 0.5
+        # Only process objects whose billboard anchor is inside the camera
+        # frustum, with a narrow edge allowance to prevent visible pop-in.
+        margin = self.half_fov + 0.06
 
         def consider(kind, obj, x, y, max_dist):
             dx = x - player.x
@@ -1137,9 +1161,9 @@ class Renderer:
             floor_y = horizon + unit / 2.0          # where this distance meets the ground
 
             if kind == 'tree':
-                img_list = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
-                variant_idx = obj.get('canopy_seed', 0) % len(img_list)
-                img = img_list[variant_idx]
+                tree_type = obj.get('type', 'balete')
+                variant_idx = int(obj.get('canopy_seed', 0)) % 5
+                img = self._get_tree_sprite(tree_type, variant_idx)
                 height_mult = self._TREE_HEIGHT_MULT.get(obj.get('type'), 2.5)
                 sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
