@@ -1187,7 +1187,7 @@ class Renderer:
         for plant in plant_candidates:
             consider('plant', plant, plant['x'], plant['y'], MAX_DEPTH * 0.6)
         for enemy in enemies:
-            if not enemy.alive:
+            if not enemy.alive and getattr(enemy, 'death_timer', 0.0) <= 0:
                 continue
             if consider('enemy', enemy, enemy.x, enemy.y, MAX_DEPTH):
                 stats['enemies_view'] += 1
@@ -1332,6 +1332,10 @@ class Renderer:
         is_crawl = (anim_state in ('crawl', 'crouch', 'stalk'))
         is_atk = (anim_state in ('attack', 'lunge'))
         is_dead = (anim_state == 'death')
+        death_progress = 0.0
+        if is_dead:
+            duration = max(0.01, getattr(enemy, 'death_duration', 1.9))
+            death_progress = max(0.0, min(1.0, 1.0 - getattr(enemy, 'death_timer', 0.0) / duration))
         is_hov = (anim_state in ('hover', 'float')) or (float_mul > 0 and anim_state == 'idle')
         is_run = (anim_state in ('run', 'sprint'))
 
@@ -1380,6 +1384,39 @@ class Renderer:
         sh = unit * (0.28 if is_dead else (0.52 if is_crawl else 0.85)) * size_mul * breathe
         sw = sh * img.get_width() / img.get_height()
         bottom = floor_y - hover
+        death_rotation = 0.0
+        death_sink = 0.0
+        if is_dead:
+            # Each creature has its own final motion: collapse, fall, dissolve, or crumple.
+            variant = getattr(enemy, 'death_variant', 0.5)
+            if etype == 'aswang':       # drops to its knees, then folds forward
+                death_rotation, death_sink = -68.0 * min(1.0, death_progress * 1.4), unit * 0.12 * death_progress
+            elif etype == 'manananggal': # wings fold and the body sinks away
+                death_rotation, death_sink = 24.0 * death_progress, unit * 0.30 * death_progress
+                sh *= 1.0 - 0.30 * death_progress
+            elif etype == 'tikbalang':  # heavy sideways horse-like collapse
+                death_rotation, death_sink = 82.0 * death_progress, unit * 0.10 * death_progress
+            elif etype == 'kapre':      # topples backward, large body slumps
+                death_rotation, death_sink = -42.0 * death_progress, unit * 0.16 * death_progress
+                sh *= 1.0 - 0.12 * death_progress
+            elif etype == 'white_lady': # supernatural vertical fade
+                death_sink = unit * 0.34 * death_progress
+                sh *= 1.0 - 0.55 * death_progress
+            elif etype == 'multo':      # phases out in a shrinking spiral
+                death_rotation = 160.0 * death_progress
+                death_sink = unit * 0.22 * death_progress
+                sh *= 1.0 - 0.70 * death_progress
+            elif etype == 'sigbin':     # curls into a low heap
+                death_rotation = 95.0 * death_progress
+                death_sink = unit * 0.20 * death_progress
+                sh *= 1.0 - 0.42 * death_progress
+            sw = sh * img.get_width() / img.get_height()
+            bottom += death_sink
+            if death_progress > 0.45:
+                img = img.copy()
+                img.set_alpha(max(0, int(255 * (1.0 - (death_progress - 0.45) / 0.55 * (0.35 if etype not in ('white_lady','multo') else 1.0)))))
+            if abs(death_rotation) > 0.1:
+                img = pygame.transform.rotate(img, death_rotation)
 
         if enemy.hit_flash > 0 or enemy.bound or anim_state == 'stagger':
             img = img.copy()
