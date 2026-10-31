@@ -57,6 +57,7 @@ class JumpscareManager:
         self.enemy_type = 'aswang'
         self.theme = self.THEMES['aswang']
         self.scream_sound = None
+        self.multo_sound = None
         self.stinger_sound = None
         self._noise_frames = {}   # (w,h) -> [surface, ...]
         self._fx = None           # reusable fx surface
@@ -77,6 +78,7 @@ class JumpscareManager:
     def _load_assets(self):
         pack_dir = os.path.join(BASE_PATH, 'enemy_animations_pack')
         for name, attr in (('jumpscare_scream.wav', 'scream_sound'),
+                           ('multo_jumpscare.mp3', 'multo_sound'),
                            ('jumpscare_stinger.wav', 'stinger_sound')):
             path = os.path.join(pack_dir, name)
             if os.path.exists(path):
@@ -111,7 +113,12 @@ class JumpscareManager:
         proximity = max(0.0, min(1.0, 1.0 - distance / 10.0))
         self._proximity = proximity
 
-        self._play(self.scream_sound, 1.0)
+        # Multo uses the user's dedicated sound; all other enemies keep the
+        # existing shared scream. The multo sound is optional and fails safely.
+        if self.enemy_type == 'multo' and self.multo_sound is not None:
+            self._play(self.mult o_sound, 1.0)
+        else:
+            self._play(self.scream_sound, 1.0)
         self._play(self.stinger_sound, 0.9)
         try:
             from audio_synth import audio_mgr
