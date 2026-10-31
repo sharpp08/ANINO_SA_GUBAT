@@ -13,8 +13,8 @@
   "enable_audio_synth": true,
   "enable_sanity": true,
   "enable_intro": true,
-  "debug_overlay": false,
-  "quality_tier": "low",
+  "debug_overlay": true,
+  "quality_tier": "medium",
   "controls": {
     "forward": "w",
     "backward": "s",
