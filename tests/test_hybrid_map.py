@@ -70,8 +70,26 @@ def test_tree_border_and_collision_hash_survive():
     assert gm.clamp_position(-100, -100, 0.3) == (5.8, 5.8)
 
 
+
+def test_no_legacy_out_of_bounds_entities_or_validation_warnings():
+    for chapter in (1, 2):
+        gm = GameMap(chapter)
+        for kind, objects in (('enemy', gm.enemies), ('pickup', gm.pickups)):
+            for obj in objects:
+                assert 0.0 <= obj['x'] < gm.width, (chapter, kind, obj)
+                assert 0.0 <= obj['y'] < gm.height, (chapter, kind, obj)
+        assert 0.0 <= gm.exit_pos[0] < gm.width
+        assert 0.0 <= gm.exit_pos[1] < gm.height
+        assert not gm.validation_errors, (chapter, gm.validation_errors)
+        assert all(enemy['x'] < 256.0 for enemy in gm.enemies)
+        assert all(pickup['x'] < 256.0 for pickup in gm.pickups)
+
+
+
+
 if __name__ == '__main__':
-    tests = [test_hybrid_dimensions_and_landmarks, test_handcrafted_buildings_and_doorways,
+    tests = [test_hybrid_dimensions_and_landmarks, test_no_legacy_out_of_bounds_entities_or_validation_warnings,
+             test_handcrafted_buildings_and_doorways,
              test_hybrid_chunk_loader_does_not_erase_map, test_water_is_walkable_but_classified,
              test_tree_border_and_collision_hash_survive]
     for test in tests:
