@@ -806,6 +806,9 @@ class Game:
                 except Exception:
                     pass
         
+        # Convert defeated enemies into loot once; drops use the normal pickup system.
+        self.enemy_manager.update_drops(self.game_map)
+
         # Auto-collect pickups
         for pickup in self.game_map.get_nearby_pickups(p.x, p.y):
             if p.pickup_item(pickup):
