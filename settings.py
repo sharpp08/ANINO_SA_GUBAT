@@ -29,7 +29,6 @@ ENABLE_SANITY = True
 ENABLE_STEALTH_NOISE = True
 DEBUG_OVERLAY = False
 # Avoid full-frame CPU/GPU readback post-processing on integrated graphics.
-ENABLE_GPU_POSTPROCESS = False
 
 # Animation & Physics Toggles
 ENABLE_ANIMATIONS = True
