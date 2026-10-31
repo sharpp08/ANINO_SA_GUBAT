@@ -248,7 +248,11 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 ## Map & Tile System
 
-- **Grid Size:** 64 × 64 outdoor forest map.
+- **Grid Size:** 256 × 256 hybrid outdoor forest map (65,536 world cells).
+- **Hybrid Layout:** Hand-authored survivor camp, abandoned village (three enterable huts), ancient Balete grove and central ruins/checkpoint, limestone cave entrance, swamp basin, and forgotten shrine exit are connected by winding trails.
+- **Procedural Terrain:** Deterministic terrain regions use distinct ground tints for forest, dirt trails, village earth, swamp, ancient grove, limestone and shallow water. The renderer samples the terrain layer during floor projection, so the regions are visible without adding fake wall geometry.
+- **Forest Population:** Chapter 1 generates approximately 5,200 regular trees and Chapter 2 approximately 6,500, plus the dense perimeter tree ring and 1,300 undergrowth objects. Species and scale distributions vary by biome.
+- **World Generation:** A fixed world seed makes the map repeatable. The legacy chunk loader is intentionally bypassed for this bounded hybrid map so it cannot erase handcrafted POIs or reset their collision data.
 - **Tile Types:**
   - `EMPTY`: Walkable forest ground.
   - `WALL_STONE`: Outer boundary wall (edges at `0` and `63`).
