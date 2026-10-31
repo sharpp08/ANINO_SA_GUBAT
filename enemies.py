@@ -72,7 +72,8 @@ class Enemy:
         self.speed = stats['speed']
         self.attack_range = stats['attack_range']
         self.detect_range = stats['detect_range']
-        self.attack_cooldown_max = stats['attack_cooldown']
+        # Shorter recovery between attacks makes close-range pressure relentless.
+        self.attack_cooldown_max = stats['attack_cooldown'] * 0.75
         self.vulnerabilities = stats['vulnerabilities']
         self.resistances = stats['resistances']
 
