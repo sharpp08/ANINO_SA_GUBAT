@@ -1365,11 +1365,19 @@ class Renderer:
         # blade sweeps while the grip stays in the hand.
         bolo_grip = None
         if wname == 'bolo':
+            from asset_generator import BOLO_SWING_FRAMES
             swing_angle = 0.0
             swing_dx = swing_dy = 0.0
+            frame_data = None
+            pre_x, pre_y = final_x, final_y
             if self.bolo_swing_timer > 0:
-                prog = 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN
-                swing_angle, swing_dx, swing_dy = self._bolo_swing_pose(max(0.0, min(1.0, prog)))
+                prog = max(0.0, min(1.0, 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN))
+                if BOLO_SWING_FRAMES:
+                    # Play the animation sheet: one frame per slice of the cooldown
+                    fi = min(len(BOLO_SWING_FRAMES) - 1, int(prog * len(BOLO_SWING_FRAMES)))
+                    frame_data = BOLO_SWING_FRAMES[fi]
+                else:
+                    swing_angle, swing_dx, swing_dy = self._bolo_swing_pose(prog)
                 hk = self.h / 360.0   # pose offsets are authored for a 360px-tall view
                 swing_dx *= hk
                 swing_dy *= hk
@@ -1396,6 +1404,17 @@ class Renderer:
             # grip point rotates with the blade around the pivot
             g_x, g_y = _rot(grp_x - piv_x, grp_y - piv_y)
             bolo_grip = (int(pivot_x + g_x), int(pivot_y + g_y))
+            if frame_data is not None:
+                # Sheet frames already contain the motion, so draw the frame as-is
+                # (registered to the rest sprite) and put the hand on its handle.
+                f_surf, f_grip, f_dest = frame_data
+                kx = sw / sprite.get_width()
+                ky = sh / sprite.get_height()
+                draw_surf = pygame.transform.scale(
+                    f_surf, (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
+                final_x = pre_x + int(f_dest[0] * kx)
+                final_y = pre_y + int(f_dest[1] * ky)
+                bolo_grip = (int(pre_x + f_grip[0] * sw), int(pre_y + f_grip[1] * sh))
 
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)

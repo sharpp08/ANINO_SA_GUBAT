@@ -675,6 +675,67 @@ def generate_all_textures():
 # of the surface. The renderer pivots the swing on `pivot` and draws the hand at
 # `grip`. Defaults match the procedural bolo; the custom sprite overrides them.
 BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
+BOLO_GEOM = {}            # source-canvas -> viewmodel-surface mapping of bolo_fpv.png
+BOLO_SWING_FRAMES = []    # [(surface, grip_frac, (dest_x, dest_y)), ...] from the swing sheet
+
+
+def _add_steel_edge(surf):
+    """The bolo blade is near-black art; add a steel-colored edge behind it so it
+    stays readable against the dark forest."""
+    glow = pygame.mask.from_surface(surf, 20).to_surface(
+        setcolor=(165, 175, 190, 255), unsetcolor=(0, 0, 0, 0))
+    out = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+    for gx, gy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        out.blit(glow, (gx, gy))
+    out.blit(surf, (0, 0))
+    return out
+
+
+def _load_bolo_swing_frames(size=128):
+    """Load bolo_swing_sheet.png as the bolo attack animation.
+
+    The sheet is drawn on the same canvas as the original hero art (handle
+    top-left, blade down-right), so each frame is rotated 180 degrees to match
+    the right-handed bolo_fpv.png and then registered to the same viewmodel
+    surface. The grip point of each frame is the centroid of its brown handle
+    pixels, so the hand follows the handle. Returns [] if the sheet or the
+    viewmodel sprite is missing.
+    """
+    frames = []
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'bolo', 'bolo_swing_sheet.png')
+    try:
+        if not os.path.exists(path) or not BOLO_GEOM:
+            return frames
+        sheet = pygame.image.load(path).convert_alpha()
+        fs = sheet.get_height()                  # frames are square
+        count = sheet.get_width() // fs
+        s = BOLO_GEOM['k'] * BOLO_GEOM['canvas'] / fs   # surface px per frame px
+        target = max(1, int(round(fs * s)))
+        dest = (int(round(BOLO_GEOM['ox'] - BOLO_GEOM['bbox'].x * BOLO_GEOM['k'])),
+                int(round(BOLO_GEOM['oy'] - BOLO_GEOM['bbox'].y * BOLO_GEOM['k'])))
+        for i in range(count):
+            frame = sheet.subsurface((i * fs, 0, fs, fs)).copy()
+            frame = pygame.transform.rotate(frame, 180)
+            frame = pygame.transform.smoothscale(frame, (target, target))
+            # keep the frame at full size (no clipping to the 128px viewmodel
+            # surface); `dest` says where it sits relative to that surface
+            surf = _add_steel_edge(frame)
+            # grip = centroid of the brown handle pixels, as a fraction of the
+            # 128px viewmodel surface
+            sx = sy = n = 0
+            for y in range(target):
+                for x in range(target):
+                    r, g, b, a = surf.get_at((x, y))
+                    if a > 128 and r - b > 40 and 60 < r < 190 and g < 130 and b < 90:
+                        sx += x
+                        sy += y
+                        n += 1
+            grip = ((dest[0] + sx / n) / size, (dest[1] + sy / n) / size) if n \
+                else tuple(BOLO_ANCHORS['grip'])
+            frames.append((surf, grip, dest))
+    except Exception:
+        return []
+    return frames
 
 
 def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
@@ -691,6 +752,7 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         if not os.path.exists(path):
             return None
         img = pygame.image.load(path).convert_alpha()
+        path_canvas = img.get_width()
         bbox = img.get_bounding_rect()
         if bbox.width == 0 or bbox.height == 0:
             return None
@@ -703,13 +765,11 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
         # Anchor bottom-right so the handle sits at the corner the hand grips
         ox, oy = size - new_w, size - new_h
-        # The blade is near-black art; add a steel-colored edge behind it so it
-        # stays readable against the dark forest.
-        glow = pygame.mask.from_surface(img, 20).to_surface(
-            setcolor=(165, 175, 190, 255), unsetcolor=(0, 0, 0, 0))
-        for gx, gy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            surf.blit(glow, (ox + gx, oy + gy))
         surf.blit(img, (ox, oy))
+        surf = _add_steel_edge(surf)
+        # Remember how the 640px source canvas maps onto this surface so the
+        # swing frames (drawn on the same canvas) can be registered to it.
+        BOLO_GEOM.update({'canvas': path_canvas, 'bbox': bbox, 'k': k, 'ox': ox, 'oy': oy})
         # Handle end / grip positions measured on the 640px source art
         # (handle end ~ (585, 520), grip ~ (520, 480) inside the 40..600 x 85..555 bbox)
         def frac(sx, sy):
@@ -723,8 +783,10 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
 
 def generate_all_weapons():
     """Generate all weapon sprites."""
+    bolo = _load_custom_bolo_sprite(128)
+    BOLO_SWING_FRAMES[:] = _load_bolo_swing_frames(128) if bolo is not None else []
     return {
-        'bolo': _load_custom_bolo_sprite(128) or generate_weapon_sprite('bolo', 128, 128),
+        'bolo': bolo or generate_weapon_sprite('bolo', 128, 128),
         'shotgun': generate_weapon_sprite('shotgun', 128, 128),
         'revolver': generate_weapon_sprite('revolver', 128, 128),
     }
