@@ -935,6 +935,14 @@ class Game:
             elif self.state == STATE_PLAYING:
                 self.update_playing(dt, mouse_dx, mouse_dy)
 
+            # Forest ambience (wind, crickets, owl, rustling) only while actually playing
+            try:
+                audio_mgr.set_ambience_active(self.state == STATE_PLAYING)
+                if self.state == STATE_PLAYING:
+                    audio_mgr.update_ambience(dt)
+            except Exception:
+                pass
+
             self.render(dt)
 
         pygame.quit()
