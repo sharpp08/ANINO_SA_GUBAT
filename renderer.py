@@ -275,16 +275,13 @@ class Renderer:
             'banana': 3.5, 'palm': 4.5, 'supernatural': 4.75,
             'akasya': 4.9, 'narra': 5.0, 'tree_fern': 3.1, 'strangler': 4.6,
         }
-        self.undergrowth_sprites = {
-            'fern': generate_undergrowth_sprite('fern', 32, 32),
-            'mushroom': generate_undergrowth_sprite('mushroom', 32, 32),
-            'rock': generate_undergrowth_sprite('rock', 32, 32),
-            'bush': generate_undergrowth_sprite('bush', 32, 32),
-            'log': generate_undergrowth_sprite('log', 32, 32),
-            'stump': generate_undergrowth_sprite('stump', 32, 32),
-            'boulder': generate_undergrowth_sprite('boulder', 32, 32),
-            'sapling': generate_undergrowth_sprite('sapling', 32, 32),
-        }
+        # Understory billboards are also created only when first visible.
+        self.undergrowth_sprites = {}
+        self._undergrowth_sprite_types = (
+            'fern', 'mushroom', 'rock', 'bush',
+            'log', 'stump', 'boulder', 'sapling'
+        )
+        self._undergrowth_sprite_generator = generate_undergrowth_sprite
         self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
         self._ground_arr = pygame.surfarray.array3d(self.world_ground_tex)
         # Multipliers tint the shared procedural ground texture by map terrain.
@@ -1071,6 +1068,16 @@ class Renderer:
             variants[variant_idx] = sprite
         return sprite
 
+    def _get_undergrowth_sprite(self, plant_type):
+        """Build and cache a small plant/prop sprite only when it enters view."""
+        if plant_type not in self._undergrowth_sprite_types:
+            plant_type = 'bush'
+        sprite = self.undergrowth_sprites.get(plant_type)
+        if sprite is None:
+            sprite = self._undergrowth_sprite_generator(plant_type, 32, 32)
+            self.undergrowth_sprites[plant_type] = sprite
+        return sprite
+
     def _get_sprite_candidates(self, game_map, px, py, max_dist):
         """Query cached coarse buckets instead of scanning every forest object."""
         trees = getattr(game_map, 'trees', [])
@@ -1181,7 +1188,7 @@ class Renderer:
                 self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
 
             elif kind == 'plant':
-                img = self.undergrowth_sprites.get(obj.get('type'), self.undergrowth_sprites['bush'])
+                img = self._get_undergrowth_sprite(obj.get('type', 'bush'))
                 sh = unit * 0.35 * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
                 
