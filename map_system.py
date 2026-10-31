@@ -323,12 +323,15 @@ class GameMap:
                 terrain = int(self.terrain_grid[iy, ix])
                 if terrain in (1, 6) or self.grid[iy][ix] != EMPTY:
                     continue
-                # Keep all important clearings and the spawn approach readable.
-                if math.hypot(tx - 15, ty - 128) < 10.0:
-                    continue
-                if math.hypot(tx - 130, ty - 130) < 12.0:
-                    continue
-                if math.hypot(tx - 72, ty - 78) < 7.0:
+                # Keep the camp, village doors, cave mouth, grove entrance
+                # and shrine approach clear of trunk colliders.
+                clearings = (
+                    (15, 128, 10.0), (65, 70, 8.5), (83, 70, 8.5),
+                    (75, 91, 8.5), (69, 202, 8.5), (130, 130, 12.0),
+                    (241, 128, 9.0),
+                )
+                if any(math.hypot(tx - cx, ty - cy) < radius
+                       for cx, cy, radius in clearings):
                     continue
                 choices, weights = tree_types_by_terrain.get(terrain, tree_types_by_terrain[0])
                 t_type = rng_map.choices(choices, weights=weights, k=1)[0]
@@ -374,9 +377,13 @@ class GameMap:
             ix, iy = int(px), int(py)
             if self.terrain_grid[iy, ix] in (1, 6) or self.grid[iy][ix] != EMPTY:
                 continue
-            if math.hypot(px - 15, py - 128) < 7.0:
-                continue
-            if math.hypot(px - 130, py - 130) < 9.0:
+            plant_clearings = (
+                (15, 128, 7.0), (65, 70, 5.0), (83, 70, 5.0),
+                (75, 91, 5.0), (69, 202, 5.0), (130, 130, 9.0),
+                (241, 128, 6.0),
+            )
+            if any(math.hypot(px - cx, py - cy) < radius
+                   for cx, cy, radius in plant_clearings):
                 continue
             if not self.spatial_hash.query(px, py, radius=0.5):
                 continue
