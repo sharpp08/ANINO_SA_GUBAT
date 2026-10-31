@@ -142,9 +142,11 @@ class JumpscareManager:
                     ch.play(custom)
                 else:
                     custom.play()
+                print(f"[Jumpscare] playing custom {self.enemy_type} audio ({custom.get_length():.1f}s)")
             except Exception as e:
                 print(f"[Jumpscare] Could not play {self.enemy_type} audio: {e}")
         else:
+            print(f"[Jumpscare] no custom audio for '{self.enemy_type}', using generic scream")
             self._play(self.scream_sound, 1.0)
             self._play(self.stinger_sound, 0.9)
             try:
