@@ -473,8 +473,6 @@ class EnemyManager:
             if enemy.alive or enemy.death_drop_created:
                 continue
             enemy.death_drop_created = True
-            if random.random() > 0.82:
-                continue
             choices = drop_tables.get(enemy.type, [('health', 0.4, 10), ('ammo_revolver', 0.6, 3)])
             total = sum(item[1] for item in choices)
             roll = random.random() * total
