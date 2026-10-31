@@ -304,6 +304,7 @@ class Renderer:
         self.muzzle_flash = 0
         self.bolo_swing_timer = 0.0   # >0 while the bolo slash is playing
         self.shotgun_fire_timer = 0.0  # >0 while the shotgun fire animation is playing
+        self.revolver_fire_timer = 0.0
 
         # Screen effects
         self.screen_shake = 0
@@ -1442,6 +1443,16 @@ class Renderer:
             reload_offset = int(math.sin(player.reload_timer * 4) * 35)
             reload_rot = -10
 
+        # Revolver: crisp backward kick, muzzle lift, and quick return.
+        revolver_kick_x = revolver_kick_y = revolver_tilt = 0
+        if wname == 'revolver' and self.revolver_fire_timer > 0:
+            fire_p = max(0.0, min(1.0, self.revolver_fire_timer / 0.16))
+            kick = math.sin(fire_p * math.pi) ** 0.7
+            revolver_kick_x = int(12 * kick)
+            revolver_kick_y = int(25 * kick)
+            revolver_tilt = -7.0 * kick
+            self.revolver_fire_timer = max(0.0, self.revolver_fire_timer - dt)
+
         # Damage / Death
         if not player.alive:
             reload_offset += 80
@@ -1449,11 +1460,18 @@ class Renderer:
         elif player.damage_flash > 0:
             recoil_y += 10
 
-        final_x = base_x + bob_x + sprint_off_x
-        final_y = base_y + bob_y + recoil_y + reload_offset
+        final_x = base_x + bob_x + sprint_off_x - revolver_kick_x
+        final_y = base_y + bob_y + recoil_y + reload_offset + revolver_kick_y
+
+        # Revolver reload: lower and cant the gun as the cylinder is serviced.
+        if wname == 'revolver' and player.reloading:
+            reload_p = max(0.0, min(1.0, 1.0 - player.reload_timer / max(0.01, RELOAD_TIME)))
+            reload_wave = math.sin(reload_p * math.pi)
+            final_y += int(22 * reload_wave)
+            reload_rot -= 18.0 * reload_wave
 
         # Rotate viewmodel if sprinting, reloading, or dying
-        total_rot = sprint_tilt + reload_rot
+        total_rot = sprint_tilt + reload_rot + revolver_tilt
         if total_rot != 0:
             draw_surf = pygame.transform.rotate(scaled, total_rot)
         else:
@@ -1595,6 +1613,10 @@ class Renderer:
             self.surface.blit(flash, (0, 0))
 
     def trigger_muzzle_flash(self):
+        self.muzzle_flash = 1.0
+        self.weapon_recoil = 1.0
+        # Short, sharp revolver kick; animation is applied only while equipped.
+        self.revolver_fire_timer = 0.16
         self.muzzle_flash = 1.0
         self.weapon_recoil = 1.0
 
