@@ -538,9 +538,11 @@ class EnemyManager:
     def check_attacks(self, player_x, player_y):
         """Check if any enemy attacks the player. Returns total damage."""
         total_damage = 0
+        self.last_attackers = []
         for enemy in self.enemies:
             if enemy.can_attack(player_x, player_y):
                 total_damage += enemy.perform_attack()
+                self.last_attackers.append(enemy)
         return total_damage
 
     def apply_weapon_hit(self, player_x, player_y, player_angle, weapon_info):

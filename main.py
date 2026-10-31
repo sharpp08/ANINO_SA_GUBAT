@@ -769,17 +769,20 @@ class Game:
         attackers = self.enemy_manager.last_attackers
 
         for enemy in attackers:
-            enemy_audio_mgr.play_spatial(
-                enemy.type,
-                'attack',
-                p.x,
-                p.y,
-                p.angle,
-                enemy.x,
-                enemy.y,
-                base_volume=1.0,
-                max_dist=20.0,
-            )
+            try:
+                enemy_audio_mgr.play_spatial(
+                    enemy.type,
+                    'attack',
+                    p.x,
+                    p.y,
+                    p.angle,
+                    enemy.x,
+                    enemy.y,
+                    base_volume=1.0,
+                    max_dist=20.0,
+                )
+            except Exception as e:
+                print(f"[Audio] attack sound failed for {enemy.type}: {e}")
 
         if dmg > 0:
             p.take_damage(dmg)
@@ -804,7 +807,9 @@ class Game:
                         p.stunned = True
                         p.stun_timer = stun_duration
                 except Exception:
-                    pass
+                    import traceback
+                    print("[Jumpscare] trigger failed:")
+                    traceback.print_exc()
         
         # Convert defeated enemies into loot once; drops use the normal pickup system.
         self.enemy_manager.update_drops(self.game_map)
