@@ -871,7 +871,8 @@ class Game:
         # Only during gameplay, and the result is copied back into the SAME surface:
         # the renderer and cinematic hold a reference to self.internal, so it must
         # never be rebound to a new Surface object.
-        if (self.state in (STATE_PLAYING, STATE_PAUSED)
+        if (ENABLE_GPU_POSTPROCESS
+                and self.state in (STATE_PLAYING, STATE_PAUSED)
                 and hasattr(self.renderer, 'shader_renderer')
                 and self.renderer.shader_renderer.enabled):
             time_sec = pygame.time.get_ticks() / 1000.0
