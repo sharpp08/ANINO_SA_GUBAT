@@ -678,6 +678,11 @@ BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
 # Hand positions on the custom shotgun viewmodel, as fractions of its 128px surface.
 # Empty until the custom sprite loads (the renderer then uses its default hand spots).
 SHOTGUN_ANCHORS = {}
+SHOTGUN_GEOM = {}         # source-canvas -> viewmodel-surface mapping of the shotgun art
+# [(surface, (dest_x, dest_y), right_hand_frac, left_hand_frac), ...] from the pump sheet
+SHOTGUN_FIRE_FRAMES = []
+# Share of the shotgun cooldown each fire frame (sheet frames 1..5) stays on screen
+SHOTGUN_FIRE_WEIGHTS = (0.12, 0.18, 0.24, 0.24, 0.22)
 
 
 def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
@@ -752,17 +757,74 @@ def _load_custom_shotgun_sprite(size=128) -> Optional[pygame.Surface]:
             return ((ox + (sx - bbox.x) * k) / size, (oy + (sy - bbox.y) * k) / size)
         SHOTGUN_ANCHORS['right'] = frac(425, 365)
         SHOTGUN_ANCHORS['left'] = frac(300, 320)
+        SHOTGUN_GEOM.update({'canvas': img.get_width(), 'bbox': bbox, 'k': k, 'ox': ox, 'oy': oy})
         return surf
     except Exception:
         return None
 
 
+def _stock_centroid(surf):
+    """Centroid (x, y) in pixels of the brown stock pixels, or None."""
+    sx = sy = n = 0
+    w, h = surf.get_size()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = surf.get_at((x, y))
+            if a > 128 and r - b > 40 and 60 < r < 190 and g < 130 and b < 90:
+                sx += x
+                sy += y
+                n += 1
+    return (sx / n, sy / n) if n else None
+
+
+def _load_shotgun_fire_frames(size=128):
+    """Load shotgun_pump_sheet.png as the shotgun fire animation.
+
+    The sheet is drawn on the same canvas as shotgun_hero.png: frame 0 is the rest
+    pose, frame 1 the muzzle flash with the gun kicked up, frames 2-5 the recoil
+    settling back. Each frame is rotated 180 degrees (like the hero art) and
+    registered to the viewmodel surface at full size, so nothing is clipped. The
+    hands follow the stock: each frame's hand spots are the rest anchors shifted
+    by how far that frame's stock moved. Returns [] if anything is missing.
+    """
+    frames = []
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'shotgun', 'shotgun_pump_sheet.png')
+    try:
+        if not os.path.exists(path) or not SHOTGUN_GEOM or not SHOTGUN_ANCHORS:
+            return frames
+        sheet = pygame.image.load(path).convert_alpha()
+        fs = sheet.get_height()                      # frames are square
+        count = sheet.get_width() // fs
+        g = SHOTGUN_GEOM
+        s = g['k'] * g['canvas'] / fs                # surface px per frame px
+        target = max(1, int(round(fs * s)))
+        dest = (int(round(g['ox'] - g['bbox'].x * g['k'])),
+                int(round(g['oy'] - g['bbox'].y * g['k'])))
+        scaled = []
+        for i in range(count):
+            f = sheet.subsurface((i * fs, 0, fs, fs)).copy()
+            f = pygame.transform.rotate(f, 180)
+            scaled.append(pygame.transform.smoothscale(f, (target, target)))
+        rest_c = _stock_centroid(scaled[0])
+        for surf in scaled[1:]:
+            c = _stock_centroid(surf)
+            sx, sy = ((c[0] - rest_c[0]) / size, (c[1] - rest_c[1]) / size) if (c and rest_c) else (0.0, 0.0)
+            right = (SHOTGUN_ANCHORS['right'][0] + sx, SHOTGUN_ANCHORS['right'][1] + sy)
+            left = (SHOTGUN_ANCHORS['left'][0] + sx, SHOTGUN_ANCHORS['left'][1] + sy)
+            frames.append((surf, dest, right, left))
+    except Exception:
+        return []
+    return frames
+
+
 def generate_all_weapons():
     """Generate all weapon sprites."""
     bolo = _load_custom_bolo_sprite(128)
+    shotgun = _load_custom_shotgun_sprite(128)
+    SHOTGUN_FIRE_FRAMES[:] = _load_shotgun_fire_frames(128) if shotgun is not None else []
     return {
         'bolo': bolo or generate_weapon_sprite('bolo', 128, 128),
-        'shotgun': _load_custom_shotgun_sprite(128) or generate_weapon_sprite('shotgun', 128, 128),
+        'shotgun': shotgun or generate_weapon_sprite('shotgun', 128, 128),
         'revolver': generate_weapon_sprite('revolver', 128, 128),
     }
 

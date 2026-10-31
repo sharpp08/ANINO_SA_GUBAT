@@ -280,6 +280,7 @@ class Renderer:
         self.weapon_recoil = 0
         self.muzzle_flash = 0
         self.bolo_swing_timer = 0.0   # >0 while the bolo slash is playing
+        self.shotgun_fire_timer = 0.0  # >0 while the shotgun fire animation is playing
 
         # Screen effects
         self.screen_shake = 0
@@ -1409,6 +1410,31 @@ class Renderer:
                 self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
             draw_surf, final_x, final_y, bolo_grip = place(*swing_pose)
 
+        # Shotgun: play the pump sheet (flash, kick, settle) while firing
+        shotgun_hands = None
+        if custom_shotgun and self.shotgun_fire_timer > 0:
+            from asset_generator import SHOTGUN_FIRE_FRAMES, SHOTGUN_FIRE_WEIGHTS
+            if SHOTGUN_FIRE_FRAMES:
+                prog = max(0.0, min(1.0, 1.0 - self.shotgun_fire_timer / SHOTGUN_COOLDOWN))
+                idx, acc = len(SHOTGUN_FIRE_FRAMES) - 1, 0.0
+                for i, wgt in enumerate(SHOTGUN_FIRE_WEIGHTS[:len(SHOTGUN_FIRE_FRAMES)]):
+                    acc += wgt
+                    if prog < acc / sum(SHOTGUN_FIRE_WEIGHTS[:len(SHOTGUN_FIRE_FRAMES)]):
+                        idx = i
+                        break
+                f_surf, f_dest, f_right, f_left = SHOTGUN_FIRE_FRAMES[idx]
+                kx = sw / sprite.get_width()
+                ky = sh / sprite.get_height()
+                draw_surf = pygame.transform.scale(
+                    f_surf, (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
+                base_x, base_y = final_x, final_y
+                final_x = base_x + int(f_dest[0] * kx)
+                final_y = base_y + int(f_dest[1] * ky)
+                shotgun_hands = (
+                    (int(base_x + f_right[0] * sw), int(base_y + f_right[1] * sh)),
+                    (int(base_x + f_left[0] * sw), int(base_y + f_left[1] * sh)))
+            self.shotgun_fire_timer = max(0.0, self.shotgun_fire_timer - dt)
+
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)
         sleeve_color = (45, 52, 62)
@@ -1441,10 +1467,13 @@ class Renderer:
             pygame.draw.circle(self.surface, glove_color, (bolo_grip[0] - 3, bolo_grip[1] + 3), 6)
         elif player.alive and custom_shotgun:
             # Hands sit on the custom shotgun art: right on the receiver, left on the pump
-            rx = int(final_x + SHOTGUN_ANCHORS['right'][0] * sw)
-            ry = int(final_y + SHOTGUN_ANCHORS['right'][1] * sh)
-            lx = int(final_x + SHOTGUN_ANCHORS['left'][0] * sw)
-            ly = int(final_y + SHOTGUN_ANCHORS['left'][1] * sh)
+            if shotgun_hands is not None:
+                (rx, ry), (lx, ly) = shotgun_hands
+            else:
+                rx = int(final_x + SHOTGUN_ANCHORS['right'][0] * sw)
+                ry = int(final_y + SHOTGUN_ANCHORS['right'][1] * sh)
+                lx = int(final_x + SHOTGUN_ANCHORS['left'][0] * sw)
+                ly = int(final_y + SHOTGUN_ANCHORS['left'][1] * sh)
             pygame.draw.circle(self.surface, skin_color, (rx, ry), 9)
             pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
             pygame.draw.circle(self.surface, skin_color, (lx, ly), 8)
@@ -1473,6 +1502,10 @@ class Renderer:
     def trigger_muzzle_flash(self):
         self.muzzle_flash = 1.0
         self.weapon_recoil = 1.0
+
+    def trigger_shotgun_fire(self):
+        """Start the shotgun fire animation (lasts as long as the shotgun cooldown)."""
+        self.shotgun_fire_timer = SHOTGUN_COOLDOWN
 
     def trigger_bolo_swing(self):
         """Start the bolo slash animation (lasts as long as the bolo cooldown)."""
