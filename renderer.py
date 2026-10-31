@@ -1443,7 +1443,13 @@ class Renderer:
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
         # Revolver: use the pre-rotated forward-facing sprite (muzzle up)
         sprite = self._revolver_forward if (wname == 'revolver' and self._revolver_forward is not None) else self.weapon_sprites.get(wname)
-        scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
+        if wname == 'revolver':
+            # Keep the revolver fully readable at every internal resolution.
+            # Its rotated muzzle sits near the top; the grip extends toward the
+            # bottom of the screen like a proper first-person held weapon.
+            scale = self.h * 0.89 / sprite.get_height()
+        else:
+            scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
         scaled = pygame.transform.scale(sprite, (sw, sh))
@@ -1454,8 +1460,10 @@ class Renderer:
         # Forward-facing revolver: nudge it toward screen center so the muzzle
         # aims up toward the crosshair instead of hanging at the right edge.
         if wname == 'revolver':
-            base_x = self.w // 2 - sw // 2 + 30
-            base_y = self.h - sh + 10
+            # The rotated sprite's barrel axis is at roughly 57% of its width.
+            # Align that axis with the crosshair and keep the muzzle on-screen.
+            base_x = self.w // 2 - int(sw * 0.57)
+            base_y = self.h - sh + int(self.h * 0.26)
 
         # Animation calculations
         t_ticks = pygame.time.get_ticks()
@@ -1642,6 +1650,14 @@ class Renderer:
             pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
             pygame.draw.circle(self.surface, skin_color, (lx, ly), 8)
             pygame.draw.circle(self.surface, glove_color, (lx - 3, ly + 3), 5)
+        elif player.alive and wname == 'revolver':
+            # The rotated revolver's wooden grip is on the lower-left of the
+            # viewmodel; anchor the hand there instead of floating at sprite center.
+            grip_x = int(final_x + sw * 0.19)
+            grip_y = int(final_y + sh * 0.72)
+            pygame.draw.circle(self.surface, skin_color, (grip_x, grip_y), 10)
+            pygame.draw.circle(self.surface, glove_color, (grip_x - 3, grip_y + 3), 7)
+            pygame.draw.circle(self.surface, skin_color, (grip_x + 5, grip_y - 5), 5)
         elif player.alive:
             # Right hand knuckles / fingers on grip
             pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)
@@ -1650,8 +1666,6 @@ class Renderer:
             if wname == 'shotgun':
                 pygame.draw.circle(self.surface, skin_color, (int(lh_x + 10), int(lh_y + 20)), 7)
                 pygame.draw.circle(self.surface, glove_color, (int(lh_x + 8), int(lh_y + 22)), 5)
-            elif wname == 'revolver':
-                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 20), int(lh_y + 25)), 6)
 
     def _draw_muzzle_flash(self):
         """Draw muzzle flash effect."""
