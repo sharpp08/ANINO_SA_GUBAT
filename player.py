@@ -150,38 +150,27 @@ class Player:
             move_x = move_x / mag * speed * dt
             move_y = move_y / mag * speed * dt
 
-        # Collision detection — separate-axis swept circle with pushout.
-        #
-        # The old code probed only two points (±pad) on each axis.  Once the
-        # player overlapped a tree (easy to do because SpatialHash.query was
-        # buggy) both points hit the tree and the player froze permanently.
-        #
-        # The new approach:
-        #  1. Try the full move; if the target is in open space, take it.
-        #  2. Otherwise try X-only then Y-only (axis separation) so the player
-        #     slides along walls and trunks.
-        #  3. After any accepted move, run resolve_circle_collision() which
-        #     pushes the player circle out of any overlapping tree trunk along
-        #     the radial normal.  This means only the blocked (normal)
-        #     component is cancelled — the tangential component survives and
-        #     the player slides naturally around the trunk.
-        #  4. A small margin (0.02) keeps the player from jittering against the
-        #     trunk while still feeling the obstacle.
-        new_x = self.x + move_x
-        new_y = self.y + move_y
+        # Swept circle movement against tile walls and tree trunks.
+        # Substeps prevent tunnelling at high frame times; axis-separated
+        # tests preserve smooth sliding along both walls and trees.
         pad = PLAYER_SIZE
+        travel = math.hypot(move_x, move_y)
+        max_step = max(0.05, pad * 0.5)
+        steps = max(1, int(math.ceil(travel / max_step)))
+        step_x = move_x / steps
+        step_y = move_y / steps
 
-        if not game_map.is_solid(new_x, self.y, doors_block=True):
-            self.x = new_x
-        else:
-            # X blocked — try resolve so we can still slide if partially open
-            pass
-        if not game_map.is_solid(self.x, new_y, doors_block=True):
-            self.y = new_y
+        for _ in range(steps):
+            candidate_x = self.x + step_x
+            if not game_map.is_circle_solid(candidate_x, self.y, pad, doors_block=True):
+                self.x = candidate_x
 
-        # Circle-vs-tree pushout: correct any trunk overlap so the player is
-        # never left embedded inside a collider.  This is what lets the player
-        # slide around trunks instead of getting stuck.
+            candidate_y = self.y + step_y
+            if not game_map.is_circle_solid(self.x, candidate_y, pad, doors_block=True):
+                self.y = candidate_y
+
+        # Final trunk push-out protects against numerical overlap while the
+        # tile-AABB test above prevents the player clipping through wall edges.
         self.x, self.y = game_map.resolve_circle_collision(self.x, self.y, pad)
 
         # Invisible wall: the dense perimeter tree-line normally blocks
