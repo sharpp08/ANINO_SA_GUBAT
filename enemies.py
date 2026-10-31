@@ -614,6 +614,7 @@ class EnemyManager:
         w_damage = weapon_info['damage']
         w_spread = weapon_info.get('spread', 0)
         pellets = weapon_info.get('pellets', 1)
+        revolver_candidates = []
 
         for enemy in self.enemies:
             if not enemy.alive:
@@ -648,10 +649,20 @@ class EnemyManager:
                         enemy.take_damage(total_dmg, 'physical')
                         hits.append(enemy)
             elif w_type == 'revolver':
-                if abs(angle_diff) < 0.15:
-                    falloff = max(0.5, 1.0 - dist / w_range * 0.3)
-                    enemy.take_damage(w_damage * falloff, 'physical')
-                    hits.append(enemy)
+                # Revolver is a single-target hitscan: use the enemy's apparent
+                # angular size instead of a fixed cone, then damage only the
+                # closest valid target. This keeps distant shots precise while
+                # making close-range hits register consistently.
+                target_angle = math.atan2(max(0.12, enemy.size), max(0.1, dist))
+                if abs(angle_diff) <= target_angle:
+                    revolver_candidates.append((dist, enemy))
+
+        if w_type == 'revolver' and revolver_candidates:
+            _, target = min(revolver_candidates, key=lambda item: item[0])
+            dist = target.distance_to(player_x, player_y)
+            falloff = max(0.5, 1.0 - dist / w_range * 0.3)
+            target.take_damage(w_damage * falloff, 'physical')
+            hits.append(target)
 
         return hits
 
