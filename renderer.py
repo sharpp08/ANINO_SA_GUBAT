@@ -202,6 +202,7 @@ class Renderer:
         self.h = INTERNAL_HEIGHT
         self.textures = textures
         self._wall_col_cache = {}
+        self._wall_col_lit_cache = {}  # quantised scale+light buckets (bounded)
         for _tex in self.textures.values():  # pre-slice wall columns once at startup
             self._wall_columns(_tex)
         self.weapon_sprites = weapon_sprites
@@ -255,30 +256,37 @@ class Renderer:
         self._sprite_bucket_cache_key = None
         self._tree_buckets = {}
         self._plant_buckets = {}
+        self._sprite_lit_cache = {}  # bounded cache of scaled+lit billboards
 
         # Z-buffer for sprite occlusion (one entry per ray)
         self.z_buffer = [0.0] * self.num_rays
 
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
-        self.tree_sprites = {}
-        for tname in ['balete', 'bamboo', 'mahogany', 'dead', 'banana', 'palm', 'supernatural', 'akasya', 'narra', 'tree_fern', 'strangler']:
-            self.tree_sprites[tname] = [generate_tree_billboard(tname, 64, 256, seed=42 + v * 333) for v in range(5)]
+        # ── Procedural visual streaming ──────────────────────────────────
+        # Tree billboards and undergrowth sprites are generated LAZILY:
+        # a (species, variant) is only generated the first time that
+        # species+variant enters the camera's visible region.  Generation
+        # is fully seeded (deterministic), so evicted assets regenerate
+        # pixel-identical when the player looks at that area again.
+        # A small "active" set is kept so recently-seen variants do not
+        # regenerate; when it overflows the least-recently-used variants
+        # are dropped (bounded memory, no per-frame regeneration).
+        self._generate_tree_billboard = generate_tree_billboard
+        self._generate_undergrowth_sprite = generate_undergrowth_sprite
+        self._tree_sprite_cache = {}   # (type, variant) -> surface  (bounded LRU)
+        self._undergrowth_cache = {}  # type -> surface            (bounded LRU)
+        self._TREE_SPRITE_VARIANTS = 5
+        self._TREE_CACHE_LIMIT = 24   # ~24 billboards * 64x256 RGBA
+        self._UNDERGROWTH_CACHE_LIMIT = 8
         self._TREE_HEIGHT_MULT = {
-            'balete': 3.6, 'mahogany': 4.2, 'bamboo': 3.4, 'dead': 3.0,
-            'banana': 2.8, 'palm': 3.6, 'supernatural': 3.8,
-            'akasya': 3.9, 'narra': 4.0, 'tree_fern': 2.5, 'strangler': 3.7,
+            'balete': 4.5, 'mahogany': 5.25, 'bamboo': 4.25, 'dead': 3.75,
+            'banana': 3.5, 'palm': 4.5, 'supernatural': 4.75,
+            'akasya': 4.875, 'narra': 5.0, 'tree_fern': 3.125, 'strangler': 4.625,
         }
-        self.undergrowth_sprites = {
-            'fern': generate_undergrowth_sprite('fern', 32, 32),
-            'mushroom': generate_undergrowth_sprite('mushroom', 32, 32),
-            'rock': generate_undergrowth_sprite('rock', 32, 32),
-            'bush': generate_undergrowth_sprite('bush', 32, 32),
-            'log': generate_undergrowth_sprite('log', 32, 32),
-            'stump': generate_undergrowth_sprite('stump', 32, 32),
-            'boulder': generate_undergrowth_sprite('boulder', 32, 32),
-            'sapling': generate_undergrowth_sprite('sapling', 32, 32),
-        }
+        # 25% taller than the original set: balete 3.6, mahogany 4.2, bamboo 3.4,
+        # dead 3.0, banana 2.8, palm 3.6, supernatural 3.8, akasya 3.9,
+        # narra 4.0, tree_fern 2.5, strangler 3.7.
         self.world_ground_tex = generate_world_ground_texture(GROUND_TEX_SIZE, GROUND_TEX_SIZE)
         self._ground_arr = pygame.surfarray.array3d(self.world_ground_tex)
         # Multipliers tint the shared procedural ground texture by map terrain.
@@ -384,10 +392,9 @@ class Renderer:
                 all_assets.append((f"enemy_{etype}_{st}", spr))
         for ptype, spr in self.pickup_sprites.items():
             all_assets.append((f"pickup_{ptype}", spr))
-        for ttype, spr_list in self.tree_sprites.items():
-            for idx, spr in enumerate(spr_list):
-                all_assets.append((f"tree_{ttype}_{idx}", spr))
-        for utype, spr in self.undergrowth_sprites.items():
+        for key, spr in self._tree_sprite_cache.items():
+            all_assets.append((f"tree_{key[0]}_{key[1]}", spr))
+        for utype, spr in self._undergrowth_cache.items():
             all_assets.append((f"undergrowth_{utype}", spr))
 
         for name, surf in all_assets:
@@ -874,16 +881,26 @@ class Renderer:
             if tex:
                 cols = self._wall_columns(tex)
                 tex_x = int(hit_x_frac * len(cols)) % len(cols)
-                # Scale the pre-sliced column, then shade it with a multiply-fill
-                # (distance fog + darker side faces) instead of allocating overlays.
-                shaded = pygame.transform.scale(cols[tex_x], (1, max(1, wall_h)))
+                # Quantised scale + lighting buckets: same (tex, column, height
+                # bucket, light bucket, face) reuses the cached surface so we
+                # avoid 640 pygame.transform.scale + full-column fills/frame.
+                wh_q = max(4, (wall_h + 3) // 4 * 4)  # round up to 4px bucket
                 shade = max(0.15, 1.0 - corrected_dist / MAX_DEPTH)
                 dark_a = min(255, int((1 - shade) * 220) + (35 if side == 1 else 0))
                 v = 255 - dark_a
-                shaded.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+                v_q = min(255, (v + 8) // 16 * 16)
+                lit_key = (id(tex), tex_x, wh_q, v_q, side)
+                shaded = self._wall_col_lit_cache.get(lit_key)
+                if shaded is None:
+                    base = pygame.transform.scale(cols[tex_x], (1, wh_q))
+                    base.fill((v_q, v_q, v_q), special_flags=pygame.BLEND_RGB_MULT)
+                    self._wall_col_lit_cache[lit_key] = base
+                    if len(self._wall_col_lit_cache) > 8192:
+                        self._wall_col_lit_cache.clear()
+                    shaded = base
 
                 self.surface.blit(shaded, (i, max(0, draw_start)),
-                                  (0, max(0, -draw_start), 1, min(wall_h, self.h - max(0, draw_start))))
+                                  (0, max(0, -draw_start), 1, min(wh_q, self.h - max(0, draw_start))))
             else:
                 # Fallback solid color
                 color = self._get_wall_color(wall_type, corrected_dist)
@@ -1049,6 +1066,56 @@ class Renderer:
         img.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
         return img
 
+    # ─── Procedural visual streaming (lazy, bounded, deterministic) ─────
+    def _tree_sprite(self, ttype, variant_idx):
+        """Return the billboard for (species, variant), generating it only
+        on first use.  Deterministic seed => re-generates identically after
+        eviction.  Bounded LRU so memory stays capped."""
+        key = (ttype, variant_idx)
+        img = self._tree_sprite_cache.get(key)
+        if img is None:
+            img = self._generate_tree_billboard(ttype, 64, 256, seed=42 + variant_idx * 333)
+            self._tree_sprite_cache[key] = img
+            while len(self._tree_sprite_cache) > self._TREE_CACHE_LIMIT:
+                self._tree_sprite_cache.pop(next(iter(self._tree_sprite_cache)))
+        else:
+            # refresh LRU position
+            self._tree_sprite_cache[key] = self._tree_sprite_cache.pop(key)
+        return img
+
+    def _undergrowth_sprite(self, ptype):
+        """Same lazy/bounded pattern for environment decorations."""
+        img = self._undergrowth_cache.get(ptype)
+        if img is None:
+            img = self._generate_undergrowth_sprite(ptype, 32, 32)
+            self._undergrowth_cache[ptype] = img
+            while len(self._undergrowth_cache) > self._UNDERGROWTH_CACHE_LIMIT:
+                self._undergrowth_cache.pop(next(iter(self._undergrowth_cache)))
+        else:
+            self._undergrowth_cache[ptype] = self._undergrowth_cache.pop(ptype)
+        return img
+
+    def _lit_sprite(self, img, sw, sh, dist):
+        """Cached scaled+distance-lit surface.  Sizes are quantised to 4px
+        buckets and light values to 1/32 steps, so unchanged sprites never
+        pay the pygame.transform.scale + full-surface lighting cost again."""
+        qsw = max(1, (sw + 3) // 4 * 4)
+        qsh = max(1, (sh + 3) // 4 * 4)
+        shade = max(MIN_SPRITE_LIGHT, 1.0 - 0.55 * min(1.0, dist / max(1.0, float(MAX_DEPTH))))
+        v = int(255 * shade)
+        v = min(255, (v + 8) // 16 * 16)  # quantise light bucket
+        key = (id(img), qsw, qsh, v)
+        cached = self._sprite_lit_cache.get(key)
+        if cached is not None:
+            self._sprite_lit_cache[key] = self._sprite_lit_cache.pop(key)  # LRU refresh
+            return cached, qsw, qsh
+        scaled = pygame.transform.scale(img, (qsw, qsh))
+        scaled.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+        self._sprite_lit_cache[key] = scaled
+        if len(self._sprite_lit_cache) > 600:  # bounded: no unbounded growth
+            self._sprite_lit_cache.pop(next(iter(self._sprite_lit_cache)))
+        return scaled, qsw, qsh
+
     def _get_sprite_candidates(self, game_map, px, py, max_dist):
         """Query cached coarse buckets instead of scanning every forest object."""
         trees = getattr(game_map, 'trees', [])
@@ -1086,7 +1153,10 @@ class Renderer:
         """Collect nearby billboards, sort far -> near, and draw."""
         items = []
         stats = {'trees': 0, 'enemies_view': 0, 'pickups_view': 0, 'drawn': 0}
-        margin = self.half_fov + 0.5
+        # Actual camera FOV half-width + small edge margin so nothing visible
+        # pops in; the old +0.5 rad wasted work on off-screen billboards.
+        margin_tree = self.half_fov + 0.12
+        margin_small = self.half_fov + 0.08
 
         def consider(kind, obj, x, y, max_dist):
             dx = x - player.x
@@ -1096,7 +1166,8 @@ class Renderer:
                 return False
             dist = math.sqrt(dist_sq)
             angle = self._norm_angle(math.atan2(dy, dx) - player.angle)
-            if abs(angle) > margin:
+            lim = margin_tree if kind == 'tree' else margin_small
+            if abs(angle) > lim:
                 return False
             items.append((dist, angle, kind, obj))
             return True
@@ -1137,9 +1208,8 @@ class Renderer:
             floor_y = horizon + unit / 2.0          # where this distance meets the ground
 
             if kind == 'tree':
-                img_list = self.tree_sprites.get(obj.get('type'), self.tree_sprites['balete'])
-                variant_idx = obj.get('canopy_seed', 0) % len(img_list)
-                img = img_list[variant_idx]
+                variant_idx = obj.get('canopy_seed', 0) % self._TREE_SPRITE_VARIANTS
+                img = self._tree_sprite(obj.get('type', 'balete'), variant_idx)
                 height_mult = self._TREE_HEIGHT_MULT.get(obj.get('type'), 2.5)
                 sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
@@ -1157,7 +1227,7 @@ class Renderer:
                 self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
 
             elif kind == 'plant':
-                img = self.undergrowth_sprites.get(obj.get('type'), self.undergrowth_sprites['bush'])
+                img = self._undergrowth_sprite(obj.get('type', 'bush'))
                 sh = unit * 0.35 * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
                 
@@ -1216,10 +1286,9 @@ class Renderer:
             sw = max(1, int(sh * aspect))
         if sh < 2 or sw < 1:
             return 0
-        scaled = pygame.transform.scale(img, (max(1, sw), max(1, sh)))
-        self._light_sprite(scaled, dist)
-        x = int(cx - sw / 2)
-        y = int(bottom - sh)
+        scaled, qsw, qsh = self._lit_sprite(img, sw, sh, dist)
+        x = int(cx - qsw / 2)
+        y = int(bottom - qsh)
         n = self._blit_zbuf(scaled, x, y, dist)
         stats['drawn'] += 1 if n > 0 else 0
         return n
