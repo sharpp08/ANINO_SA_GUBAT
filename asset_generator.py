@@ -675,6 +675,9 @@ def generate_all_textures():
 # of the surface. The renderer pivots the swing on `pivot` and draws the hand at
 # `grip`. Defaults match the procedural bolo; the custom sprite overrides them.
 BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
+# Hand positions on the custom shotgun viewmodel, as fractions of its 128px surface.
+# Empty until the custom sprite loads (the renderer then uses its default hand spots).
+SHOTGUN_ANCHORS = {}
 
 
 def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
@@ -715,12 +718,51 @@ def _load_custom_bolo_sprite(size=128) -> Optional[pygame.Surface]:
         return None
 
 
+def _load_custom_shotgun_sprite(size=128) -> Optional[pygame.Surface]:
+    """Load assets/sprites/weapons/shotgun/shotgun_hero.png as the shotgun viewmodel.
+
+    The pack art has the stock at the top-left and the barrel pointing down-right.
+    Like the bolo, it is rotated 180 degrees so the stock sits at the bottom-right
+    and the barrel points up-left for a right-handed first-person view, then
+    cropped to its visible pixels, smooth-scaled to fit size x size (aspect
+    preserved) and anchored bottom-right. Returns None if the file is missing or
+    can't be loaded so the procedural shotgun is used instead.
+    """
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'shotgun', 'shotgun_hero.png')
+    try:
+        if not os.path.exists(path):
+            return None
+        img = pygame.image.load(path).convert_alpha()
+        img = pygame.transform.rotate(img, 180)
+        bbox = img.get_bounding_rect()
+        if bbox.width == 0 or bbox.height == 0:
+            return None
+        img = img.subsurface(bbox).copy()
+        k = min(size / img.get_width(), size / img.get_height())
+        new_w = max(1, int(img.get_width() * k))
+        new_h = max(1, int(img.get_height() * k))
+        img = pygame.transform.smoothscale(img, (new_w, new_h))
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        ox, oy = size - new_w, size - new_h
+        surf.blit(img, (ox, oy))
+
+        # Hand spots measured on the rotated 640px art: right hand on the
+        # receiver / wrist behind the pump, left hand on the pump forend.
+        def frac(sx, sy):
+            return ((ox + (sx - bbox.x) * k) / size, (oy + (sy - bbox.y) * k) / size)
+        SHOTGUN_ANCHORS['right'] = frac(425, 365)
+        SHOTGUN_ANCHORS['left'] = frac(300, 320)
+        return surf
+    except Exception:
+        return None
+
+
 def generate_all_weapons():
     """Generate all weapon sprites."""
     bolo = _load_custom_bolo_sprite(128)
     return {
         'bolo': bolo or generate_weapon_sprite('bolo', 128, 128),
-        'shotgun': generate_weapon_sprite('shotgun', 128, 128),
+        'shotgun': _load_custom_shotgun_sprite(128) or generate_weapon_sprite('shotgun', 128, 128),
         'revolver': generate_weapon_sprite('revolver', 128, 128),
     }
 

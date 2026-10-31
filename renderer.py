@@ -1299,9 +1299,11 @@ class Renderer:
         if sprite is None:
             return
 
-        # The bolo art fills its whole surface, so size it to the screen height
-        # (works at any internal resolution); other weapons keep the old 3x scale.
-        scale = (self.h * 0.85 / sprite.get_height()) if wname == 'bolo' else 3
+        # The custom bolo / shotgun art fills its whole surface, so size it to the
+        # screen height (works at any internal resolution); other weapons keep 3x.
+        from asset_generator import SHOTGUN_ANCHORS
+        custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
+        scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
         scaled = pygame.transform.scale(sprite, (sw, sh))
@@ -1437,6 +1439,16 @@ class Renderer:
             # Right hand wraps the bolo handle and follows the swing
             pygame.draw.circle(self.surface, skin_color, bolo_grip, 9)
             pygame.draw.circle(self.surface, glove_color, (bolo_grip[0] - 3, bolo_grip[1] + 3), 6)
+        elif player.alive and custom_shotgun:
+            # Hands sit on the custom shotgun art: right on the receiver, left on the pump
+            rx = int(final_x + SHOTGUN_ANCHORS['right'][0] * sw)
+            ry = int(final_y + SHOTGUN_ANCHORS['right'][1] * sh)
+            lx = int(final_x + SHOTGUN_ANCHORS['left'][0] * sw)
+            ly = int(final_y + SHOTGUN_ANCHORS['left'][1] * sh)
+            pygame.draw.circle(self.surface, skin_color, (rx, ry), 9)
+            pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
+            pygame.draw.circle(self.surface, skin_color, (lx, ly), 8)
+            pygame.draw.circle(self.surface, glove_color, (lx - 3, ly + 3), 5)
         elif player.alive:
             # Right hand knuckles / fingers on grip
             pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)
