@@ -354,8 +354,14 @@ class GameMap:
                               4: 'ancient_grove', 5: 'limestone_ridge'}.get(terrain, 'dense_forest')
                 })
 
-        # Natural understory is denser near the forest edge and biome borders,
-        # but never covers the main trail, shallow pools, buildings or spawn.
+        # Index the generated trunks before placing understory so plants
+        # cluster naturally around trees without occupying their collision discs.
+        self.spatial_hash.clear()
+        for tree in self.trees:
+            self.spatial_hash.insert(tree, tree['x'], tree['y'], tree['radius'])
+
+        # Natural understory is denser near trunks and biome borders, but
+        # never covers the main trail, shallow pools, buildings or spawn.
         self.undergrowth = []
         plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
         desired_plants = UNDERGROWTH_DENSITY
@@ -371,7 +377,7 @@ class GameMap:
                 continue
             if math.hypot(px - 130, py - 130) < 9.0:
                 continue
-            if self.spatial_hash.query(px, py, radius=0.5) if self.spatial_hash.cells else False:
+            if not self.spatial_hash.query(px, py, radius=0.5):
                 continue
             self.undergrowth.append({
                 'x': px, 'y': py, 'type': rng_map.choice(plant_types),
