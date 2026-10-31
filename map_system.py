@@ -314,7 +314,7 @@ class GameMap:
         }
         target_tree_count = (5200 if chapter_num == 1 else 6500)
         step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
-        cell_step = max(2, int(step))
+        cell_step = 2 if chapter_num == 2 else max(2, int(step))
         for gy in range(8, self.height - 8, cell_step):
             if len(self.trees) >= target_tree_count:
                 break
