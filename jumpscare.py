@@ -52,7 +52,7 @@ class JumpscareManager:
 
     # enemy_type -> file in enemy_animations_pack/ used instead of the generic scream
     CUSTOM_SOUNDS = {
-        'multo': 'multo_jumpscare.mp3',
+        'multo': ('multo_jumpscare.wav', 'multo_jumpscare.mp3'),
     }
 
     def __init__(self):
@@ -94,14 +94,19 @@ class JumpscareManager:
                     print(f"[Jumpscare] Failed to load {name}: {e}")
 
         # Enemy-specific jumpscare audio (replaces the generic scream for that enemy)
-        for etype, fname in self.CUSTOM_SOUNDS.items():
-            path = os.path.join(pack_dir, fname)
-            if os.path.exists(path):
+        for etype, fnames in self.CUSTOM_SOUNDS.items():
+            for fname in fnames:
+                path = os.path.join(pack_dir, fname)
+                if not os.path.exists(path):
+                    continue
                 try:
                     self.enemy_sounds[etype] = pygame.mixer.Sound(path)
                     print(f"[Jumpscare] Loaded {etype} audio: {path}")
+                    break
                 except Exception as e:
                     print(f"[Jumpscare] Failed to load {fname}: {e}")
+            else:
+                print(f"[Jumpscare] No usable audio found for {etype} in {pack_dir}")
 
     def _play(self, snd, volume):
         if snd is None:
@@ -130,7 +135,15 @@ class JumpscareManager:
         custom = self.enemy_sounds.get(self.enemy_type)
         if custom is not None:
             # Enemy-specific jumpscare sound (e.g. multo) replaces the generic audio
-            self._play(custom, 1.0)
+            try:
+                custom.set_volume(1.0)
+                ch = pygame.mixer.find_channel(True)   # force: never dropped if channels are full
+                if ch is not None:
+                    ch.play(custom)
+                else:
+                    custom.play()
+            except Exception as e:
+                print(f"[Jumpscare] Could not play {self.enemy_type} audio: {e}")
         else:
             self._play(self.scream_sound, 1.0)
             self._play(self.stinger_sound, 0.9)
