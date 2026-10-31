@@ -17,7 +17,7 @@ TITLE = "ANINO SA GUBAT: Mga Bulong ng Dilim"
 FULLSCREEN = True
 
 # Performance & Effect Toggles
-DEBUG = True
+DEBUG = False
 ENABLE_BLOOM = True
 ENABLE_FILM_GRAIN = True
 ENABLE_FOG = True
@@ -28,6 +28,8 @@ ENABLE_AUDIO_SYNTH = True
 ENABLE_SANITY = True
 ENABLE_STEALTH_NOISE = True
 DEBUG_OVERLAY = False
+# Avoid full-frame CPU/GPU readback post-processing on integrated graphics.
+ENABLE_GPU_POSTPROCESS = False
 
 # Animation & Physics Toggles
 ENABLE_ANIMATIONS = True
