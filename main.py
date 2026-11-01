@@ -668,7 +668,7 @@ class Game:
                 if wi['type'] == 'shotgun':
                     self.renderer.trigger_shotgun_fire()
             if wi['type'] in ('shotgun', 'revolver', 'bolo'):
-                audio_mgr.play(wi['type'])
+                audio_mgr.play(wi['type'], volume=1.0, headroom=1.0)
                 if wi['type'] in ('shotgun', 'revolver'):
                     self.renderer.emit_casing(self.renderer.w // 2 + 60, self.renderer.h - 30, random.uniform(40, 90), random.uniform(-110, -60))
                     self.renderer.emit_smoke(self.renderer.w // 2, self.renderer.h // 2, random.uniform(-10, 10), random.uniform(-30, -10))
