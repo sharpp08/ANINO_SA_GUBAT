@@ -775,6 +775,16 @@ class Game:
 
         # Enemy AI with stealth sensing and sanity proximity
         self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)
+
+        # Loot: enemies that just died may drop a pickup where they fell
+        try:
+            from enemies import DROP_LABELS
+            for drop in self.enemy_manager.collect_drops(self.game_map, self.player):
+                label = DROP_LABELS.get(drop['type'], drop['type'].replace('_', ' ').title())
+                self.notify(f"{drop['from'].replace('_', ' ').title()} dropped {label}")
+        except Exception:
+            import traceback
+            traceback.print_exc()
         
         # Chase scream audio: trigger scream for enemies that entered chase state
         for enemy in self.enemy_manager.enemies:

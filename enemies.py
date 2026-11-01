@@ -85,6 +85,7 @@ class Enemy:
         self.patrol_angle = random.uniform(0, math.pi * 2)
         self.size = 0.3
         self.alive = True
+        self.just_died = False   # set once when killed; consumed by EnemyManager.collect_drops
         self.hit_flash = 0
         self.stalk_timer = 0
 
@@ -464,6 +465,7 @@ class Enemy:
         if self.health <= 0:
             self.health = 0
             self.alive = False
+            self.just_died = True
             self.state = EnemyState.DEFEATED
         else:
             # Stagger
@@ -541,6 +543,69 @@ class Enemy:
             'alive': self.alive,
             'state': self.state,
         }
+
+
+# ─── Loot drops ──────────────────────────────────────────────────────────
+# Chance that a slain enemy drops something (tougher enemies drop more often).
+DROP_CHANCE = {'kapre': 0.85, 'tikbalang': 0.85, 'manananggal': 0.75}
+DROP_CHANCE_DEFAULT = 0.6
+# type -> (base weight, min amount, max amount)
+DROP_TABLE = {
+    'health':        (3, 15, 25),
+    'ammo_shotgun':  (3, 2, 4),
+    'ammo_revolver': (3, 3, 6),
+    'battery':       (2, 15, 30),
+    'faith':         (2, 10, 20),
+    'salt':          (2, 1, 2),
+    'garlic':        (2, 1, 2),
+}
+DROP_LABELS = {
+    'health': 'Health', 'ammo_shotgun': 'Shotgun Shells', 'ammo_revolver': 'Revolver Rounds',
+    'battery': 'Battery', 'faith': 'Faith', 'salt': 'Salt', 'garlic': 'Garlic',
+}
+
+
+def _drop_need(item, player):
+    """Return fill fraction (0 empty .. 1 full) of the player's stock of ``item``."""
+    stock = {
+        'health': (getattr(player, 'health', None), PLAYER_MAX_HEALTH),
+        'ammo_shotgun': (getattr(player, 'ammo_shotgun', None), SHOTGUN_MAX_AMMO),
+        'ammo_revolver': (getattr(player, 'ammo_revolver', None), REVOLVER_MAX_AMMO),
+        'battery': (getattr(player, 'flashlight_battery', None), FLASHLIGHT_MAX_BATTERY),
+        'faith': (getattr(player, 'faith_energy', None), FAITH_ENERGY_MAX),
+        'salt': (getattr(player, 'salt_count', None), SALT_MAX),
+        'garlic': (getattr(player, 'garlic_count', None), GARLIC_MAX),
+    }
+    cur, mx = stock[item]
+    if cur is None or not mx:
+        return 0.5
+    return max(0.0, min(1.0, cur / float(mx)))
+
+
+def roll_drop(enemy_type, player=None, rng=random):
+    """Roll the loot for one dead enemy. Returns (item_type, amount) or None.
+
+    Items the player is nearly out of are twice as likely; items they are
+    already full on are skipped (unless that would leave nothing to drop).
+    """
+    if rng.random() >= DROP_CHANCE.get(enemy_type, DROP_CHANCE_DEFAULT):
+        return None
+    weights = {}
+    for item, (base, _lo, _hi) in DROP_TABLE.items():
+        w = float(base)
+        if player is not None:
+            fill = _drop_need(item, player)
+            if fill >= 1.0:
+                w = 0.0
+            elif fill < 0.35:
+                w *= 2.0
+        weights[item] = w
+    if not any(weights.values()):
+        weights = {item: float(v[0]) for item, v in DROP_TABLE.items()}
+    items = list(weights)
+    item = rng.choices(items, weights=[weights[i] for i in items], k=1)[0]
+    _base, lo, hi = DROP_TABLE[item]
+    return item, rng.randint(lo, hi)
 
 
 class EnemyManager:
@@ -698,6 +763,34 @@ class EnemyManager:
 
     def get_alive_enemies(self):
         return [e for e in self.enemies if e.alive]
+
+    def collect_drops(self, game_map, player=None):
+        """Turn freshly killed enemies into ground pickups. Returns the new pickups."""
+        spawned = []
+        for enemy in self.enemies:
+            if not getattr(enemy, 'just_died', False):
+                continue
+            enemy.just_died = False
+            result = roll_drop(enemy.type, player)
+            if result is None:
+                continue
+            item, amount = result
+            x, y = enemy.x, enemy.y
+            if game_map.is_solid(x, y):
+                for k in range(8):  # nudge out of walls/trees
+                    a = k * math.pi / 4
+                    nx, ny = enemy.x + math.cos(a) * 0.7, enemy.y + math.sin(a) * 0.7
+                    if not game_map.is_solid(nx, ny):
+                        x, y = nx, ny
+                        break
+            pickup = {'type': item, 'x': x, 'y': y, 'amount': amount,
+                      'active': True, 'drop': True, 'from': enemy.type}
+            # Keep the list short: forget drops that were already picked up.
+            game_map.pickups[:] = [pk for pk in game_map.pickups
+                                   if pk.get('active', True) or not pk.get('drop')]
+            game_map.pickups.append(pickup)
+            spawned.append(pickup)
+        return spawned
 
     def get_states(self):
         return [e.get_state() for e in self.enemies]
