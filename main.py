@@ -361,8 +361,7 @@ class Game:
         print(f"[DIAGNOSTICS] Trees Generated (Chapter 1): {len(test_gm.trees)}")
         print(f"[DIAGNOSTICS] Undergrowth Generated: {len(test_gm.undergrowth)}")
 
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+        self.screen = self._set_display_mode()
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
 
@@ -439,11 +438,32 @@ class Game:
                 _s.save_settings(_s.load_settings())
             except Exception:
                 pass
+    def _set_display_mode(self):
+        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
+
+        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
+        (no desktop mode switch).  vsync is only requested on ~60 Hz panels: with the
+        clock.tick(60) limiter on a 120/144 Hz panel it would lock to every 3rd refresh.
+        """
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
+        try:
+            rate = pygame.display.get_current_refresh_rate()
+        except Exception:
+            rate = 0
+        vsync = 1 if 55 <= rate <= 65 else 0
+        try:
+            return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
+        except Exception:
+            try:
+                return pygame.display.set_mode(size, flags | pygame.SCALED)
+            except Exception:
+                return pygame.display.set_mode(size, flags)
+
     def toggle_fullscreen(self):
         global FULLSCREEN
         FULLSCREEN = not FULLSCREEN
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+        self.screen = self._set_display_mode()
         self.notify("Fullscreen: ON" if FULLSCREEN else "Fullscreen: OFF")
 
 
