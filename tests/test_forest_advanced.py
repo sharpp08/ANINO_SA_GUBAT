@@ -62,6 +62,14 @@ def test_frame_render_timing():
     game.load_chapter(1)
     game.state = STATE_PLAYING
 
+    # Warm-up: fill caches (tree billboards, lit sprites, terrain atlas)
+    # so we measure steady-state performance, not cold-start cost.
+    for _ in range(20):
+        game.update_playing(0.016, 0.0, 0.0)
+        game.renderer.render_frame(game.player, game.game_map,
+                                   game.enemy_manager.get_alive_enemies(),
+                                   game.effects, 0.016)
+
     t0 = time.time()
     frames = 60
     for _ in range(frames):

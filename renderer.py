@@ -134,11 +134,20 @@ class Flashlight:
         self.glow_mask = pygame.Surface((mw, mh))
         pygame.surfarray.blit_array(self.glow_mask, rgb)
 
+        # .convert_alpha() matches these overlays to the display pixel format
+        # so the per-frame blits use the fast SDL blitter.
+        self.dark_mask = self.dark_mask.convert_alpha()
+        self.glow_mask = self.glow_mask.convert()
         self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
                             int((1.0 - 0.05) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 90))
+        try:
+            self.dark_off = self.dark_off.convert_alpha()
+            self.dark_flicker = self.dark_flicker.convert_alpha()
+        except Exception:
+            pass
 
     def toggle(self):
         self.on = not self.on
@@ -274,8 +283,8 @@ class Renderer:
         self._grid_src = None
         self._grid_rev = -1
         # reusable full-screen overlay surfaces (allocated once, not every frame)
-        self._flash_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        self._flash_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+        self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
         self._dbg_key = None
         self._dbg_surf = None
         self.hit_fx = []  # small blood / ectoplasm / spark particles spawned on enemy hits
@@ -296,8 +305,11 @@ class Renderer:
         self._tree_sprite_cache = {}   # (type, variant) -> surface  (bounded LRU)
         self._undergrowth_cache = {}  # type -> surface            (bounded LRU)
         self._TREE_SPRITE_VARIANTS = 5
-        self._TREE_CACHE_LIMIT = 24   # ~24 billboards * 64x256 RGBA
-        self._UNDERGROWTH_CACHE_LIMIT = 8
+        # 11 species x 5 variants = 55 max combinations; a cache of 24 thrashes
+        # and regenerates ~12 billboards per frame (each costs ~1.3 ms).
+        # 64 covers all combinations with headroom (~4 MB at 64x256x4 bytes).
+        self._TREE_CACHE_LIMIT = 64
+        self._UNDERGROWTH_CACHE_LIMIT = 16
         self._TREE_HEIGHT_MULT = {
             'balete': 4.5, 'mahogany': 5.25, 'bamboo': 4.25, 'dead': 3.75,
             'banana': 3.5, 'palm': 4.5, 'supernatural': 4.75,
@@ -325,8 +337,23 @@ class Renderer:
         self._terrain_maps_for = None
         self.frame_counter = 0
 
-        self.floor_surf = pygame.Surface((self.w, self.h // 2))
+        self.floor_surf = pygame.Surface((self.w, self.h // 2)).convert()
         self._generate_floor_gradient()
+
+        # Pre-generate and convert cloud + aurora surfaces at init so they
+        # never allocate mid-frame and always use the fast SDL blitter.
+        self._sky_fx_cache = {}
+        for c_idx in range(6):
+            alpha = max(30, 80 - c_idx * 15)
+            cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
+            pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
+            self._sky_fx_cache[('cloud', c_idx)] = cloud_surf.convert_alpha()
+        for a_idx in range(3):
+            aurora_w = 60 + a_idx * 20
+            aurora_alpha = max(5, 25 - a_idx * 5)
+            aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
+            pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+            self._sky_fx_cache[('aurora', a_idx)] = aurora_surf.convert_alpha()
 
         # Weapon animation
         self.weapon_bob = 0
@@ -359,7 +386,7 @@ class Renderer:
         pygame.draw.circle(moon_surf, (190, 202, 225), (moon_size // 2 - 5, moon_size // 2 - 4), 7)
         pygame.draw.circle(moon_surf, (200, 210, 235), (moon_size // 2 + 7, moon_size // 2 + 6), 5)
         pygame.draw.circle(moon_surf, (210, 218, 240), (moon_size // 2 - 6, moon_size // 2 + 8), 4)
-        self.moon_surf = moon_surf
+        self.moon_surf = moon_surf.convert_alpha()
         self.moon_size = moon_size
 
         self.vignette = self._generate_vignette()
@@ -379,9 +406,17 @@ class Renderer:
                 'color': (rng_p.randint(180, 255), rng_p.randint(200, 255), rng_p.randint(100, 180)),
                 'kind': 'firefly' if rng_p.random() < 0.4 else 'dust',
             })
-        # Pre-rendered particle surfaces (cached per size) to avoid per-frame allocation
+        # Pre-rendered particle surfaces (cached per size) to avoid per-frame allocation.
+        # Pre-build them at init so they're converted to display format for fast blits.
         self._particle_cache = {}
-        self._sky_fx_cache = {}      # prebuilt cloud / aurora surfaces
+        for p in self.particles:
+            psize = int(p['size'])
+            key = (psize, p['color'])
+            if key not in self._particle_cache:
+                psurf = pygame.Surface((psize * 2, psize * 2), pygame.SRCALPHA)
+                pygame.draw.circle(psurf, (*p['color'], 255), (psize, psize), psize)
+                self._particle_cache[key] = psurf.convert_alpha()
+        # _sky_fx_cache is already pre-built (clouds + auroras) above the star init.
         self._viewmodel_cache = {}   # scaled / rotated weapon surfaces
 
         # Debug overlay (F3)
@@ -537,7 +572,7 @@ class Renderer:
         av = pygame.surfarray.pixels_alpha(surf)
         av[:, :] = alpha_arr.T.astype(np.uint8)
         del av
-        return surf
+        return surf.convert_alpha()
 
     def _generate_vignette(self):
         """Generate a proper vignette overlay (clear center, alpha ~170 at corners)."""
@@ -557,7 +592,7 @@ class Renderer:
         alpha_view = pygame.surfarray.pixels_alpha(vig)
         alpha_view[:, :] = alpha_arr.T.astype(np.uint8)
         del alpha_view
-        return vig
+        return vig.convert_alpha()
 
     def _glow_sprite(self, radius, color):
         """Cached soft round glow (RGB, meant for BLEND_RGB_ADD)."""
@@ -575,6 +610,7 @@ class Renderer:
                 arr[:, :, c] = (f * color[c]).astype(np.uint8)
             s = pygame.Surface((size, size))
             pygame.surfarray.blit_array(s, arr)
+            s = s.convert()  # display-format for fast additive blits
             self._glow_cache[key] = s
         return s
 
@@ -609,6 +645,7 @@ class Renderer:
         self.surface.fill(SKY_COLOR)
         self.frame_counter += 1
         self._emissive = []
+        # Single time query per frame; reused everywhere instead of 15+ calls.
         t_ticks = pygame.time.get_ticks()
 
         pitch_offset = int(player.pitch * self.h)
@@ -629,6 +666,9 @@ class Renderer:
 
         if horizon_y > 0:
             # Stars (260 stars, local Random(999))
+            # Lock once for the whole loop: set_at() locks/unlocks per call,
+            # which is the slow path.  One lock amortises it across all stars.
+            self.surface.lock()
             for s_az, s_el, phase, big in self.stars:
                 az_diff = s_az - player.angle
                 while az_diff > math.pi: az_diff -= 2 * math.pi
@@ -643,6 +683,7 @@ class Renderer:
                             pygame.draw.rect(self.surface, col, (sx, sy, 2, 2))
                         else:
                             self.surface.set_at((sx, sy), col)
+            self.surface.unlock()
 
             # Moon (fixed world azimuth pi/4, elevation 0.42)
             moon_world_az = math.pi / 4
@@ -661,31 +702,17 @@ class Renderer:
             for c_idx in range(6):
                 cx = int((c_idx * 180 + cloud_t * (25 if c_idx < 4 else 15)) % (self.w + 300) - 150)
                 cy = int(horizon_y * (0.15 + c_idx * 0.12))
-                alpha = max(30, 80 - c_idx * 15)
                 if 0 <= cy < horizon_y:
-                    # Built once per cloud, not once per frame.
-                    ckey = ('cloud', c_idx)
-                    cloud_surf = self._sky_fx_cache.get(ckey)
-                    if cloud_surf is None:
-                        cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
-                        pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
-                        self._sky_fx_cache[ckey] = cloud_surf
-                    self.surface.blit(cloud_surf, (cx, cy))
+                    # Surfaces are pre-built and converted at init time.
+                    self.surface.blit(self._sky_fx_cache[('cloud', c_idx)], (cx, cy))
 
             # Subtle aurora borealis effect at horizon
             if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
                 aurora_t = t_ticks * 0.0003
                 for a_idx in range(3):
                     aurora_x = int((a_idx * 250 + aurora_t * 50) % (self.w + 200) - 100)
-                    aurora_w = 60 + a_idx * 20
-                    aurora_alpha = max(5, 25 - a_idx * 5)
-                    akey = ('aurora', a_idx)
-                    aurora_surf = self._sky_fx_cache.get(akey)
-                    if aurora_surf is None:
-                        aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
-                        pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
-                        self._sky_fx_cache[akey] = aurora_surf
-                    self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
+                    self.surface.blit(self._sky_fx_cache[('aurora', a_idx)],
+                                      (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
         # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
         floor_h = self.h - horizon_y
@@ -736,9 +763,12 @@ class Renderer:
 
         # 7. Particles (fireflies / dust / spores)
         if ENABLE_PARTICLES:
+            _particle_cache = self._particle_cache  # local ref avoids attribute lookups
+            _w = self.w
+            _h = self.h
             for p in self.particles:
-                p['x'] = (p['x'] + p['vx']) % self.w
-                p['y'] = (p['y'] + p['vy']) % self.h
+                p['x'] = (p['x'] + p['vx']) % _w
+                p['y'] = (p['y'] + p['vy']) % _h
                 p['phase'] += dt * 2
                 # Dust motes are dimmer and slower-pulsing than fireflies
                 if p.get('kind') == 'dust':
@@ -747,15 +777,10 @@ class Renderer:
                     alpha = int(abs(math.sin(p['phase'])) * 180)
                 if alpha < 5:
                     continue
-                psize = int(p['size'])
-                key = (psize, p['color'])
-                psurf = self._particle_cache.get(key)
-                if psurf is None:
-                    psurf = pygame.Surface((psize * 2, psize * 2), pygame.SRCALPHA)
-                    pygame.draw.circle(psurf, (*p['color'], 255), (psize, psize), psize)
-                    self._particle_cache[key] = psurf
-                psurf.set_alpha(alpha)
-                self.surface.blit(psurf, (int(p['x']), int(p['y'])))
+                psurf = _particle_cache.get((int(p['size']), p['color']))
+                if psurf is not None:
+                    psurf.set_alpha(alpha)
+                    self.surface.blit(psurf, (int(p['x']), int(p['y'])))
 
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
             try:
@@ -1014,6 +1039,7 @@ class Renderer:
                     v = vqs[i]
                     shaded = pygame.transform.scale(cols[tex_x], (1, wq))
                     shaded.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+                    shaded = shaded.convert()  # display-format for fast blits
                     cache[lit_key] = shaded
                     if len(cache) > 8192:
                         cache.clear()
@@ -1188,6 +1214,7 @@ class Renderer:
         img = self._tree_sprite_cache.get(key)
         if img is None:
             img = self._generate_tree_billboard(ttype, 64, 256, seed=42 + variant_idx * 333)
+            img = img.convert_alpha()  # display-format for fast per-frame blits
             self._tree_sprite_cache[key] = img
             while len(self._tree_sprite_cache) > self._TREE_CACHE_LIMIT:
                 self._tree_sprite_cache.pop(next(iter(self._tree_sprite_cache)))
@@ -1201,6 +1228,7 @@ class Renderer:
         img = self._undergrowth_cache.get(ptype)
         if img is None:
             img = self._generate_undergrowth_sprite(ptype, 32, 32)
+            img = img.convert_alpha()  # display-format for fast per-frame blits
             self._undergrowth_cache[ptype] = img
             while len(self._undergrowth_cache) > self._UNDERGROWTH_CACHE_LIMIT:
                 self._undergrowth_cache.pop(next(iter(self._undergrowth_cache)))
@@ -1224,6 +1252,7 @@ class Renderer:
             return cached, qsw, qsh
         scaled = pygame.transform.scale(img, (qsw, qsh))
         scaled.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+        scaled = scaled.convert_alpha()  # display-format for fast per-frame blits
         self._sprite_lit_cache[key] = scaled
         if len(self._sprite_lit_cache) > 600:  # bounded: no unbounded growth
             self._sprite_lit_cache.pop(next(iter(self._sprite_lit_cache)))

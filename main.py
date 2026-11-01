@@ -365,7 +365,13 @@ class Game:
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
 
-        self.internal = pygame.Surface((INTERNAL_WIDTH, INTERNAL_HEIGHT))
+        # .convert() matches the surface to the display's pixel format so all
+        # blits onto this surface use the fast SDL blitter instead of the slow
+        # software fallback.  This is the single biggest pygame optimisation.
+        try:
+            self.internal = pygame.Surface((INTERNAL_WIDTH, INTERNAL_HEIGHT)).convert()
+        except Exception:
+            self.internal = pygame.Surface((INTERNAL_WIDTH, INTERNAL_HEIGHT))
 
         self.font_lg   = pygame.font.SysFont('consolas', 32, bold=True)
         self.font_sm   = pygame.font.SysFont('consolas', 18)
@@ -377,16 +383,23 @@ class Game:
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Generating Procedural Textures & Sprites...", 0.3)
         textures      = generate_all_textures()
+        # Convert to display pixel format so every blit uses SDL's fast blitter
+        # instead of the slow software fallback (biggest pygame perf win).
+        textures = {k: v.convert() for k, v in textures.items()}
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Forging Weapons & Tools...", 0.5)
         weapon_spr    = generate_all_weapons()
+        weapon_spr = {k: (v.convert_alpha() if v is not None else v) for k, v in weapon_spr.items()}
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Summoning Forest Entities & AI...", 0.7)
         enemy_spr     = generate_all_enemies()
+        for _states in enemy_spr.values():
+            for s, spr in _states.items():
+                _states[s] = spr.convert_alpha()
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Preparing Items & Relics...", 0.85)
-        pickup_spr    = generate_all_pickups()
-        crosshair_spr = generate_crosshair(16)
+        pickup_spr    = {k: v.convert_alpha() for k, v in generate_all_pickups().items()}
+        crosshair_spr = generate_crosshair(16).convert_alpha()
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Entering the Forest...", 1.0)
 
