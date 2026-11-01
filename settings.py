@@ -356,6 +356,10 @@ BEAM_GLOW = (240, 240, 235)  # neutral white 5000K LED main beam
 HOTSPOT_GLOW = (255, 255, 250) # intense neutral white hotspot
 PERIPHERAL_SPILL = (35, 45, 65) # faint 10% spill in atmospheric haze
 FOG_DISTANCE = 35.0
+# Atmospheric depth-fog overlay parameters (subtle haze; controlled by ENABLE_FOG)
+FOG_NEAR = 8.0       # tiles: fog begins here (closer surfaces stay clear)
+FOG_FAR = 28.0       # tiles: fog reaches maximum opacity
+FOG_MAX_ALPHA = 90   # 0-255; 90 ≈ 35% (subtle, never blinds the player)
 AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
 AMBIENT_LIGHT_OFF = 0.02
 ENEMY_EYE_GLOW = True

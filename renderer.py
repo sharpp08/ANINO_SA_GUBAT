@@ -285,6 +285,15 @@ class Renderer:
         # reusable full-screen overlay surfaces (allocated once, not every frame)
         self._flash_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
         self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+        # Depth-fog overlay: one pre-allocated alpha surface, reused every frame.
+        # The fog colour comes from settings.FOG_COLOR; the alpha pattern is
+        # rebuilt each frame from the z-buffer (per-column wall depth) blended
+        # with a cached vertical bell curve (concentrates fog near the horizon).
+        self._fog_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+        # Pre-fill the RGB channels once; only the alpha channel is updated
+        # per frame via pixels_alpha (the RGB never changes).
+        self._fog_surf.fill((FOG_COLOR[0], FOG_COLOR[1], FOG_COLOR[2], 0))
+        self._fog_vkey = None   # cache key for the vertical bell curve
         self._dbg_key = None
         self._dbg_surf = None
         self.hit_fx = []  # small blood / ectoplasm / spark particles spawned on enemy hits
@@ -752,6 +761,11 @@ class Renderer:
         # 4. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
         self._draw_world_sprites(player, enemies, game_map)
 
+        # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls
+        # get hazed, but before the flashlight so the beam cuts through it.
+        if not self.debug_f4:
+            self._draw_depth_fog(player, game_map)
+
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
         if not self.debug_f4:
@@ -1060,6 +1074,75 @@ class Renderer:
             cols = [tex.subsurface((x, 0, 1, h)) for x in range(tex.get_width())]
             self._wall_col_cache[id(tex)] = cols
         return cols
+
+    def _draw_depth_fog(self, player, game_map):
+        """Subtle atmospheric depth-fog overlay.
+
+        Combines two depth cues into one cheap alpha blit:
+
+        1. **Per-column depth** from the z-buffer: each screen column's wall
+           distance maps to a fog alpha (0 up close, max at FOG_FAR).  Columns
+           where no wall was hit stay at the far-distance alpha, so open sky
+           gaps and distant tree lines get a natural haze.
+
+        2. **Vertical bell curve** centered on the horizon: fog concentrates
+           where distant geometry appears (near the horizon), tapering to
+           zero at the top and bottom of the screen.  The curve is cached and
+           only rebuilt when the horizon shifts.
+
+        The result is written to a pre-allocated alpha surface (RGB set once
+        at init, only the alpha channel is updated per frame) and blitted
+        with a normal alpha blend.  The flashlight pass runs *after* this, so
+        the beam naturally cuts through the fog.
+
+        Cost: one numpy outer product + one alpha-channel write per frame.
+        No per-pixel Python loops, no surface allocations.
+        """
+        if not getattr(_settings_mod, 'ENABLE_FOG', True):
+            return
+
+        h = self.h
+        w = self.w
+        pitch_offset = int(player.pitch * h)
+        horizon = h // 2 + pitch_offset
+
+        # ── Per-column fog alpha from the z-buffer ────────────────────────
+        # z_buffer has one entry per ray; map screen columns to ray indices.
+        zb = self.z_buffer
+        col_depth = zb[self._col_to_ray]      # (w,) float64 in tile units
+
+        # Normalise to [0, 1]:  0 at FOG_NEAR (clear), 1 at FOG_FAR (max fog).
+        # Columns where no wall was hit (z == MAX_DEPTH+1) map to 1.0.
+        t = np.clip((col_depth - FOG_NEAR) / max(0.1, FOG_FAR - FOG_NEAR), 0.0, 1.0)
+        # Smooth curve so fog ramps gently, not a hard step.
+        col_alpha = (t * t * (3.0 - 2.0 * t)).astype(np.float32)  # smoothstep
+
+        # ── Vertical bell curve (cached, rebuilt only when horizon moves) ─
+        vkey = horizon
+        v_profile = None
+        if self._fog_vkey == vkey:
+            v_profile = self._fog_vcurve
+        if v_profile is None:
+            ys = np.arange(h, dtype=np.float32)
+            # Gaussian centred on the horizon, sigma ≈ 0.22 * h.
+            sigma = max(1.0, h * 0.22)
+            dy = ys - float(horizon)
+            v_profile = np.exp(-(dy * dy) / (2.0 * sigma * sigma))
+            self._fog_vcurve = v_profile
+            self._fog_vkey = vkey
+
+        # ── Combine: outer product of (rows,) × (cols,) → (h, w) ──────────
+        # Convert to the alpha value, clipped to FOG_MAX_ALPHA.
+        fog_alpha = (v_profile[:, None] * col_alpha[None, :]) * FOG_MAX_ALPHA
+        fog_alpha = np.clip(fog_alpha, 0, 255).astype(np.uint8)   # (h, w)
+
+        # ── Write to the pre-allocated surface's alpha channel ────────────
+        # pygame surfarray uses (width, height) ordering, so transpose.
+        av = pygame.surfarray.pixels_alpha(self._fog_surf)
+        av[:, :] = fog_alpha.T
+        del av
+
+        self.surface.blit(self._fog_surf, (0, 0))
 
     def _dda_cast(self, px, py, cos_a, sin_a, game_map):
         """Digital Differential Analyzer raycasting. Returns (dist, wall_type, hit_frac, side)."""
