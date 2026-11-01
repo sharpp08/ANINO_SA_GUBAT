@@ -8,6 +8,10 @@ from settings import *
 
 
 
+# How long a slain enemy keeps playing its collapse/fade animation before it is removed.
+DEATH_ANIM_TIME = 1.1
+
+
 class EnemyState:
     IDLE = 'idle'
     PATROL = 'patrol'
@@ -86,6 +90,15 @@ class Enemy:
         self.size = 0.3
         self.alive = True
         self.just_died = False   # set once when killed; consumed by EnemyManager.collect_drops
+        # Hit-reaction state (read by the animator / renderer)
+        self.hit_seq = 0              # increments on every hit so effects fire once per hit
+        self.hit_strength = 0.0       # 0.25..1.0, how hard the last hit was
+        self.hit_side = 1             # -1/+1: which way the flinch leans
+        self.last_damage_type = 'physical'
+        self.hit_stop = 0.0           # brief slow-down on impact ("hit stop")
+        self.kb_vx = 0.0              # knockback velocity (tiles/s), decays quickly
+        self.kb_vy = 0.0
+        self.death_t = 0.0            # seconds since death
         self.hit_flash = 0
         self.stalk_timer = 0
 
@@ -195,10 +208,40 @@ class Enemy:
         new_y = self.y + math.sin(angle) * move_speed
         return self._try_move(game_map, new_x, new_y, angle, move_speed)
 
+    @property
+    def dying(self):
+        """True while a dead enemy is still playing its death animation."""
+        return (not self.alive) and self.death_t < DEATH_ANIM_TIME
+
+    def _apply_knockback(self, dt, game_map):
+        """Slide the enemy along its knockback velocity (stops at walls, decays fast)."""
+        speed = math.hypot(self.kb_vx, self.kb_vy)
+        if speed < 0.05:
+            self.kb_vx = self.kb_vy = 0.0
+            return
+        step = speed * dt
+        angle = math.atan2(self.kb_vy, self.kb_vx)
+        nx = self.x + math.cos(angle) * step
+        ny = self.y + math.sin(angle) * step
+        if not game_map.is_solid(nx, ny):
+            self.x, self.y = nx, ny
+        else:
+            self.kb_vx = self.kb_vy = 0.0
+        decay = math.exp(-9.0 * dt)
+        self.kb_vx *= decay
+        self.kb_vy *= decay
+
     def update(self, dt, player_x, player_y, game_map):
         """Update enemy AI state machine."""
+        self._apply_knockback(dt, game_map)
         if not self.alive:
+            self.death_t += dt
             return
+
+        # Hit stop: a few frames of near-freeze on impact sells the weight of a hit.
+        if self.hit_stop > 0:
+            self.hit_stop -= dt
+            dt *= 0.15
 
         # Update effects
         if self.bound:
@@ -450,8 +493,8 @@ class Enemy:
         self.state_timer = 0.5
         return self.damage
 
-    def take_damage(self, amount, damage_type='physical'):
-        """Apply damage to enemy."""
+    def take_damage(self, amount, damage_type='physical', source=None):
+        """Apply damage to enemy. ``source`` = (x, y) of the attacker, used for knockback."""
         if not self.alive:
             return
 
@@ -462,10 +505,24 @@ class Enemy:
         self.health -= amount
         self.hit_flash = 1.0
 
+        # Hit reaction data: stronger hits flinch harder, freeze longer and shove further.
+        strength = max(0.25, min(1.0, amount / max(1.0, self.max_health * 0.35)))
+        self.hit_seq += 1
+        self.hit_strength = strength
+        self.hit_side = random.choice((-1, 1))
+        self.last_damage_type = damage_type
+        self.hit_stop = 0.04 + 0.05 * strength
+        if source is not None and damage_type == 'physical':
+            dx, dy = self.x - source[0], self.y - source[1]
+            d = math.hypot(dx, dy) or 1.0
+            kb = 3.4 * strength
+            self.kb_vx, self.kb_vy = dx / d * kb, dy / d * kb
+
         if self.health <= 0:
             self.health = 0
             self.alive = False
             self.just_died = True
+            self.animation_state = 'death'
             self.state = EnemyState.DEFEATED
         else:
             # Stagger
@@ -698,7 +755,7 @@ class EnemyManager:
 
             if w_type == 'bolo':
                 if abs(angle_diff) < 0.5 and dist <= w_range:
-                    enemy.take_damage(w_damage, 'physical')
+                    enemy.take_damage(w_damage, 'physical', (player_x, player_y))
                     hits.append(enemy)
             elif w_type == 'shotgun':
                 if abs(angle_diff) < 0.3:
@@ -712,12 +769,12 @@ class EnemyManager:
                         # Damage falloff with distance
                         falloff = max(0.3, 1.0 - dist / w_range)
                         total_dmg = w_damage * hit_pellets / pellets * falloff
-                        enemy.take_damage(total_dmg, 'physical')
+                        enemy.take_damage(total_dmg, 'physical', (player_x, player_y))
                         hits.append(enemy)
             elif w_type == 'revolver':
                 if abs(angle_diff) < 0.15:
                     falloff = max(0.5, 1.0 - dist / w_range * 0.3)
-                    enemy.take_damage(w_damage * falloff, 'physical')
+                    enemy.take_damage(w_damage * falloff, 'physical', (player_x, player_y))
                     hits.append(enemy)
 
         return hits
@@ -763,6 +820,10 @@ class EnemyManager:
 
     def get_alive_enemies(self):
         return [e for e in self.enemies if e.alive]
+
+    def get_renderable_enemies(self):
+        """Living enemies plus ones still playing their death animation."""
+        return [e for e in self.enemies if e.alive or e.dying]
 
     def collect_drops(self, game_map, player=None):
         """Turn freshly killed enemies into ground pickups. Returns the new pickups."""

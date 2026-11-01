@@ -895,10 +895,12 @@ class Game:
     # ── Render ────────────────────────────────────────────────────────────
     def render(self, dt):
         alive_enemies = self.enemy_manager.get_alive_enemies()
+        # the renderer also draws enemies that are still playing their death animation
+        render_enemies = self.enemy_manager.get_renderable_enemies()
 
         if self.state == STATE_PLAYING:
             self.renderer.render_frame(
-                self.player, self.game_map, alive_enemies, self.effects, dt)
+                self.player, self.game_map, render_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
                                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
@@ -916,7 +918,7 @@ class Game:
 
         elif self.state == STATE_PAUSED:
             self.renderer.render_frame(
-                self.player, self.game_map, alive_enemies, self.effects, dt)
+                self.player, self.game_map, render_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             draw_top_hud(self.internal, self.player, self.game_map,
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
