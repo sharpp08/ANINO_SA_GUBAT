@@ -85,6 +85,25 @@ ENEMY_AUDIO_EVENTS = {
     'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.004, 'decay': 1.8, 'gain': 0.92, 'breath': 0.0, 'drive': 1.0},
 }
 
+# Each creature has its own Tik-Tik signature. These affect ONLY the added
+# stalking sound; alert, attack, hurt, death and jumpscare sounds stay untouched.
+TIKTIK_DESIGNS = {
+    # Aswang: dry bone/teeth snaps with a faint throat-rattle underneath.
+    'aswang':      {'click_hz': 1850, 'tone_hz': 730,  'spacing': (0.00, 0.075, 0.19, 0.39), 'noise': 0.30, 'tone': 0.12, 'sub': 0.10, 'tail': 15.0},
+    # Manananggal: piercing, metallic wing-claw ticks in a fluttering triplet.
+    'manananggal': {'click_hz': 3350, 'tone_hz': 2850, 'spacing': (0.00, 0.045, 0.105, 0.29, 0.34), 'noise': 0.24, 'tone': 0.25, 'sub': 0.02, 'tail': 21.0},
+    # Tikbalang: hollow hoof knocks with an uneven double-step rhythm.
+    'tikbalang':   {'click_hz': 1120, 'tone_hz': 390,  'spacing': (0.00, 0.13, 0.37, 0.50), 'noise': 0.18, 'tone': 0.20, 'sub': 0.12, 'tail': 11.0},
+    # Kapre: heavy, low wooden trunk-knocks with a chesty resonance.
+    'kapre':       {'click_hz': 620,  'tone_hz': 115,  'spacing': (0.00, 0.24, 0.58), 'noise': 0.12, 'tone': 0.25, 'sub': 0.32, 'tail': 8.0},
+    # White Lady: thin, icy glass-like ticks with a long eerie high ring.
+    'white_lady':  {'click_hz': 4200, 'tone_hz': 3150, 'spacing': (0.00, 0.17, 0.43), 'noise': 0.10, 'tone': 0.30, 'sub': 0.00, 'tail': 7.0},
+    # Multo: hollow, ghostly clicks with a wavering spectral tail.
+    'multo':       {'click_hz': 1450, 'tone_hz': 980,  'spacing': (0.00, 0.11, 0.31, 0.56), 'noise': 0.16, 'tone': 0.23, 'sub': 0.04, 'tail': 5.5},
+    # Sigbin: rapid insect/ratchet chatter, tight and aggressively repetitive.
+    'sigbin':      {'click_hz': 2750, 'tone_hz': 1850, 'spacing': (0.00, 0.035, 0.08, 0.145, 0.23, 0.31), 'noise': 0.32, 'tone': 0.15, 'sub': 0.00, 'tail': 26.0},
+}
+
 
 class EnemyAudioManager:
     def __init__(self):
@@ -158,34 +177,48 @@ class EnemyAudioManager:
             )
 
         if event_name == 'tiktik':
-            # A sharp, dry Filipino folklore "tik-tik-tik" call: three uneven
-            # wooden/beak-like clicks with a thin insectile whistle underneath.
-            # Each enemy profile shifts the resonant pitch so individuals do not
-            # sound like an identical loop.
-            click_rate = 3.0 + (profile['base_hz'] % 7) * 0.11
-            click_period = max(1, int(rate / click_rate))
-            clicks = np.zeros(n, dtype=np.float64)
-            offsets = (0, int(rate * 0.105), int(rate * 0.245))
-            for burst_start in offsets:
-                idx = burst_start
-                while idx < n:
-                    length = max(2, int(rate * 0.0045))
-                    end = min(n, idx + length)
-                    if end > idx:
-                        local_t = np.arange(end - idx, dtype=np.float64) / rate
-                        clicks[idx:end] += np.sin(2.0 * np.pi * (2350.0 + profile['base_hz'] * 1.8) * local_t) * np.exp(-local_t * 780.0)
-                    idx += click_period
-            whistle = np.sin(2.0 * np.pi * (1450.0 + profile['base_hz'] * 2.2) * t)
-            whistle *= np.exp(-t * 5.5) * 0.13
-            low_rattle = fft_filter(rng.standard_normal(n), rate, lo=500, hi=1800) * 0.08
-            wave = clicks + whistle + low_rattle
+            # Build a louder, unmistakably different stalking call for each
+            # creature using its own click pitch, rhythm and resonant body.
+            design = TIKTIK_DESIGNS[enemy_type]
+            wave = np.zeros(n, dtype=np.float64)
+            click_len = max(4, int(rate * 0.018))
+            click_t = np.arange(click_len, dtype=np.float64) / rate
+            for burst_start in design['spacing']:
+                idx = int(rate * burst_start)
+                if idx >= n:
+                    continue
+                end = min(n, idx + click_len)
+                local_t = click_t[:end - idx]
+                # A hard transient plus a short creature-specific resonant tail.
+                transient = np.sin(2.0 * np.pi * design['click_hz'] * local_t)
+                transient += 0.32 * np.sin(2.0 * np.pi * design['click_hz'] * 1.73 * local_t)
+                transient *= np.exp(-local_t * design['tail'])
+                grit = rng.standard_normal(len(local_t)) * np.exp(-local_t * (design['tail'] * 0.72))
+                wave[idx:end] += transient + design['noise'] * grit
+
+            # Tonal signature continues briefly after the clicks, like a creature
+            # resonating in the forest. Low layer is reserved for heavier monsters.
+            ring = np.sin(2.0 * np.pi * design['tone_hz'] * t)
+            ring *= np.exp(-t * (3.2 if enemy_type in ('white_lady', 'multo') else 7.0))
+            wave += design['tone'] * ring
+            if design['sub'] > 0:
+                sub = np.sin(2.0 * np.pi * (72.0 + design['sub'] * 95.0) * t)
+                wave += design['sub'] * sub * np.exp(-t * 9.0)
+            # Add a little rasp to make the pattern cut through ambient forest noise.
+            rasp = fft_filter(rng.standard_normal(n), rate, lo=900, hi=min(9000, rate * 0.45))
+            wave += rasp * (0.035 + design['noise'] * 0.08)
         else:
             wave = voice(f0)
         chorus = profile.get('chorus')
         if chorus:                                      # second, detuned voice -> ghostly beating
             wave = wave + 0.75 * voice(f0 * 2 ** (chorus / 1200.0), 1)
 
-        wave = wave * self._amp_gate(profile, t, p, rng)
+        # Do not apply the creature voice gate to Tik-Tik: it can mute or
+        # pulse the clicks unpredictably (especially for Kapre and Sigbin).
+        if event_name == 'tiktik':
+            wave *= 0.88 + 0.12 * np.sin(2.0 * np.pi * 2.2 * t) ** 2
+        else:
+            wave = wave * self._amp_gate(profile, t, p, rng)
 
         envelope = (1.0 - np.exp(-t / max(event['att'], 1e-3))) * np.exp(-event['decay'] * p)
         envelope *= np.clip((1.0 - p) * 14.0, 0.0, 1.0)
