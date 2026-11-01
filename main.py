@@ -809,9 +809,9 @@ class Game:
             enemy._tiktik_timer -= dt
             if dist <= 22.0 and enemy._tiktik_timer <= 0.0:
                 proximity = max(0.0, min(1.0, 1.0 - dist / 22.0))
-                # Quiet background layer; the enemy's original attack/alert sounds
-                # remain dominant and are not modified.
-                intensity = 0.12 + proximity * 0.28
+                # Stronger, more readable stalking call; attack sounds are still
+                # protected by the attack-state pause above.
+                intensity = 0.24 + proximity * 0.56
                 try:
                     enemy_audio_mgr.play_spatial(
                         enemy.type, 'tiktik',
