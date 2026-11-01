@@ -83,7 +83,7 @@ ENEMY_AUDIO_EVENTS = {
     'death':     {'time': 1.20, 'pitch': 0.80, 'sweep': -0.55, 'bump': 0.05, 'att': 0.04,  'decay': 2.2, 'gain': 0.90, 'breath': 2.0, 'drive': 0.8},
     'jumpscare': {'time': 0.85, 'pitch': 1.15, 'sweep': 0.45,  'bump': 0.10, 'att': 0.015, 'decay': 0.9, 'gain': 1.00, 'breath': 1.4, 'drive': 1.8},
     # Dedicated chase screams; the enemy anatomy/profile makes each one distinct.
-    'scream':    {'time': 1.25, 'pitch': 1.30, 'sweep': 0.62, 'bump': 0.22, 'att': 0.012, 'decay': 0.72, 'gain': 1.12, 'breath': 1.65, 'drive': 1.65},
+    'scream':    {'time': 1.55, 'pitch': 1.38, 'sweep': 0.78, 'bump': 0.30, 'att': 0.006, 'decay': 0.56, 'gain': 1.28, 'breath': 2.15, 'drive': 2.35},
     'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.004, 'decay': 1.8, 'gain': 0.92, 'breath': 0.0, 'drive': 1.0},
 }
 
@@ -211,6 +211,22 @@ class EnemyAudioManager:
             wave += rasp * (0.035 + design['noise'] * 0.08)
         else:
             wave = voice(f0)
+
+        if event_name == 'scream':
+            # Add a forceful breath/roar layer and a creature-scaled chest hit.
+            # This makes the chase call cut through the forest ambience without
+            # changing the original alert/attack/hurt/death voice designs.
+            scream_env = np.sin(np.pi * np.clip(p, 0.0, 1.0)) ** 0.62
+            air = fft_filter(rng.standard_normal(n), rate, lo=180, hi=min(7200, rate * 0.45))
+            air = _pk(air) * scream_env
+            sub_hz = max(32.0, min(68.0, profile['base_hz'] * 0.22))
+            chest = np.sin(2.0 * np.pi * sub_hz * t + 0.35 * np.sin(2.0 * np.pi * 3.1 * t))
+            chest *= scream_env * (0.22 if profile['base_hz'] < 180 else 0.11)
+            # A short noisy attack gives the scream a sudden, startling onset.
+            onset = np.exp(-t * 19.0) * rng.standard_normal(n)
+            onset = fft_filter(onset, rate, lo=500, hi=min(8500, rate * 0.45))
+            wave = wave + 0.24 * air + chest + 0.10 * _pk(onset)
+
         chorus = profile.get('chorus')
         if chorus:                                      # second, detuned voice -> ghostly beating
             wave = wave + 0.75 * voice(f0 * 2 ** (chorus / 1200.0), 1)
