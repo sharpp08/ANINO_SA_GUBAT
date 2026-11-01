@@ -804,8 +804,10 @@ class Game:
                 enemy._scream_pause_timer = max(0.0, scream_pause - dt)
                 enemy._tiktik_timer = max(getattr(enemy, '_tiktik_timer', 0.0), 0.25)
                 continue
-            # Do not emit a Tik-Tik on the same frame a chase scream is queued.
-            if enemy.just_entered_chase or enemy_state == 'attack':
+            # Suppress Tik-Tik only while a chase scream is queued/playing.
+            # The 'attack' AI state also means the enemy is actively chasing, so
+            # blocking it here would silence stalking clicks for the whole pursuit.
+            if enemy.just_entered_chase:
                 enemy._tiktik_timer = max(getattr(enemy, '_tiktik_timer', 0.0), 0.35)
                 continue
 
@@ -817,7 +819,7 @@ class Game:
                 proximity = max(0.0, min(1.0, 1.0 - dist / 22.0))
                 # Stronger, more readable stalking call; attack sounds are still
                 # protected by the attack-state pause above.
-                intensity = 0.24 + proximity * 0.56
+                intensity = 0.35 + proximity * 0.65
                 try:
                     enemy_audio_mgr.play_spatial(
                         enemy.type, 'tiktik',
@@ -844,13 +846,29 @@ class Game:
             import traceback
             traceback.print_exc()
         
-        # Chase scream audio: trigger scream for enemies that entered chase state
+        # Recurring chase screams: each enemy keeps its own cooldown and voice.
+        # Tik-Tik is paused only for the scream plus its short reverb tail.
         for enemy in self.enemy_manager.enemies:
-            if enemy.alive and enemy.just_entered_chase:
+            if not enemy.alive:
+                continue
+            enemy_state = getattr(getattr(enemy, 'state', None), 'value', getattr(enemy, 'state', None))
+            pursuing = enemy_state in ('investigate', 'stalk', 'attack')
+            should_scream = False
+
+            if enemy.just_entered_chase:
                 enemy.just_entered_chase = False
+                should_scream = True
+            elif pursuing:
+                enemy._chase_scream_timer = max(
+                    0.0, getattr(enemy, '_chase_scream_timer', random.uniform(3.0, 4.5)) - dt
+                )
+                if enemy._chase_scream_timer <= 0.0:
+                    should_scream = True
+            else:
+                enemy._chase_scream_timer = 0.0
+
+            if should_scream:
                 try:
-                    # Pause this enemy's stalking clicks for the full scream and
-                    # its audible reverb tail. The scream uses a unique creature voice.
                     enemy._scream_pause_timer = enemy_audio_mgr.duration_for(enemy.type, 'scream')
                     enemy_audio_mgr.play_spatial(
                         enemy.type,
@@ -861,10 +879,12 @@ class Game:
                         enemy.x,
                         enemy.y,
                         base_volume=1.0,
-                        max_dist=enemy.detect_range * 2.0,
+                        max_dist=enemy.detect_range * 2.4,
                     )
+                    enemy._chase_scream_timer = random.uniform(4.5, 6.0)
                 except Exception as exc:
                     print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
+                    enemy._chase_scream_timer = 2.0
 
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
