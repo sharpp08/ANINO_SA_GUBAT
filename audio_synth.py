@@ -33,6 +33,13 @@ import pygame
 try:
     from scipy import fft as _fftmod
     _FFT_KW = {'workers': -1}
+except ImportError:
+    try:
+        import scipy.fft as _fftmod
+        _FFT_KW = {'workers': -1}
+    except Exception:
+        _fftmod = np.fft
+        _FFT_KW = {}
 except Exception:                                   # pragma: no cover
     _fftmod = np.fft
     _FFT_KW = {}
@@ -289,12 +296,15 @@ AMBIENCE_RESERVED = 2          # channels 0/1 hold the wind + cricket beds
 class SoundManager:
     def __init__(self):
         try:
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
         except Exception:
             try:
-                pygame.mixer.init(frequency=22050, size=-16, channels=2)
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
             except Exception:
-                pass
+                try:
+                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=1024)
+                except Exception:
+                    pass
         mixer_init = pygame.mixer.get_init()
         self.sample_rate = mixer_init[0] if mixer_init else 44100
         self.rate = self.sample_rate
