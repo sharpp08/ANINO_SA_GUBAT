@@ -9,7 +9,7 @@ noise-modulated motion that has real anticipation and follow-through:
   walk   : weight shift + gait bob
   stalk  : low, prowling sway with pauses
   attack : WINDUP (0.16s squash crouch) -> LUNGE (0.13s stretch) -> spring RECOVER
-  hit    : scale impulse kicks the spring (visible stagger)
+  hit    : per-hit squash/rebound, sideways flinch and tilt, scaled by hit strength
   hover  : floating types bob on a soft spring instead of a fixed sine
 
 WIRING (2 small edits in renderer.py - see INTEGRATION_GUIDE.md):
@@ -42,9 +42,12 @@ class RealisticEnemyAnimator:
                 'spring_scale': SpringScalar(1.0, stiffness=240.0, damping=20.0,
                                              min_value=0.55, max_value=1.65),
                 'spring_hover': SpringScalar(0.0, stiffness=70.0, damping=8.0),
+                # lateral flinch (fraction of sprite width) and tilt (degrees) from hits
+                'spring_flinch': SpringScalar(0.0, stiffness=190.0, damping=13.0),
+                'spring_tilt': SpringScalar(0.0, stiffness=130.0, damping=9.0),
                 'atk_t': None,
                 'was_attacking': False,
-                'was_hit': False,
+                'hit_seq': getattr(enemy, 'hit_seq', 0),
             }
             enemy._ra = rec
         return rec
@@ -66,11 +69,17 @@ class RealisticEnemyAnimator:
         if rec['atk_t'] is not None:
             rec['atk_t'] += dt
 
-        # hit reaction: kick the scale spring when hit_flash spikes
-        if enemy.hit_flash > 0.95 and not rec['was_hit']:
-            rec['spring_scale'].impulse(6.0)
-            rec['spring_hover'].impulse(-2.2)
-        rec['was_hit'] = enemy.hit_flash > 0.5
+        # Hit reaction, fired once per hit (hit_seq), scaled by how hard it landed:
+        #   impact squash -> rebound overshoot, sideways flinch, tilt away, hover jolt.
+        seq = getattr(enemy, 'hit_seq', 0)
+        if seq != rec['hit_seq']:
+            rec['hit_seq'] = seq
+            s = getattr(enemy, 'hit_strength', 0.6)
+            side = getattr(enemy, 'hit_side', 1)
+            rec['spring_scale'].impulse(-5.5 * s)
+            rec['spring_hover'].impulse(-2.4 * s)
+            rec['spring_flinch'].impulse(side * 3.4 * s)
+            rec['spring_tilt'].impulse(-side * 95.0 * s)
 
         # phase-driven targets
         target_scale, target_hover = 1.0, 0.0
@@ -84,6 +93,8 @@ class RealisticEnemyAnimator:
                 target_scale, target_hover = 1.30, 0.04
         rec['spring_scale'].update(dt, target_scale)
         rec['spring_hover'].update(dt, target_hover)
+        rec['spring_flinch'].update(dt, 0.0)
+        rec['spring_tilt'].update(dt, 0.0)
 
     def transform(self, enemy, t_s):
         """Return render transform values. t_s = seconds (pygame.time.get_ticks()/1000)."""
@@ -118,7 +129,8 @@ class RealisticEnemyAnimator:
         if rec['atk_t'] is not None and rec['atk_t'] > WINDUP:
             jitter = rec['noise_fast'].sample(t_s * 11.0) * 2.4
 
-        return {'breathe': breathe, 'sway': sway, 'hover': hover, 'jitter': jitter}
+        return {'breathe': breathe, 'sway': sway, 'hover': hover, 'jitter': jitter,
+                'flinch': rec['spring_flinch'].value, 'tilt': rec['spring_tilt'].value}
 
 
 _animator = None

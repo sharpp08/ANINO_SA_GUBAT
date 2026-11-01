@@ -20,3 +20,9 @@ This test suite covers:
 python tests/test_raycast_fast.py
 ```
 Checks the vectorised raycaster and sprite depth-test in `raycast_fast.py` against the original scalar implementations.
+
+## Enemy Drops / Hit Reactions (headless)
+```bash
+python tests/test_enemy_drops.py
+python tests/test_enemy_hit_reactions.py
+```

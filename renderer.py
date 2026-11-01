@@ -30,6 +30,7 @@ import numpy as np
 from settings import *
 from floor_fast import fill_floor
 from raycast_fast import cast_rays, visible_runs
+from enemies import DEATH_ANIM_TIME
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
@@ -276,6 +277,7 @@ class Renderer:
         self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         self._dbg_key = None
         self._dbg_surf = None
+        self.hit_fx = []  # small blood / ectoplasm / spark particles spawned on enemy hits
 
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
@@ -677,6 +679,7 @@ class Renderer:
 
         # 6. Glowing eyes / halos: drawn AFTER darkness so they show in the dark
         self._draw_emissive()
+        self._update_draw_hit_fx(dt)
 
         # 7. Particles (fireflies / dust / spores)
         if ENABLE_PARTICLES:
@@ -810,6 +813,7 @@ class Renderer:
         pickups = getattr(game_map, 'pickups', [])
         pickups_active = sum(1 for p in pickups if p.get('active', True))
         nearest = None
+        enemies = [e for e in enemies if e.alive]
         for e in enemies:
             d = math.hypot(e.x - player.x, e.y - player.y)
             if nearest is None or d < nearest:
@@ -1236,7 +1240,7 @@ class Renderer:
         for plant in plant_candidates:
             consider('plant', plant, plant['x'], plant['y'], MAX_DEPTH * 0.6)
         for enemy in enemies:
-            if not enemy.alive:
+            if not enemy.alive and not getattr(enemy, 'dying', False):
                 continue
             if consider('enemy', enemy, enemy.x, enemy.y, MAX_DEPTH):
                 stats['enemies_view'] += 1
@@ -1326,8 +1330,11 @@ class Renderer:
 
         self.stats = stats
 
-    def _draw_one(self, img, cx, bottom, sw, sh, dist, stats):
-        """Scale, light and depth-test-blit one billboard. Returns columns drawn."""
+    def _draw_one(self, img, cx, bottom, sw, sh, dist, stats, cache=True, alpha=255):
+        """Scale, light and depth-test-blit one billboard. Returns columns drawn.
+
+        cache=False is for one-off frames (hit flashes, tilted or fading sprites) so they
+        don't churn the shared scaled-sprite cache."""
         sw = int(sw)
         sh = int(sh)
         # Clamp oversized sprites instead of culling them.
@@ -1344,7 +1351,16 @@ class Renderer:
             return 0
         if sh > self.h * 2 or sw > self.w * 2:
             return self._draw_one_cropped(img, cx, bottom, sw, sh, dist, stats)
-        scaled, qsw, qsh = self._lit_sprite(img, sw, sh, dist)
+        if cache:
+            scaled, qsw, qsh = self._lit_sprite(img, sw, sh, dist)
+        else:
+            qsw, qsh = sw, sh
+            scaled = pygame.transform.scale(img, (qsw, qsh))
+            shade = max(MIN_SPRITE_LIGHT, 1.0 - 0.55 * min(1.0, dist / max(1.0, float(MAX_DEPTH))))
+            v = min(255, (int(255 * shade) + 8) // 16 * 16)
+            scaled.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+            if alpha < 255:
+                scaled.set_alpha(max(0, alpha))
         x = int(cx - qsw / 2)
         y = int(bottom - qsh)
         n = self._blit_zbuf(scaled, x, y, dist)
@@ -1421,19 +1437,27 @@ class Renderer:
         sway = 0.0
         hover = 0.0
         jitter = 0.0
+        flinch = 0.0   # lateral hit recoil, fraction of sprite width
+        tilt = 0.0     # hit recoil tilt, degrees
 
-        if getattr(self, 'enemy_animator', None) is not None and not is_dead:
+        # Death collapse progress (0 -> 1) and eased value: fast drop, slow settle
+        death_p = min(1.0, getattr(enemy, 'death_t', 0.0) / DEATH_ANIM_TIME) if is_dead else 0.0
+        death_e = 1.0 - (1.0 - death_p) ** 3
+
+        if getattr(self, 'enemy_animator', None) is not None:
             tr = self.enemy_animator.transform(enemy, t_ticks * 0.001)
             breathe = tr['breathe']
             sway = tr['sway'] * unit * 0.05
             hover = tr['hover'] * unit
             jitter = tr['jitter']
+            flinch = tr.get('flinch', 0.0)
+            tilt = tr.get('tilt', 0.0)
         else:
             breath_freq = 0.003 if etype in ('kapre', 'tikbalang') else (0.006 if etype in ('sigbin', 'aswang') else 0.004)
             phase = (id(enemy) % 628) / 100.0
             breathe = 1.0 + 0.035 * math.sin(t_ticks * breath_freq + phase)
             if is_dead:
-                breathe = 0.28
+                breathe = 1.0
             elif is_atk:
                 attack_pulse = math.sin(t_ticks * 0.02 + phase)
                 breathe *= (1.18 + 0.08 * attack_pulse)
@@ -1446,7 +1470,7 @@ class Renderer:
                 breathe *= 1.0 + 0.04 * math.sin(t_ticks * 0.0035 + phase)
 
             sway_amp = 0.05 if is_run else (0.025 if is_crawl else 0.035)
-            sway = math.sin(t_ticks * 0.004 + phase) * sw * sway_amp
+            sway = math.sin(t_ticks * 0.004 + phase) * unit * 0.5 * sway_amp
             if is_atk:
                 sway += math.sin(t_ticks * 0.03) * 3.0 + random.uniform(-1.0, 1.0)
             elif is_run:
@@ -1459,23 +1483,61 @@ class Renderer:
             elif is_dead:
                 hover = -unit * 0.25
 
-        sh = unit * (0.28 if is_dead else (0.52 if is_crawl else 0.85)) * size_mul * breathe
+        if is_dead:
+            # collapse: shrink toward the ground, sink, and lean to the side the last hit came from
+            body = 0.85 * (1.0 - 0.72 * death_e)
+            hover = hover * (1.0 - death_e) - unit * 0.10 * death_e
+        else:
+            body = 0.52 if is_crawl else 0.85
+        sh = unit * body * size_mul * breathe
         sw = sh * img.get_width() / img.get_height()
         bottom = floor_y - hover
+        if is_dead:
+            sway += getattr(enemy, 'hit_side', 1) * sw * 0.22 * death_e
+            tilt += -getattr(enemy, 'hit_side', 1) * 38.0 * death_e
+        sway += flinch * sw
 
-        if enemy.hit_flash > 0 or enemy.bound or anim_state == 'stagger':
+        # Impact colouring: white-hot first frames, then a tint that fades out.
+        tint = None
+        hf = enemy.hit_flash
+        if hf > 0 and not is_dead:
+            white = max(0.0, (hf - 0.6) / 0.4)
+            base = (210, 170, 60) if getattr(enemy, 'last_damage_type', 'physical') == 'sacred' else (210, 36, 28)
+            k = min(1.0, hf) * 0.8
+            tint = tuple(min(255, int(base[i] * k + 255 * white * 0.9)) for i in range(3))
+        if enemy.bound and not is_dead:
+            tint = (60, 20, 120) if tint is None else tuple(min(255, tint[i] + (60, 20, 120)[i]) for i in range(3))
+
+        alpha = 255
+        if is_dead:
+            alpha = int(255 * (1.0 - max(0.0, (death_p - 0.55) / 0.45)))
+
+        # Anything other than the plain cached frame is drawn through the uncached path.
+        special = tint is not None or abs(tilt) > 0.4 or alpha < 255
+        if special:
             img = img.copy()
-            if enemy.hit_flash > 0 or anim_state == 'stagger':
-                v = max(0, min(220, int(max(enemy.hit_flash, 0.5) * 200)))
-                img.fill((v, v // 2, v // 2), special_flags=pygame.BLEND_RGB_ADD)
-            if enemy.bound:
-                img.fill((60, 20, 120), special_flags=pygame.BLEND_RGB_ADD)
-
-        n = self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
+            if tint is not None:
+                img.fill(tint, special_flags=pygame.BLEND_RGB_ADD)
+            if abs(tilt) > 0.4:
+                ow, oh = img.get_size()
+                img = pygame.transform.rotate(img, tilt)
+                rw, rh = img.get_size()
+                sw_r, sh_r = sw * rw / ow, sh * rh / oh
+                bottom += (sh_r - sh) * 0.5   # rotate about the body centre, not the feet
+                sw, sh = sw_r, sh_r
+        n = self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats,
+                           cache=not special, alpha=alpha)
 
         cx = screen_x + sway
         top = bottom - sh
         left = cx - sw / 2.0
+
+        # One burst of particles per hit, spawned where the enemy is on screen right now.
+        seq = getattr(enemy, 'hit_seq', 0)
+        if seq != getattr(enemy, '_fx_seq', 0):
+            enemy._fx_seq = seq
+            if n > 0 and enemy.hit_flash > 0.5:
+                self._emit_hit_fx(cx, top + sh * 0.42, enemy, sh)
 
         if ENEMY_EYE_GLOW and n > 0 and not is_dead:
             pulse = 0.7 + 0.3 * math.sin(t_ticks * 0.007 + phase)
@@ -1500,6 +1562,54 @@ class Renderer:
 
         if self.debug_f4:
             self._debug_marker(cx, top + sh * 0.5, (255, 0, 255), f"{etype}:{anim_state} {dist:.1f}")
+
+    def _emit_hit_fx(self, x, y, enemy, sh):
+        """Spawn a spray of blood (or ectoplasm / holy sparks) from a hit enemy."""
+        strength = getattr(enemy, 'hit_strength', 0.6)
+        ghost = enemy.type in ('multo', 'white_lady')
+        sacred = getattr(enemy, 'last_damage_type', 'physical') == 'sacred'
+        count = int(6 + 18 * strength)
+        spread = max(4.0, sh * 0.12)
+        side = getattr(enemy, 'hit_side', 1)
+        for _ in range(count):
+            ang = random.uniform(-math.pi * 0.95, -math.pi * 0.05)
+            spd = random.uniform(35.0, 150.0) * (0.55 + strength)
+            if sacred:
+                col = random.choice(((255, 226, 130), (255, 244, 200)))
+            elif ghost:
+                col = random.choice(((170, 205, 235), (215, 232, 255)))
+            else:
+                col = random.choice(((150, 14, 14), (112, 10, 12), (186, 26, 20)))
+            life = random.uniform(0.35, 0.75)
+            self.hit_fx.append([x + random.uniform(-spread, spread), y + random.uniform(-spread, spread) * 0.5,
+                                math.cos(ang) * spd + side * random.uniform(0.0, 45.0), math.sin(ang) * spd,
+                                life, life, 2 if random.random() < 0.3 else 1, col, sacred or ghost])
+        if len(self.hit_fx) > 220:
+            del self.hit_fx[:len(self.hit_fx) - 220]
+
+    def _update_draw_hit_fx(self, dt):
+        """Advance and draw hit particles (gravity, fade). Cheap: tens of 1-2px fills."""
+        fx = self.hit_fx
+        if not fx:
+            return
+        surf = self.surface
+        w, h = self.w, self.h
+        alive = []
+        for p in fx:
+            p[4] -= dt
+            if p[4] <= 0:
+                continue
+            p[2] *= (1.0 - 1.5 * dt)
+            p[3] += 300.0 * dt
+            p[0] += p[2] * dt
+            p[1] += p[3] * dt
+            x, y = int(p[0]), int(p[1])
+            if 0 <= x < w and 0 <= y < h:
+                r = p[4] / p[5]
+                col = p[7] if p[8] else tuple(int(c * (0.45 + 0.55 * r)) for c in p[7])
+                surf.fill(col, (x, y, p[6], p[6]))
+            alive.append(p)
+        self.hit_fx = alive
 
     def _debug_marker(self, x, y, color, label):
         x = int(x)
