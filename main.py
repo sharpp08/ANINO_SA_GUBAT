@@ -789,6 +789,35 @@ class Game:
         # Enemy AI with stealth sensing and sanity proximity
         self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)
 
+        # Each living enemy emits its own spatial "tik-tik-tik" stalking call.
+        # Independent timers prevent a synchronized chorus; closer enemies call
+        # more often and louder, while distance/panning keeps their direction clear.
+        for enemy in self.enemy_manager.enemies:
+            if not enemy.alive:
+                continue
+            dist = enemy.distance_to(p.x, p.y)
+            if not hasattr(enemy, '_tiktik_timer'):
+                enemy._tiktik_timer = random.uniform(0.25, 2.4)
+            enemy._tiktik_timer -= dt
+            if dist <= 22.0 and enemy._tiktik_timer <= 0.0:
+                proximity = max(0.0, min(1.0, 1.0 - dist / 22.0))
+                intensity = 0.28 + proximity * 0.72
+                try:
+                    enemy_audio_mgr.play_spatial(
+                        enemy.type, 'tiktik',
+                        p.x, p.y, p.angle, enemy.x, enemy.y,
+                        base_volume=intensity, max_dist=22.0,
+                    )
+                except Exception as exc:
+                    print(f"[Audio] tiktik sound failed for {enemy.type}: {exc}")
+                # A nearby hunter clicks rapidly; distant ones are sparse and unsettling.
+                enemy._tiktik_timer = random.uniform(
+                    1.05 - proximity * 0.45,
+                    2.8 - proximity * 1.05,
+                )
+            elif dist > 22.0:
+                enemy._tiktik_timer = max(enemy._tiktik_timer, 0.15)
+
         # Loot: enemies that just died may drop a pickup where they fell
         try:
             from enemies import DROP_LABELS
