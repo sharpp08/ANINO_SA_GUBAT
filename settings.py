@@ -5,7 +5,7 @@ Game Settings and Configuration (Enhanced - Phases 1 to 5)
 import json
 import os
 
-BUILD_VERSION = "BUILD 2026.10.31-HYBRID-MAP"
+BUILD_VERSION = "BUILD 2026.11.02-SURVIVAL-AUDIO"
 
 # Display
 SCREEN_WIDTH = 1280

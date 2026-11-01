@@ -4,7 +4,7 @@
 > A first-person raycasting horror-shooter set in Philippine folklore, built entirely in Python with **Pygame-CE** and **NumPy**.  
 > Survive the haunted forest. Resist the creatures of the night. Trust in faith — and your bolo.
 
-**Current build:** `BUILD 2026.10.31-HYBRID-MAP` (shown in the F3 debug overlay and the console at startup)
+**Current build:** `BUILD 2026.11.02-SURVIVAL-AUDIO` (shown in the F3 debug overlay and the console at startup)
 
 ---
 
@@ -39,11 +39,13 @@
 
 The game features:
 - 100% procedurally generated pixel-art assets and textures (no external texture files needed)
-- An outdoor forest rendered with depth-sorted tree billboards, a starry sky with moon and clouds, exponential fog, and a cached flashlight/darkness overlay
+- An outdoor forest rendered with depth-sorted tree billboards, a starry sky with moon and clouds, exponential fog, an atmospheric depth-fog overlay, and a cached flashlight/darkness overlay
 - Glowing enemy eyes and pickup halos that stay visible in the dark
-- Horror feedback: pulsing red vignette, heartbeat and screen shake when enemies get close
-- Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver)
+- Horror feedback: pulsing red vignette, heartbeat and screen shake when enemies get close, plus per-enemy jumpscare sequences on player death
+- Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver), including a voxel-style revolver viewmodel with firing and reload animation
 - A **Sacred Ward** and faith system based on Filipino spiritual traditions
+- A **five-page sunrise survival** objective: collect 5 Bible pages, then endure the night until 7:00 AM. A compass arrow and sunrise clock keep you oriented
+- Unique procedural creature voices for every enemy, with spatial Tik-Tik stalking calls and recurring chase screams
 - Two chapters with carry-over progression, JSON save/load, and a standalone Windows executable build
 
 ---
@@ -59,12 +61,20 @@ The game features:
 | 🌬️ Dynamic Wind | Time-varying wind gusts affecting trees and undergrowth with realistic sway patterns |
 | ✨ Particle Effects | Ejected shell casings, muzzle smoke, bullet sparks, blood splatters with gravity and bounce |
 | 🌌 Atmospheric Sky | Layered clouds with parallax, subtle aurora borealis effect, twinkling stars, dynamic moon |
-| 👹 7 Enemy Types | Each with unique stats and AI (all 7 spawn across the two chapters, see [Chapters](#chapters)) |
-| ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
+| 🌫️ Depth Fog | Atmospheric per-column depth-fog overlay drawn after sprites, cut through by the flashlight beam |
+| 👹 7 Enemy Types | Each with unique stats and AI, its own procedural voice, spatial Tik-Tik stalking call, and jumpscare (all 7 spawn across the two chapters, see [Chapters](#chapters)) |
+| ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload. Revolver uses a voxel-style viewmodel with firing and reload animation |
 | ✝️ 5 Sacred Wards | Light, Shield, Banish, Bind and Final, powered by Faith energy with per-ward cooldowns |
 | 🔦 Flashlight | Battery-powered beam with sway, low-battery flicker, and pickups to recharge |
 | 🧠 Sanity | Darkness and nearby enemies drain sanity; light restores it |
 | 😱 Danger Feedback | Red pulsing vignette, heartbeat and screen shake when an enemy is within 7 tiles |
+| 😈 Jumpscares | Each enemy has its own individual jumpscare — a 2.6-second fullscreen horror sequence triggered when it kills you |
+| 🔊 Creature Voices | Unique source-filter synthesised voices per enemy (growl, shriek, bray, boom, wail, moan, chitter) with distance panning, air-absorption muffling, and recurring chase screams |
+| 🎯 Compass Arrow | Golden HUD arrow that spins like a compass needle to point at the nearest Bible page (or the exit once it opens) |
+| 📡 Radar Mini-Map | Rotating radar showing nearby enemies, walls, trees and pickups; toggle with `M` |
+| 💰 Loot Drops | Slain enemies may drop health, ammo, battery, faith, salt or garlic; the drop favours items you are running low on |
+| 🩸 Hit Reactions | Enemies flinch, tilt and squash on impact; death triggers a squash-and-collapse animation before the body fades |
+| 🌅 Survival Mode | Collect all 5 Bible pages, then survive until 7:00 AM. The forest grows more aggressive as sunrise approaches |
 | 💾 Save/Load | JSON save file in the `saves/` directory |
 | 🎲 Procedural Art | All textures and sprites are generated at runtime; the large ground texture is cached on disk |
 | ⏳ Loading Screen | Step-by-step progress bar while assets are generated at startup |
@@ -79,12 +89,21 @@ ANINO_SA_GUBAT/
 │
 ├── main.py              # Game loop, states, HUD drawing, save/load logic, loading screen
 ├── player.py            # Player class: movement, stamina, sanity, noise, weapons, items, wards
-├── enemies.py           # Enemy AI state machine, noise investigation, proximity sanity drain
+├── enemies.py           # Enemy AI state machine, noise investigation, proximity sanity drain, loot drops, hit/death animation
 ├── map_system.py        # Forest map generation, cabin, trees, chapter entities, validation, tile queries
-├── renderer.py          # Raycasting renderer, sprite pass, flashlight, fog, sky, post-fx, debug overlay
+├── renderer.py          # Raycasting renderer, sprite pass, flashlight, fog, depth-fog, sky, post-fx, debug overlay
 ├── asset_generator.py   # Procedural pixel-art generator (textures, sprites, trees, ground)
-├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis)
+├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis, spatial mixing, ambience)
+├── enemy_audio.py       # Unique per-enemy procedural voices (alert, attack, hurt, death, jumpscare, chase scream, Tik-Tik)
+├── jumpscare.py         # Fullscreen per-enemy jumpscare sequences triggered on player death
 ├── animation_core.py    # Physics & Animation core: springs, easing, NumPy particle system, Verlet ropes, camera shake
+├── anim_integration.py  # Realistic enemy animator: squash, flinch, tilt, hover, attack windup/lunge, death animation
+├── radar.py             # Rotating enemy radar / mini-map
+├── objective.py         # Objective guidance logic (nearest Bible page / exit, heading)
+├── page_arrow.py        # Compass arrow HUD pointing at the next Bible page or the exit
+├── raycast_fast.py      # Vectorised DDA raycaster and sprite depth-test (pure NumPy)
+├── floor_fast.py        # Vectorised perspective floor fill with biome terrain (pure NumPy)
+├── cinematic.py         # Intro cinematic
 ├── settings.py          # All game constants, colors, controls, settings load/save
 ├── requirements.txt     # Python dependencies
 ├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
@@ -92,6 +111,9 @@ ANINO_SA_GUBAT/
 │
 ├── saves/               # (auto-created) JSON save files
 ├── dist/                # (auto-created) PyInstaller build output
+├── tests/               # Headless test suite (smoke tests, raycast equivalence, drops, hit reactions)
+├── tools/               # Asset generation scripts (e.g. Bible-page arrow art)
+├── enemy_animations_pack/  # Optional 6-frame sprite sheets for animated enemies (auto-discovered)
 ├── crash.log            # (auto-created) written if the game crashes
 └── assets/              # (auto-created) Asset directories
     ├── textures/
@@ -169,6 +191,7 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder. Saves, se
 | `G` | Place a Salt circle (repelling/slowing zone) |
 | `H` | Throw Garlic (barrier zone against aswang) |
 | `E` | Interact (open doors, save checkpoints) |
+| `M` | Toggle the radar mini-map on / off |
 | `Escape` | Pause |
 | `F11` | Toggle Fullscreen |
 
@@ -187,11 +210,14 @@ Debug keys (`F3`, `F4`, `F6`, `F7`) are listed under [Debug Tools](#debug-tools)
 
 ## Gameplay Guide
 
-- **Survival:** Navigate the dark forest, manage your flashlight battery, stamina, and sanity. Darkness and nearby enemies drain sanity; light restores it.
-- **Combat:** Use your bolo for silent close-quarters melee, the shotgun for powerful spread damage, or the revolver for precise ranged shots. Firearms are loud and draw enemies.
+- **Survival:** Navigate the dark forest, manage your flashlight battery, stamina, and sanity. Darkness and nearby enemies drain sanity; light restores it. Each chapter gives you 7 minutes (until 7:00 AM) to find all **5 Bible pages** and then survive the remaining time. The forest grows more aggressive as sunrise approaches — new hunters spawn on a timer that shortens as the night goes on.
+- **Compass Arrow & Clock:** A compact panel at the top-centre of the HUD shows your page count, a sunrise countdown clock, and a golden compass arrow that points at the nearest uncollected Bible page. Once you have all 5 pages the arrow redirects to the exit. Press `M` to toggle the radar mini-map, which shows nearby enemies, walls, trees and pickups as a rotating overlay.
+- **Combat:** Use your bolo for silent close-quarters melee, the shotgun for powerful spread damage, or the revolver for precise ranged shots. Firearms are loud and draw enemies. Enemies flinch, tilt and squash when hit, and play a collapse animation when killed.
+- **Loot Drops:** When you kill an enemy it may drop a pickup where it fell. Tougher enemies (Kapre, Tikbalang, Manananggal) drop more often. The roll favours items you are running low on, so you are less likely to get ammo you cannot hold.
 - **Sacred Wards & Items:** Cast wards using Faith energy to repel, shield, banish or bind creatures. Scatter Salt or throw Garlic to create protective zones. Collect Bible pages for lore and strength.
 - **Pickups:** Walk over an item to collect it. Pickups glow softly so you can spot them in the dark. Types: Health, Shotgun Ammo, Revolver Ammo, Salt, Garlic, Flashlight Battery, Faith, Bible Page.
-- **Progression:** The exit (about 1.2 tiles to trigger) stays **sealed until you hold 3 Bible pages for the chapter** (`PAGES_REQUIRED_CH1` / `PAGES_REQUIRED_CH2` in `settings.py`); killing every enemy does **not** open it (`ALLOW_ENEMY_CLEAR_EXIT = False`). Each chapter has 4 pages spread along the forest, so one can be missed. The objective line at the top of the screen shows the nearest page (or the exit once you have enough) with an arrow and distance. Health, ammo, items and wards carry over to the next chapter. Clearing the last chapter shows the ending screen.
+- **Jumpscares:** When an enemy kills you, it triggers its own individual jumpscare — a 2.6-second fullscreen horror sequence with a rushing face, motion streaks, eye flares, impact flash and radial blur, followed by the death screen.
+- **Progression:** The exit stays **sealed until you hold all 5 Bible pages** for the chapter (`PAGES_REQUIRED_CH1` / `PAGES_REQUIRED_CH2`, both 5 in `settings.py`); killing every enemy does **not** open it (`ALLOW_ENEMY_CLEAR_EXIT = False`). Each chapter has 5 pages, including one inside the limestone cave (an open archway, not a closed door). The objective line at the top of the screen shows the nearest page (or the exit once you have enough) with the compass arrow and distance. Health, ammo, items and wards carry over to the next chapter. Surviving until 7:00 AM with all 5 pages shows the win screen ("YOU SURVIVED UNTIL 7:00 AM").
 - **Checkpoints:** Stand next to the checkpoint inside the cabin and press `E` to save your respawn point.
 
 ### Ward Reference
@@ -242,7 +268,21 @@ Reloading makes noise (`4.0`). Shotgun reload takes 1.5 s, revolver reload 1.2 s
 | **Multo** | 50 | 12 | 2.0 | 8 tiles | Banish | None | Ch. 1, Ch. 2 |
 | **Sigbin** | 70 | 18 | 3.5 | 7 tiles | Bind | None | Ch. 1, Ch. 2 |
 
-Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and an aura for the spectral types. They flash when hit, tint purple while bound, and jitter and enlarge when attacking. Manananggal, White Lady and Multo hover above the ground.
+Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and an aura for the spectral types. They flash when hit, tint purple while bound, jitter and enlarge when attacking, flinch and squash when struck, and play a collapse-and-fade death animation when killed. Manananggal, White Lady and Multo hover above the ground.
+
+Each creature also has its own **synthesised voice** and **jumpscare**:
+
+| Enemy | Voice |
+|---|---|
+| Aswang | Rasping vocal-fry growl, chest formants, hard distortion |
+| Manananggal | Harsh amplitude-modulated shriek + leathery wing flaps |
+| Tikbalang | Donkey/horse "hee-haw" — pitch flips between a high and a low note |
+| Kapre | Huge smoky "ho-ho-ho" laugh, each "ho" sinking in pitch |
+| White Lady | Breathy, vibrato-rich wail in a long cave-like reverb |
+| Multo | Whispered, detuned, fluttering moan |
+| Sigbin | Rodent-like chittering with tiny clicks |
+
+Every enemy emits a spatial **Tik-Tik stalking call** (its own signature, closer = more frequent and louder) and, while actively chasing you, a **recurring chase scream**. When an enemy kills you it triggers its **individual jumpscare** — a 2.6-second fullscreen horror sequence. Tougher enemies drop loot more often when slain.
 
 ---
 
@@ -267,14 +307,14 @@ Enemies are rendered as billboards with a jagged glowing rim, glowing eyes, and 
 
 ## Chapters
 
-| Chapter | Setting | Player Start | Exit Position | Trees | Enemies | Pickups |
-|---|---|---|---|---|---|---|
-| **Chapter 1** | Forgotten Forest & Abandoned Village | (15.5, 128.5) | (242.5, 128.5) | ~5,200 | 2 Aswang, Multo, Sigbin, White Lady | 15 |
-| **Chapter 2** | Sunken Swamp & Cursed Grove | (15.5, 128.5) | (242.5, 128.5) | ~6,500 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 11 |
+| Chapter | Setting | Player Start | Exit Position | Trees | Initial Enemies | Bible Pages | Time Limit |
+|---|---|---|---|---|---|---|---|
+| **Chapter 1** | Forgotten Forest & Abandoned Village | (15.5, 128.5) | (242.5, 128.5) | ~5,200 | 2 Aswang, Multo, Sigbin, White Lady | 5 | 7 min |
+| **Chapter 2** | Sunken Swamp & Cursed Grove | (15.5, 128.5) | (242.5, 128.5) | ~6,500 | 2 Aswang, Manananggal, Multo, Sigbin, Tikbalang, Kapre | 5 | 7 min |
 
-Both chapters share the hybrid landmark layout and use the central ancient ruins as a checkpoint. The chapter-specific enemy and pickup placements differ. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away.
+Both chapters share the hybrid landmark layout and use the central ancient ruins as a checkpoint. The chapter-specific enemy and pickup placements differ. Chapter 1 also places a few supplies (salt, battery, faith) and an Aswang near the start so there is something to see right away. Chapter 2's fifth Bible page is inside the limestone cave, which uses an open archway entrance (3 tiles wide) rather than a closed door so the page is always reachable.
 
-After the final chapter, the win screen is shown. Completing Chapter 1 loads Chapter 2 directly with a "CHAPTER 1 CLEARED!" notification.
+Each chapter runs as a **five-page sunrise survival** round: collect all 5 Bible pages, then survive until the 7:00 AM clock runs out. New hunters spawn on a timer that shortens as the night progresses (the interval floors at 10 seconds). If sunrise arrives before you have all 5 pages, you get a warning but can keep playing. Surviving until 7:00 AM with all 5 pages triggers the win screen ("YOU SURVIVED UNTIL 7:00 AM"). Completing Chapter 1 loads Chapter 2 directly with a "CHAPTER 1 CLEARED!" notification.
 
 ---
 
@@ -284,15 +324,17 @@ The renderer draws each frame in this order:
 
 1. **Sky:** Vertical gradient, 260 twinkling stars, layered clouds with parallax, and a moon at a fixed world direction. An atmospheric aurora borealis effect subtly drifts along the horizon.
 
-2. **Floor:** Per-row gradient with exponential-squared fog and a minimum brightness. Dynamic color variation based on distance and time creates a living, breathing forest floor.
+2. **Floor:** Per-row gradient with exponential-squared fog and a minimum brightness, rendered in a single vectorised NumPy pass. Enhanced per-biome ground terrain samples a baked terrain atlas so each region (forest, trail, village, swamp, grove, cave, water) has its own distinct ground tint and texture. Dynamic color variation based on distance and time creates a living, breathing forest floor.
 
-3. **Walls:** DDA raycasting with a texture column per ray, distance shading, darker side faces, and a per-column z-buffer. Rays that hit nothing draw no wall.
+3. **Walls:** DDA raycasting (vectorised via `raycast_fast.py`) with a texture column per ray, distance shading, darker side faces, and a per-column z-buffer. Rays that hit nothing draw no wall.
 
-4. **World sprites:** Trees, enemies, undergrowth and pickups are collected, sorted far to near, and drawn together so they overlap correctly.
+4. **World sprites:** Trees, enemies, undergrowth and pickups are collected, sorted far to near, and drawn together so they overlap correctly. Sprite depth tests run as one vectorised NumPy lookup per screen column.
    - **Trees:** Billboard sprites with wind-based sway. Tree stiffness varies by type (balete trees sway more than rigid mahogany).
    - **Undergrowth:** Procedural ferns, mushrooms, rocks, and bushes react to wind and player proximity. Plants gently push away when the player walks through them.
-   - **Enemy animation:** All enemy sprites have spring-based hover, sway, and breathing animations for organic movement.
+   - **Enemy animation:** All enemy sprites have spring-based hover, sway, and breathing animations for organic movement. Hits trigger per-hit squash, lateral flinch and tilt; death triggers a collapse animation before the body fades.
    - **Particles:** Physics-driven particles including ejected shell casings, muzzle smoke, bullet sparks, and blood splatters with gravity and bounce.
+
+4b. **Atmospheric depth-fog:** A per-column alpha overlay built from the z-buffer, drawn after sprites so distant trees and walls get hazed, but before the flashlight so the beam cuts through it. Controlled by `ENABLE_FOG` with `FOG_NEAR` / `FOG_FAR` constants.
 
 5. **Darkness and flashlight:** One cached overlay with a soft hole and a warm additive glow. It sways with movement and flickers when the battery is below 20%. With the light off or the battery dead, a flat darker overlay is used.
 
@@ -381,13 +423,23 @@ The debug overlay is on by default (`DEBUG_OVERLAY = True`). The console also pr
 |---|---|
 | `main.py` | Game loop, state machine (`MENU` / `INTRO` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN`), HUD, loading screen, chapter loading and advancing, audio triggers, save/load, crash logging |
 | `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, wards, serialization |
-| `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, salt/garlic zones, ward effects, proximity sanity drain |
+| `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, salt/garlic zones, ward effects, proximity sanity drain, loot drops, hit/death animation tracking |
 | `map_system.py` | Boundary and cabin grid, seeded tree placement, per-chapter entities, entity clearance and validation, tile and tree collision queries, doors, pickups |
-| `renderer.py` | Raycasting engine, sprite pass with z-buffer, flashlight, sky, fog, particles, danger feedback, post-fx, F3/F4 debug |
+| `renderer.py` | Raycasting engine, sprite pass with z-buffer, flashlight, sky, depth-fog, fog, particles, danger feedback, post-fx, F3/F4 debug |
 | `asset_generator.py` | Procedural pixel art: wall and floor textures (fBm noise with ambient occlusion), weapons, enemies (with horror rim and drips), pickups, tree billboards, undergrowth, cached world ground |
-| `audio_synth.py` | Procedural sound synthesis using NumPy arrays & Pygame mixer |
-| `cinematic.py` | Intro cinematic |
-| `settings.py` | Constants: display, physics, weapons, enemies, wards, colors, tiles, controls, settings load/save |
+| `audio_synth.py` | Procedural sound synthesis using NumPy arrays & Pygame mixer; spatial panning, air-absorption muffling, mono-to-stereo mixing, mixer format locking, soft-limit + dither, mix headroom, anti-click fade-in |
+| `enemy_audio.py` | Unique per-enemy procedural creature voices (alert, attack, hurt, death, jumpscare, chase scream, Tik-Tik) with source-filter synthesis, reverb, formant shaping and spatial playback |
+| `jumpscare.py` | Per-enemy fullscreen jumpscare sequences triggered on player death (2.6 s procedural animation: rush, streaks, eye flares, impact flash, radial blur, black fade) |
+| `animation_core.py` | Physics & Animation core: springs, easing, NumPy particle system, Verlet ropes, camera shake |
+| `anim_integration.py` | Realistic enemy animator: spring-driven squash/rebound, flinch, tilt, hover, attack windup/lunge, death animation — applied on top of sprite frames |
+| `radar.py` | Rotating mini-map radar showing enemies, walls, trees and pickups within range; sweep-line glow, alert ring, pulsing hunting blips |
+| `objective.py` | Objective guidance logic: nearest uncollected Bible page or the exit, relative bearing, cardinal direction word |
+| `page_arrow.py` | HUD compass arrow (golden art with pulsing glow animation) that rotates to point at the next objective from the top-centre panel |
+| `raycast_fast.py` | Vectorised DDA raycaster and visible-run lookup — processes all rays in lock-step via NumPy instead of a Python per-ray loop |
+| `floor_fast.py` | Vectorised perspective floor fill with per-biome terrain atlas sampling |
+| `cinematic.py` | Intro cinematic (75 s, 6 narrative scenes) |
+| `settings.py` | Constants: display, physics, weapons, enemies, wards, colors, tiles, controls, settings load/save, quality presets |
+| `terrain_gen.py` | Baked 1024×1024 per-biome ground texture and terrain atlas used by the floor renderer |
 
 ---
 
@@ -422,9 +474,11 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 
 ## Technical Notes
 
-- **Raycasting:** DDA (Digital Differential Analyzer) algorithm for wall columns, with fish-eye correction.
-- **Z-Buffer:** One entry per ray. Sprites are depth-sorted every frame and drawn in column runs so only closer walls hide them.
+- **Raycasting:** DDA (Digital Differential Analyzer) algorithm for wall columns, with fish-eye correction. The DDA grid walk and the sprite visible-run test are **vectorised in NumPy** (`raycast_fast.py`) so all rays run in lock-step, and the floor fill is a single vectorised perspective pass (`floor_fast.py`).
+- **Z-Buffer:** One entry per ray. Sprites are depth-sorted every frame and drawn in column runs so only closer walls hide them. The depth test is a single NumPy lookup per screen column.
+- **GPU-Scaled Display:** The window is created with SDL's `SCALED` flag and vsync, so the 1280×720 surface is stretched to the native monitor resolution on the GPU instead of a CPU blit.
 - **Procedural Art:** No external asset files. Everything is generated from Python code at startup, and the 1024×1024 ground texture is saved to `assets/cache/world_ground.npy` after the first run.
+- **Creature Voices:** Enemy voices are synthesised per creature type at startup as source-filtered glottal/harmonic waveforms with formant shaping, reverb and saturation. At play time they are panned, distance-attenuated and air-absorbed (progressively muffled cached copies) so each creature has a distinct, spatialised presence.
 - **Delta Time Cap:** `dt` is capped at 50 ms per frame to prevent physics tunneling on lag spikes.
 - **Upscaling:** Internal buffer (preset-dependent: 320×180 on low, 640×360 on medium/high) upscaled to 1280×720 via `pygame.transform.scale`.
 - **Deterministic maps:** Tree layouts use a seeded random generator per chapter.
@@ -437,6 +491,18 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 
 ### Recent changes
 
+- **Five-Page Sunrise Survival:** Gameplay was remade around a survival loop. Each chapter is a 7-minute round: collect all **5 Bible pages** (the exit stays sealed until you have them, `REQUIRE_PAGES_FOR_EXIT = True`), then endure the night. A sunrise countdown clock and page counter appear in a compact top-centre HUD panel. The forest grows more aggressive as sunrise approaches — hunters spawn on a timer whose interval shortens over the night (flooring at 10 s). Surviving until 7:00 AM with all 5 pages triggers the win screen.
+- **Compass Arrow & Objective Panel:** A golden compass arrow (`page_arrow.py`, art generated by `tools/make_bible_arrow.py`) spins in the top-centre panel to point at the nearest uncollected Bible page, or at the exit once you have enough pages. The panel also shows the page count and a `SUNRISE HH:MM` countdown. The next-objective logic is headless-testable via `objective.py`.
+- **Per-Enemy Jumpscares:** Each of the 7 creatures now has its **own individual jumpscare** sound and a 2.6-second fullscreen procedural sequence (rushing face, motion streaks, eye flares, impact flash, radial blur, black fade) that plays when that enemy kills you. Optional `jumpscare_scream.wav` / `jumpscare.mp4` assets are used when present, with a procedural fallback.
+- **Enemy Loot Drops:** Slain enemies can drop a pickup where they fell (`enemies.py`: `DROP_TABLE`, `roll_drop`, `collect_drops`). Tougher enemies drop more often (Kapre/Tikbalang ~85%, Manananggal ~75%, others ~60%), and the drop rolls toward items you are running low on. The player's near-empty stock boosts the weight of that item.
+- **Realistic Enemy Hit & Death Animation:** `anim_integration.py` drives per-hit spring impulses (impact squash, rebound overshoot, sideways flinch, tilt-away, hover jolt) scaled by hit strength, plus a collapse-and-fade death animation that plays for `DEATH_ANIM_TIME` seconds. Dead-but-animating enemies still render and block the player.
+- **Vectorised Raycaster & Floor:** `raycast_fast.py` runs the DDA grid walk for all rays in lock-step and `floor_fast.py` fills the whole floor in one vectorised NumPy pass (including per-biome terrain atlas sampling). Both are exact drop-in equivalents of the scalar code, verified by `tests/test_raycast_fast.py`. The display is created with SDL's `SCALED` flag + vsync so GPU-side stretching avoids a CPU blit.
+- **Atmospheric Depth-Fog Overlay:** A subtle per-column haze built from the z-buffer, drawn after sprites but before the flashlight so the beam cuts through it. Controlled by `ENABLE_FOG` with `FOG_NEAR` / `FOG_FAR`.
+- **Enhanced Per-Biome Ground Terrain:** The floor renderer samples a baked terrain atlas so each biome (forest, dirt trail, village earth, swamp, ancient grove, limestone cave, shallow water) shows its own distinct ground tint and texture rather than a single flat colour.
+- **Unique Per-Enemy Creature Voices:** `enemy_audio.py` gives every enemy a distinct source-filtered synthesised voice (aswang growl, manananggal shriek, tikbalang bray, kapre "ho-ho-ho" boom, white-lady wail, multo whisper, sigbin chitter) with reverb, formant shaping and saturation. Each living enemy emits its own **spatial "tik-tik" stalking call** (independent timers prevent a synchronised chorus; closer enemies call more often and louder) and a **recurring chase scream** while actively pursuing you; the tik-tik is only paused for the scream's short reverb tail.
+- **Audio Pipeline Improvements:** The mixer format is locked, output is soft-limited and dithered with mix headroom, mono sources are up-mixed to stereo cleanly, a diagnostic tool (`tools/check_audio.py`) validates the pipeline, and an anti-click fade-in removes start-of-sound pops. Forest ambience was lowered so gameplay audio (attacks, calls, screams) stays clear.
+- **Voxel-Style Revolver:** The revolver viewmodel was remade as a voxel-style model (three-quarter view, shrunk to scale) with an animated firing and reloading sequence driven by the revolver's own reload duration.
+- **Cave Entrance Fix:** The limestone cave entrance was widened to a 3-tile **open archway** (not a closed door) so the Chapter 2 cave Bible page placed inside it is always reachable.
 - **Quality Presets:** Set `"quality_tier"` to `low`, `medium` or `high` in `settings.json`. The preset is applied at startup, before any resolution-dependent surface exists. `low` renders at 320×180 with fewer trees and particles; `medium` and `high` use 640×360. Press **F5** (next) / **F6** (previous) during gameplay to switch quality tiers at runtime — changes take effect immediately and are saved to `settings.json`. Presets control resolution, bloom, HDR, god rays, SSAO, particles, dynamic lights, tree draw cap, and water movement speed.
 - **Towering Tropical Forest:** Tree billboards were upgraded from 64×128 to 64×256 sprites with 7 distinct archetypes — tall tropical hardwoods (balete) with buttress roots, massive trunks with tapered bark and layered canopies, slender bamboo clusters, broken dead trees with sparse branches, banana/palm trees with radiating fronds, and supernatural twisted trees with a dark aura. Trunks feature vertical bark grooves, moss patches, and branches extending in varied directions. Most non-dead, non-bamboo trees also get hanging vines (lianas). Per-tree seeds ensure stable appearance across frames.
 - **Organic Terrain:** The world ground texture (1024×1024) now uses 4 layers of multi-octave fBm noise to produce wet soil patches, exposed moss clusters, leaf litter, and subtle root patterns. Stone/pebble spots are scattered across the surface. Undergrowth now includes 8 sprite types: fern, mushroom, rock, bush, fallen log, tree stump, mossy boulder, and sapling — all placed deterministically per chapter.
@@ -459,6 +525,8 @@ All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) rem
 - Water tiles slow movement but do not implement swimming or depth variation.
 - SSAO is defined in presets but not yet integrated into the renderer (no depth buffer available).
 - Tree billboards are 2D sprites; they do not rotate to face the camera (static billboard orientation). Canopy overlap at extreme distances may appear flat.
+- Enemy jumpscare MP4 video playback requires `ffmpeg` (not in `requirements.txt`); without it the jumpscare falls back to the procedural rendering.
+- Enemy sprite animation pack frames, if present, are uniformly 14 FPS; per-creature animation rate is not yet individually tuned.
 
 ---
 
