@@ -358,11 +358,11 @@ class Renderer:
         self._particle_cache = {}
 
         # Debug overlay (F3)
-        self.show_debug = True
+        self.debug_mode = 1   # 0 = off, 1 = compact (default), 2 = full; F3 cycles
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
         self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
-        self.dbg_font = pygame.font.SysFont('consolas', 12)
+        self.dbg_font = pygame.font.SysFont('consolas', 10)
 
         self.debug_f4 = False          # raw scene: no darkness + markers on every entity
         self.last_console_print = 0.0
@@ -793,7 +793,7 @@ class Renderer:
 
     # ─── Debug overlay ────────────────────────────────────────────────────
     def _draw_debug_overlay(self, player, game_map, enemies):
-        if not self.show_debug:
+        if not self.debug_mode:
             return
         font = self.dbg_font
         fps = 0.0
@@ -814,8 +814,20 @@ class Renderer:
             if nearest is None or d < nearest:
                 nearest = d
 
+        has_warn = bool(getattr(game_map, 'validation_errors', None))
+        if self.debug_mode == 1:
+            # Compact: two short lines in the corner (F3 for the full readout)
+            near = f" near {nearest:.0f}" if nearest is not None else ""
+            lines = [
+                f"{BUILD_VERSION.replace('BUILD ', '')}  {fps:.0f}fps",
+                f"({int(player.x)},{int(player.y)}) EN {len(enemies)}/{self.level_enemy_total}{near}"
+                f"  DNG {self.danger:.1f}" + ("  MAP WARN" if has_warn else ""),
+            ]
+            self._blit_debug_lines(lines, font, warn_idx=1 if has_warn else None)
+            return
+
         lines = [
-            f"ANINO SA GUBAT - DEBUG (F3)  [F4 = raw scene + markers]",
+            f"DEBUG (F3 cycles)  F4 = raw scene",
             f"{BUILD_VERSION}",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
@@ -834,10 +846,26 @@ class Renderer:
         else:
             lines.append("Map Validation: OK (Pass)")
 
+        self._blit_debug_lines(lines, font)
+
+    def _blit_debug_lines(self, lines, font, warn_idx=None):
+        """Draw debug text top-left on a translucent backing so it stays readable but small."""
+        step = font.get_linesize()
+        rendered = []
         for idx, line in enumerate(lines):
-            col = (0, 255, 100) if "OK" in line or idx == 0 else (255, 100, 100) if "Warnings" in line else (220, 220, 220)
-            txt = font.render(line, True, col)
-            self.surface.blit(txt, (8, 8 + idx * 14))
+            if idx == warn_idx or "Warnings" in line:
+                col = (255, 100, 100)
+            elif "OK" in line or idx == 0:
+                col = (0, 255, 100)
+            else:
+                col = (220, 220, 220)
+            rendered.append(font.render(line, True, col))
+        w = max(t.get_width() for t in rendered) + 8
+        bg = pygame.Surface((w, step * len(rendered) + 4), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 120))
+        self.surface.blit(bg, (4, 4))
+        for idx, txt in enumerate(rendered):
+            self.surface.blit(txt, (8, 6 + idx * step))
 
     # ─── Walls ────────────────────────────────────────────────────────────
     def _cast_rays(self, player, game_map):
