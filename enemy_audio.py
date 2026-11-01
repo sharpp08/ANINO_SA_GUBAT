@@ -82,6 +82,8 @@ ENEMY_AUDIO_EVENTS = {
     'hurt':      {'time': 0.30, 'pitch': 1.50, 'sweep': -0.20, 'bump': 0.35, 'att': 0.008, 'decay': 3.2, 'gain': 0.72, 'breath': 0.8, 'drive': 1.0},
     'death':     {'time': 1.20, 'pitch': 0.80, 'sweep': -0.55, 'bump': 0.05, 'att': 0.04,  'decay': 2.2, 'gain': 0.90, 'breath': 2.0, 'drive': 0.8},
     'jumpscare': {'time': 0.85, 'pitch': 1.15, 'sweep': 0.45,  'bump': 0.10, 'att': 0.015, 'decay': 0.9, 'gain': 1.00, 'breath': 1.4, 'drive': 1.8},
+    # Dedicated chase screams; the enemy anatomy/profile makes each one distinct.
+    'scream':    {'time': 1.25, 'pitch': 1.30, 'sweep': 0.62, 'bump': 0.22, 'att': 0.012, 'decay': 0.72, 'gain': 1.12, 'breath': 1.65, 'drive': 1.65},
     'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.004, 'decay': 1.8, 'gain': 0.92, 'breath': 0.0, 'drive': 1.0},
 }
 
@@ -282,6 +284,12 @@ class EnemyAudioManager:
                     self.sounds[key] = None
 
     # ── playback ──────────────────────────────────────────────────────────────
+    def duration_for(self, enemy_type, event_name):
+        """Approximate audible duration, including a short reverb-tail allowance."""
+        profile = ENEMY_AUDIO_PROFILES[enemy_type]
+        event = ENEMY_AUDIO_EVENTS[event_name]
+        return profile['duration'] * event['time'] + min(profile['rt60'], 1.2) * 0.65
+
     def play(self, enemy_type, event_name='alert', volume=1.0, pan=0.0):
         sound = self.sounds.get((enemy_type, event_name))
         if sound is None:
