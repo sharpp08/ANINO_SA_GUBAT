@@ -607,7 +607,14 @@ class Game:
                     e.take_damage(99999)
                 self.notify("DEBUG: all enemies defeated")
             elif k == pygame.K_r:
+                # Play the recorded reload only when a revolver reload can actually start.
+                can_reload_revolver = (
+                    p.current_weapon == 2 and not p.reloading
+                    and p.ammo_revolver > 0 and p.revolver_mag < REVOLVER_MAG_SIZE
+                )
                 p.start_reload()
+                if can_reload_revolver and p.reloading:
+                    audio_mgr.play('revolver_reload', volume=1.0, headroom=1.0)
             elif k == pygame.K_f:
                 p.flashlight_on = not p.flashlight_on
             elif k == pygame.K_e:
