@@ -497,6 +497,7 @@ class GameMap:
             {'type': 'bible_page', 'x': 211.5, 'y': 101.5, 'amount': 1, 'active': True},
             {'type': 'ammo_revolver', 'x': 183.5, 'y': 54.5, 'amount': 6, 'active': True},
             {'type': 'bible_page', 'x': 227.5, 'y': 190.5, 'amount': 1, 'active': True},
+            {'type': 'bible_page', 'x': 69.5, 'y': 202.5, 'amount': 1, 'active': True},
             {'type': 'health', 'x': 225.5, 'y': 149.5, 'amount': 25, 'active': True},
         ]
         self.enemies = [
