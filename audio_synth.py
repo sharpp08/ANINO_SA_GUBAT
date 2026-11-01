@@ -31,16 +31,9 @@ import pygame
 
 # scipy's FFT is ~2x faster and multi-threaded; numpy's is the dependency-free fallback.
 try:
-    from scipy import fft as _fftmod
+    import scipy.fft as _fftmod
     _FFT_KW = {'workers': -1}
 except ImportError:
-    try:
-        import scipy.fft as _fftmod
-        _FFT_KW = {'workers': -1}
-    except Exception:
-        _fftmod = np.fft
-        _FFT_KW = {}
-except Exception:                                   # pragma: no cover
     _fftmod = np.fft
     _FFT_KW = {}
 
