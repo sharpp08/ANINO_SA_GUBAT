@@ -799,7 +799,13 @@ class Game:
             # Keep the original attack vocalization clear: stalking clicks must
             # never overlap an enemy that has entered its attack animation/state.
             enemy_state = getattr(getattr(enemy, 'state', None), 'value', getattr(enemy, 'state', None))
-            if enemy_state == 'attack':
+            scream_pause = getattr(enemy, '_scream_pause_timer', 0.0)
+            if scream_pause > 0.0:
+                enemy._scream_pause_timer = max(0.0, scream_pause - dt)
+                enemy._tiktik_timer = max(getattr(enemy, '_tiktik_timer', 0.0), 0.25)
+                continue
+            # Do not emit a Tik-Tik on the same frame a chase scream is queued.
+            if enemy.just_entered_chase or enemy_state == 'attack':
                 enemy._tiktik_timer = max(getattr(enemy, '_tiktik_timer', 0.0), 0.35)
                 continue
 
@@ -843,19 +849,22 @@ class Game:
             if enemy.alive and enemy.just_entered_chase:
                 enemy.just_entered_chase = False
                 try:
+                    # Pause this enemy's stalking clicks for the full scream and
+                    # its audible reverb tail. The scream uses a unique creature voice.
+                    enemy._scream_pause_timer = enemy_audio_mgr.duration_for(enemy.type, 'scream')
                     enemy_audio_mgr.play_spatial(
                         enemy.type,
-                        'alert',
+                        'scream',
                         p.x,
                         p.y,
                         p.angle,
                         enemy.x,
                         enemy.y,
-                        base_volume=0.8,
-                        max_dist=enemy.detect_range * 1.5,
+                        base_volume=0.95,
+                        max_dist=enemy.detect_range * 1.8,
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
 
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
