@@ -82,6 +82,7 @@ ENEMY_AUDIO_EVENTS = {
     'hurt':      {'time': 0.30, 'pitch': 1.50, 'sweep': -0.20, 'bump': 0.35, 'att': 0.008, 'decay': 3.2, 'gain': 0.72, 'breath': 0.8, 'drive': 1.0},
     'death':     {'time': 1.20, 'pitch': 0.80, 'sweep': -0.55, 'bump': 0.05, 'att': 0.04,  'decay': 2.2, 'gain': 0.90, 'breath': 2.0, 'drive': 0.8},
     'jumpscare': {'time': 0.85, 'pitch': 1.15, 'sweep': 0.45,  'bump': 0.10, 'att': 0.015, 'decay': 0.9, 'gain': 1.00, 'breath': 1.4, 'drive': 1.8},
+    'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.004, 'decay': 1.8, 'gain': 0.92, 'breath': 0.0, 'drive': 1.0},
 }
 
 
@@ -156,7 +157,30 @@ class EnemyAudioManager:
                 rng=np.random.default_rng(zlib.crc32(f'{enemy_type}:{event_name}:{seed_off}'.encode('utf-8'))),
             )
 
-        wave = voice(f0)
+        if event_name == 'tiktik':
+            # A sharp, dry Filipino folklore "tik-tik-tik" call: three uneven
+            # wooden/beak-like clicks with a thin insectile whistle underneath.
+            # Each enemy profile shifts the resonant pitch so individuals do not
+            # sound like an identical loop.
+            click_rate = 3.0 + (profile['base_hz'] % 7) * 0.11
+            click_period = max(1, int(rate / click_rate))
+            clicks = np.zeros(n, dtype=np.float64)
+            offsets = (0, int(rate * 0.105), int(rate * 0.245))
+            for burst_start in offsets:
+                idx = burst_start
+                while idx < n:
+                    length = max(2, int(rate * 0.0045))
+                    end = min(n, idx + length)
+                    if end > idx:
+                        local_t = np.arange(end - idx, dtype=np.float64) / rate
+                        clicks[idx:end] += np.sin(2.0 * np.pi * (2350.0 + profile['base_hz'] * 1.8) * local_t) * np.exp(-local_t * 780.0)
+                    idx += click_period
+            whistle = np.sin(2.0 * np.pi * (1450.0 + profile['base_hz'] * 2.2) * t)
+            whistle *= np.exp(-t * 5.5) * 0.13
+            low_rattle = fft_filter(rng.standard_normal(n), rate, lo=500, hi=1800) * 0.08
+            wave = clicks + whistle + low_rattle
+        else:
+            wave = voice(f0)
         chorus = profile.get('chorus')
         if chorus:                                      # second, detuned voice -> ghostly beating
             wave = wave + 0.75 * voice(f0 * 2 ** (chorus / 1200.0), 1)
