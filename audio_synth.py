@@ -803,12 +803,12 @@ class SoundManager:
     def play_drone(self, vol=0.4):
         self.play('drone', vol)
 
-    def play_object(self, snd, volume=1.0, pan=0.0):
+    def play_object(self, snd, volume=1.0, pan=0.0, headroom=0.85):
         """Play a Sound with equal-power panning.  Returns the channel."""
         if snd is None:
             return None
         try:
-            vol = max(0.0, min(1.0, volume)) * 0.85     # headroom: many channels sum in the mixer
+            vol = max(0.0, min(1.0, volume)) * max(0.0, min(1.0, headroom))
             pan = max(-1.0, min(1.0, pan))
             theta = (pan + 1.0) * math.pi / 4.0
             left = min(1.0, vol * math.cos(theta) * math.sqrt(2.0))
@@ -820,10 +820,10 @@ class SoundManager:
         except Exception:
             return None
 
-    def play(self, name, volume=1.0, pan=0.0):
+    def play(self, name, volume=1.0, pan=0.0, headroom=0.85):
         variants = self.variants.get(name)
         snd = random.choice(variants) if variants else self.sounds.get(name)
-        return self.play_object(snd, volume, pan)
+        return self.play_object(snd, volume, pan, headroom=headroom)
 
     def muffled(self, snd, level):
         """Air-absorbed (low-passed, quieter) copy of snd, built lazily and cached."""
@@ -874,7 +874,7 @@ class SoundManager:
         return self.play_object(self.muffled(snd, level), volume, pan)
 
     # ── ambience ──────────────────────────────────────────────────────────────
-    _BEDS = (('wind_bed', 0.0, 0.08), ('crickets_bed', 1.0, 0.04))
+    _BEDS = (('wind_bed', 0.0, 0.018), ('crickets_bed', 1.0, 0.008))
 
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
@@ -905,7 +905,7 @@ class SoundManager:
         """Sparse forest one-shots (owl, leaves, distant twig snap)."""
         if not self._amb_active:
             return
-        schedule = {'owl': (40, 90, 0.04, 0.09), 'rustle': (8, 24, 0.035, 0.10), 'snap': (30, 80, 0.06, 0.13)}
+        schedule = {'owl': (55, 110, 0.015, 0.035), 'rustle': (18, 38, 0.012, 0.035), 'snap': (45, 95, 0.02, 0.045)}
         for key, (lo, hi, v0, v1) in schedule.items():
             self._amb_timers[key] = self._amb_timers.get(key, random.uniform(lo, hi)) - dt
             if self._amb_timers[key] <= 0.0:
