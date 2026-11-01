@@ -860,8 +860,8 @@ class Game:
                         p.angle,
                         enemy.x,
                         enemy.y,
-                        base_volume=0.95,
-                        max_dist=enemy.detect_range * 1.8,
+                        base_volume=1.0,
+                        max_dist=enemy.detect_range * 2.0,
                     )
                 except Exception as exc:
                     print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
