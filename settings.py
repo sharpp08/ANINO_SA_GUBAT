@@ -204,6 +204,12 @@ FOREST_VINE_DENSITY = 0.8
 GROUND_PUDDLE_DENSITY = 0.05
 ENHANCED_GROUND_DETAIL = True
 GROUND_CACHE_FILENAME = 'world_ground_knoll_v1.npy'
+# Enhanced per-biome terrain (terrain_gen.py / floor_fast.fill_floor_terrain).
+# Also requires the quality tier's 'enable_enhanced_floor' flag (off on 'low').
+ENHANCED_TERRAIN = True
+TERRAIN_TEX_SIZE = 512     # seamless per-biome texture size; 256 saves memory on weak machines
+TERRAIN_BRIGHTNESS = 1.0   # global multiplier for the new ground
+TERRAIN_FAR_DIST = 12.0    # beyond this many tiles the softened texture is used (anti-shimmer)
 
 
 UNDERGROWTH_DENSITY = 1300

@@ -28,7 +28,8 @@ import heapq
 import pygame
 import numpy as np
 from settings import *
-from floor_fast import fill_floor
+import settings as _settings_mod   # live module: ACTIVE_QUALITY is reassigned when the tier changes
+from floor_fast import fill_floor, fill_floor_terrain
 from raycast_fast import cast_rays, visible_runs
 from enemies import DEATH_ANIM_TIME
 
@@ -316,6 +317,12 @@ class Renderer:
             (0.68, 0.80, 0.66), (0.78, 0.77, 0.72),
             (0.48, 0.72, 0.82),
         ], dtype=np.float32)
+        # Enhanced per-biome ground (terrain_gen.py).  The atlas bakes once and is
+        # cached on disk; the biome map is rebuilt when the chapter's terrain_grid changes.
+        self._terrain_atlas = None
+        self._terrain_far = None
+        self._terrain_maps = None
+        self._terrain_maps_for = None
         self.frame_counter = 0
 
         self.floor_surf = pygame.Surface((self.w, self.h // 2))
@@ -471,6 +478,42 @@ class Renderer:
                 pass
 
     # ─── Cached surfaces ──────────────────────────────────────────────────
+    def _enhanced_terrain_ready(self, game_map):
+        """True when the enhanced per-biome ground can be drawn for this map.
+
+        Bakes/loads the texture atlas once and (re)builds the biome map whenever the
+        map's terrain_grid changes (new chapter).  Any failure permanently falls back
+        to the original floor so a terrain bug can never take the game down.
+        """
+        if self._terrain_atlas is False:
+            return False
+        grid = getattr(game_map, 'terrain_grid', None)
+        if grid is None:
+            return False
+        if self._terrain_atlas is None:
+            quality = getattr(_settings_mod, 'ACTIVE_QUALITY', {})
+            if not (getattr(_settings_mod, 'ENHANCED_TERRAIN', True)
+                    and quality.get('enable_enhanced_floor', True)):
+                self._terrain_atlas = False
+                return False
+        try:
+            import terrain_gen
+            if self._terrain_atlas is None:
+                from asset_generator import ASSET_DIR
+                self._terrain_atlas, self._terrain_far = terrain_gen.load_or_bake_atlas(
+                    os.path.join(ASSET_DIR, 'cache'),
+                    int(getattr(_settings_mod, 'TERRAIN_TEX_SIZE', 512)),
+                    int(getattr(_settings_mod, 'WORLD_SEED', 1337)))
+            if self._terrain_maps_for is not grid:
+                self._terrain_maps = terrain_gen.build_terrain_maps(
+                    grid, int(getattr(_settings_mod, 'WORLD_SEED', 1337)))
+                self._terrain_maps_for = grid
+        except Exception as exc:                      # never let the ground crash the game
+            print('[TERRAIN] enhanced ground disabled, using legacy floor:', exc)
+            self._terrain_atlas = False
+            return False
+        return True
+
     def _generate_floor_gradient(self):
         """Generate gradient for floor rendering."""
         for y in range(self.h // 2):
@@ -657,11 +700,21 @@ class Renderer:
             ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
 
             # Whole floor in one vectorised pass (see floor_fast.py).
-            fill_floor(arr_3d, self._ground_arr, self._terrain_tint_lut,
-                       getattr(game_map, 'terrain_grid', None),
-                       game_map.width, game_map.height,
-                       px, py, ray_dx, ray_dy,
-                       self.h, half_h, horizon_y, pitch_offset, mist_phase)
+            if self._enhanced_terrain_ready(game_map):
+                fill_floor_terrain(arr_3d, self._terrain_atlas, self._terrain_far,
+                                   self._terrain_maps['packed'], self._terrain_maps['fine'],
+                                   game_map.width, game_map.height,
+                                   px, py, ray_dx, ray_dy,
+                                   self.h, half_h, horizon_y, pitch_offset, mist_phase,
+                                   time_s=t_ticks * 0.001,
+                                   brightness=getattr(_settings_mod, 'TERRAIN_BRIGHTNESS', 1.0),
+                                   far_dist=getattr(_settings_mod, 'TERRAIN_FAR_DIST', 12.0))
+            else:
+                fill_floor(arr_3d, self._ground_arr, self._terrain_tint_lut,
+                           getattr(game_map, 'terrain_grid', None),
+                           game_map.width, game_map.height,
+                           px, py, ray_dx, ray_dy,
+                           self.h, half_h, horizon_y, pitch_offset, mist_phase)
             del arr_3d
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
