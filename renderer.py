@@ -28,6 +28,7 @@ import heapq
 import pygame
 import numpy as np
 from settings import *
+from floor_fast import fill_floor
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
@@ -208,12 +209,6 @@ class Renderer:
         self.weapon_sprites = weapon_sprites
         self.enemy_sprites = enemy_sprites
         self.pickup_sprites = pickup_sprites
-        # The revolver art is a side view (barrel points left).  Rotate it once
-        # at startup so the muzzle faces up/forward like a held gun; the HUD
-        # icons keep the original side-view sprite.
-        rev = self.weapon_sprites.get('revolver')
-        self._revolver_forward = (
-            pygame.transform.rotate(rev, -90) if rev is not None else None)
         self.crosshair = None
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
@@ -362,13 +357,15 @@ class Renderer:
             })
         # Pre-rendered particle surfaces (cached per size) to avoid per-frame allocation
         self._particle_cache = {}
+        self._sky_fx_cache = {}      # prebuilt cloud / aurora surfaces
+        self._viewmodel_cache = {}   # scaled / rotated weapon surfaces
 
         # Debug overlay (F3)
-        self.show_debug = True
+        self.debug_mode = 1   # 0 = off, 1 = compact (default), 2 = full; F3 cycles
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
         self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
-        self.dbg_font = pygame.font.SysFont('consolas', 12)
+        self.dbg_font = pygame.font.SysFont('consolas', 10)
 
         self.debug_f4 = False          # raw scene: no darkness + markers on every entity
         self.last_console_print = 0.0
@@ -559,12 +556,16 @@ class Renderer:
         horizon_y = max(0, half_h + pitch_offset)
 
         # 1. Sky Gradient (SKY_COLOR to blue-green haze (24,34,42))
-        for y in range(horizon_y):
-            t = y / max(1, horizon_y)
-            r = int(SKY_COLOR[0] * (1 - t) + 24 * t)
-            g = int(SKY_COLOR[1] * (1 - t) + 34 * t)
-            b = int(SKY_COLOR[2] * (1 - t) + 42 * t)
-            pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
+        # One vectorised write instead of ~180 draw.line calls per frame.
+        sky_rows = min(horizon_y, self.h)
+        if sky_rows > 0:
+            t = np.arange(sky_rows, dtype=np.float32) / max(1, horizon_y)
+            sky_cols = np.empty((sky_rows, 3), dtype=np.uint8)
+            for c, haze in enumerate((24, 34, 42)):
+                sky_cols[:, c] = (SKY_COLOR[c] * (1 - t) + haze * t).astype(np.uint8)
+            sky_arr = pygame.surfarray.pixels3d(self.surface)
+            sky_arr[:, :sky_rows, :] = sky_cols[None, :, :]
+            del sky_arr
 
         if horizon_y > 0:
             # Stars (260 stars, local Random(999))
@@ -602,8 +603,13 @@ class Renderer:
                 cy = int(horizon_y * (0.15 + c_idx * 0.12))
                 alpha = max(30, 80 - c_idx * 15)
                 if 0 <= cy < horizon_y:
-                    cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
-                    pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
+                    # Built once per cloud, not once per frame.
+                    ckey = ('cloud', c_idx)
+                    cloud_surf = self._sky_fx_cache.get(ckey)
+                    if cloud_surf is None:
+                        cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
+                        pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
+                        self._sky_fx_cache[ckey] = cloud_surf
                     self.surface.blit(cloud_surf, (cx, cy))
 
             # Subtle aurora borealis effect at horizon
@@ -613,8 +619,12 @@ class Renderer:
                     aurora_x = int((a_idx * 250 + aurora_t * 50) % (self.w + 200) - 100)
                     aurora_w = 60 + a_idx * 20
                     aurora_alpha = max(5, 25 - a_idx * 5)
-                    aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
-                    pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+                    akey = ('aurora', a_idx)
+                    aurora_surf = self._sky_fx_cache.get(akey)
+                    if aurora_surf is None:
+                        aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
+                        pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+                        self._sky_fx_cache[akey] = aurora_surf
                     self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
         # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
@@ -622,50 +632,19 @@ class Renderer:
         if floor_h > 0 and hasattr(self, '_ground_arr'):
             mist_phase = t_ticks * 0.0003
             arr_3d = pygame.surfarray.pixels3d(self.surface)
-            gw, gh, _ = self._ground_arr.shape
             px, py, pa = player.x, player.y, player.angle
-            
+
             cos_pa = math.cos(pa)
             sin_pa = math.sin(pa)
             ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
             ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
-            
-            for y in range(horizon_y, self.h):
-                row_y = y - half_h - pitch_offset
-                if row_y <= 0:
-                    continue
-                dist = (self.h * 0.5) / row_y
-                wx = px + dist * ray_dx
-                wy = py + dist * ray_dy
-                
-                tx = np.clip(np.abs((wx * 8.0) % gw).astype(np.int32), 0, gw - 1)
-                ty = np.clip(np.abs((wy * 8.0) % gh).astype(np.int32), 0, gh - 1)
-                
-                tex_cols = self._ground_arr[tx, ty] # shape (w, 3)
-                terrain_grid = getattr(game_map, 'terrain_grid', None)
-                if terrain_grid is not None:
-                    map_x = np.clip(np.floor(wx).astype(np.int32), 0, game_map.width - 1)
-                    map_y = np.clip(np.floor(wy).astype(np.int32), 0, game_map.height - 1)
-                    terrain_ids = np.clip(terrain_grid[map_y, map_x], 0,
-                                          len(self._terrain_tint_lut) - 1)
-                    tex_cols = np.clip(
-                        tex_cols.astype(np.float32) * self._terrain_tint_lut[terrain_ids],
-                        0, 255
-                    ).astype(np.uint8)
-                
-                fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
-                shade = max(0.08, 1.0 - fog)
-                
-                shaded_cols = (tex_cols.astype(np.float32) * shade).astype(np.uint8)
-                
-                floor_t = (y - horizon_y) / max(1, floor_h)
-                if floor_t < 0.45:
-                    mist_strength = (0.45 - floor_t) / 0.45
-                    mist_wave = math.sin(mist_phase + y * 0.08) * 0.5 + 0.5
-                    mist_alpha = mist_strength * mist_wave * 0.25
-                    shaded_cols = (shaded_cols.astype(np.float32) * (1 - mist_alpha) + np.array([30, 40, 38], dtype=np.float32) * mist_alpha).astype(np.uint8)
-                
-                arr_3d[:, y, :] = shaded_cols
+
+            # Whole floor in one vectorised pass (see floor_fast.py).
+            fill_floor(arr_3d, self._ground_arr, self._terrain_tint_lut,
+                       getattr(game_map, 'terrain_grid', None),
+                       game_map.width, game_map.height,
+                       px, py, ray_dx, ray_dy,
+                       self.h, half_h, horizon_y, pitch_offset, mist_phase)
             del arr_3d
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
@@ -799,7 +778,7 @@ class Renderer:
 
     # ─── Debug overlay ────────────────────────────────────────────────────
     def _draw_debug_overlay(self, player, game_map, enemies):
-        if not self.show_debug:
+        if not self.debug_mode:
             return
         font = self.dbg_font
         fps = 0.0
@@ -820,8 +799,20 @@ class Renderer:
             if nearest is None or d < nearest:
                 nearest = d
 
+        has_warn = bool(getattr(game_map, 'validation_errors', None))
+        if self.debug_mode == 1:
+            # Compact: two short lines in the corner (F3 for the full readout)
+            near = f" near {nearest:.0f}" if nearest is not None else ""
+            lines = [
+                f"{BUILD_VERSION.replace('BUILD ', '')}  {fps:.0f}fps",
+                f"({int(player.x)},{int(player.y)}) EN {len(enemies)}/{self.level_enemy_total}{near}"
+                f"  DNG {self.danger:.1f}" + ("  MAP WARN" if has_warn else ""),
+            ]
+            self._blit_debug_lines(lines, font, warn_idx=1 if has_warn else None)
+            return
+
         lines = [
-            f"ANINO SA GUBAT - DEBUG (F3)  [F4 = raw scene + markers]",
+            f"DEBUG (F3 cycles)  F4 = raw scene",
             f"{BUILD_VERSION}",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
@@ -840,10 +831,26 @@ class Renderer:
         else:
             lines.append("Map Validation: OK (Pass)")
 
+        self._blit_debug_lines(lines, font)
+
+    def _blit_debug_lines(self, lines, font, warn_idx=None):
+        """Draw debug text top-left on a translucent backing so it stays readable but small."""
+        step = font.get_linesize()
+        rendered = []
         for idx, line in enumerate(lines):
-            col = (0, 255, 100) if "OK" in line or idx == 0 else (255, 100, 100) if "Warnings" in line else (220, 220, 220)
-            txt = font.render(line, True, col)
-            self.surface.blit(txt, (8, 8 + idx * 14))
+            if idx == warn_idx or "Warnings" in line:
+                col = (255, 100, 100)
+            elif "OK" in line or idx == 0:
+                col = (0, 255, 100)
+            else:
+                col = (220, 220, 220)
+            rendered.append(font.render(line, True, col))
+        w = max(t.get_width() for t in rendered) + 8
+        bg = pygame.Surface((w, step * len(rendered) + 4), pygame.SRCALPHA)
+        bg.fill((0, 0, 0, 120))
+        self.surface.blit(bg, (4, 4))
+        for idx, txt in enumerate(rendered):
+            self.surface.blit(txt, (8, 6 + idx * step))
 
     # ─── Walls ────────────────────────────────────────────────────────────
     def _cast_rays(self, player, game_map):
@@ -958,6 +965,10 @@ class Renderer:
         wall_type = WALL_STONE
 
         for _ in range(MAX_DEPTH * 4):
+            # Past view distance nothing can be drawn: stop instead of walking
+            # the grid out to 4x MAX_DEPTH on rays that hit nothing.
+            if (x_dist if x_dist < y_dist else y_dist) > MAX_DEPTH:
+                break
             if x_dist < y_dist:
                 x_dist += dx
                 map_x += x_step
@@ -1465,6 +1476,29 @@ class Renderer:
         except Exception:
             pass
 
+    def _vm_scaled(self, key, surf, size):
+        """Cached pygame.transform.scale for viewmodel art (same inputs every frame)."""
+        ck = ('scale', key, size)
+        got = self._viewmodel_cache.get(ck)
+        if got is None:
+            got = pygame.transform.scale(surf, size)
+            self._viewmodel_cache[ck] = got
+            if len(self._viewmodel_cache) > 400:
+                self._viewmodel_cache.pop(next(iter(self._viewmodel_cache)))
+        return got
+
+    def _vm_rotated(self, key, surf, angle):
+        """Cached rotate, angle quantised to 0.5 degree (invisible, but reusable)."""
+        q = round(angle * 2.0) / 2.0
+        ck = ('rot', key, q)
+        got = self._viewmodel_cache.get(ck)
+        if got is None:
+            got = pygame.transform.rotate(surf, q)
+            self._viewmodel_cache[ck] = got
+            if len(self._viewmodel_cache) > 400:
+                self._viewmodel_cache.pop(next(iter(self._viewmodel_cache)))
+        return got
+
     def _draw_player_viewmodel(self, player, dt):
         """Draw immersive first-person procedural hands, forearms, sleeves, and weapon viewmodel."""
         weapon_names = ['bolo', 'shotgun', 'revolver']
@@ -1476,31 +1510,36 @@ class Renderer:
 
         # The custom bolo / shotgun art fills its whole surface, so size it to the
         # screen height (works at any internal resolution); other weapons keep 3x.
-        from asset_generator import SHOTGUN_ANCHORS
+        from asset_generator import SHOTGUN_ANCHORS, REVOLVER_ANCHORS
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
-        # Revolver: use the pre-rotated forward-facing sprite (muzzle up)
-        sprite = self._revolver_forward if (wname == 'revolver' and self._revolver_forward is not None) else self.weapon_sprites.get(wname)
-        if wname == 'revolver':
-            # Keep the revolver fully readable at every internal resolution.
-            # Its rotated muzzle sits near the top; the grip extends toward the
-            # bottom of the screen like a proper first-person held weapon.
+        custom_revolver = (wname == 'revolver' and bool(REVOLVER_ANCHORS))
+        sprite = self.weapon_sprites.get(wname)
+        if wname == 'bolo' or custom_shotgun:
+            scale = self.h * 0.85 / sprite.get_height()
+        elif custom_revolver:
+            # A sidearm: about half the screen height, tucked in the lower right so
+            # the crosshair and the view ahead stay clear (the old 3x procedural
+            # sprite was taller than the whole 360px screen).
+            scale = self.h * 0.5 / sprite.get_height()
+        elif wname == 'revolver':
+            # Keep the procedural revolver readable at any internal resolution.
             scale = self.h * 0.89 / sprite.get_height()
         else:
-            scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
+            scale = 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
-        scaled = pygame.transform.scale(sprite, (sw, sh))
+        vm_key = (wname, id(sprite))
+        scaled = self._vm_scaled(vm_key, sprite, (sw, sh))
 
         # Base screen position (shifted to right arm perspective)
         base_x = self.w // 2 - sw // 3 + 50
         base_y = self.h - sh + 30
-        # Forward-facing revolver: nudge it toward screen center so the muzzle
-        # aims up toward the crosshair instead of hanging at the right edge.
-        if wname == 'revolver':
-            # The rotated sprite's barrel axis is at roughly 57% of its width.
-            # Align that axis with the crosshair and keep the muzzle on-screen.
-            base_x = self.w // 2 - int(sw * 0.57)
-            base_y = self.h - sh + int(self.h * 0.26)
+        # The revolver art is drawn as a three-quarter view (front of the
+        # cylinder and bore visible, barrel up toward the crosshair).  Anchor
+        # its grip near bottom-center so it reads as a held gun.
+        if wname == 'revolver' and not custom_revolver:
+            base_x = self.w // 2 - sw // 2 + 8
+            base_y = self.h - int(sh * 0.82)
 
         # Animation calculations
         t_ticks = pygame.time.get_ticks()
@@ -1569,7 +1608,7 @@ class Renderer:
         # Rotate viewmodel if sprinting, reloading, or dying
         total_rot = sprint_tilt + reload_rot + revolver_tilt
         if total_rot != 0:
-            draw_surf = pygame.transform.rotate(scaled, total_rot)
+            draw_surf = self._vm_rotated(vm_key, scaled, total_rot)
         else:
             draw_surf = scaled
 
@@ -1595,7 +1634,7 @@ class Renderer:
 
                 pivot_x = pre_x + piv_x + dx * hk
                 pivot_y = pre_y + piv_y + dy * hk
-                surf = pygame.transform.rotate(scaled, angle + total_rot)
+                surf = self._vm_rotated(vm_key, scaled, angle + total_rot)
                 # the pivot sits (piv - center) from the sprite center; rotate that
                 # offset to find where the rotated surface must be blitted
                 off_x, off_y = rot(piv_x - sw / 2, piv_y - sh / 2)
@@ -1634,8 +1673,9 @@ class Renderer:
                 f_surf, f_dest, f_right, f_left = SHOTGUN_FIRE_FRAMES[idx]
                 kx = sw / sprite.get_width()
                 ky = sh / sprite.get_height()
-                draw_surf = pygame.transform.scale(
-                    f_surf, (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
+                draw_surf = self._vm_scaled(
+                    ('shotgun_fire', idx), f_surf,
+                    (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
                 base_x, base_y = final_x, final_y
                 final_x = base_x + int(f_dest[0] * kx)
                 final_y = base_y + int(f_dest[1] * ky)
@@ -1687,14 +1727,12 @@ class Renderer:
             pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
             pygame.draw.circle(self.surface, skin_color, (lx, ly), 8)
             pygame.draw.circle(self.surface, glove_color, (lx - 3, ly + 3), 5)
-        elif player.alive and wname == 'revolver':
-            # The rotated revolver's wooden grip is on the lower-left of the
-            # viewmodel; anchor the hand there instead of floating at sprite center.
-            grip_x = int(final_x + sw * 0.19)
-            grip_y = int(final_y + sh * 0.72)
-            pygame.draw.circle(self.surface, skin_color, (grip_x, grip_y), 10)
-            pygame.draw.circle(self.surface, glove_color, (grip_x - 3, grip_y + 3), 7)
-            pygame.draw.circle(self.surface, skin_color, (grip_x + 5, grip_y - 5), 5)
+        elif player.alive and custom_revolver:
+            # One-handed: the hand wraps the wooden grip of the custom art
+            rx = int(final_x + REVOLVER_ANCHORS['right'][0] * sw)
+            ry = int(final_y + REVOLVER_ANCHORS['right'][1] * sh)
+            pygame.draw.circle(self.surface, skin_color, (rx, ry), 9)
+            pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
         elif player.alive:
             # Right hand knuckles / fingers on grip
             pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)
@@ -1703,6 +1741,14 @@ class Renderer:
             if wname == 'shotgun':
                 pygame.draw.circle(self.surface, skin_color, (int(lh_x + 10), int(lh_y + 20)), 7)
                 pygame.draw.circle(self.surface, glove_color, (int(lh_x + 8), int(lh_y + 22)), 5)
+            elif wname == 'revolver':
+                # Three-quarter art: hands track relative to the scaled sprite
+                # so they stay on the grip / frame at any internal resolution.
+                gy_x = int(rh_x + sh * 0.10)
+                gy_y = int(rh_y + sh * 0.36)
+                pygame.draw.circle(self.surface, skin_color, (gy_x, gy_y), 8)
+                pygame.draw.circle(self.surface, glove_color, (gy_x - 4, gy_y + 4), 6)
+                pygame.draw.circle(self.surface, skin_color, (int(lh_x + 20), int(lh_y + 18)), 6)
 
     def _draw_muzzle_flash(self):
         """Draw muzzle flash effect."""

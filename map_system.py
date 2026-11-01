@@ -419,7 +419,7 @@ class GameMap:
 
     def _build_hybrid_landmarks(self):
         """Place handcrafted village huts, cave entrance and central ancient ruins."""
-        def building(cx, cy, half_w, half_h, wall_tile, door_side='south'):
+        def building(cx, cy, half_w, half_h, wall_tile, door_side='south', open_entrance=False):
             x0, x1 = int(cx - half_w), int(cx + half_w)
             y0, y1 = int(cy - half_h), int(cy + half_h)
             for x in range(x0, x1 + 1):
@@ -428,22 +428,29 @@ class GameMap:
             for y in range(y0, y1 + 1):
                 self.grid[y][x0] = wall_tile
                 self.grid[y][x1] = wall_tile
-            if door_side == 'south':
-                self.grid[y1][int(cx)] = DOOR
-            elif door_side == 'north':
-                self.grid[y0][int(cx)] = DOOR
-            elif door_side == 'east':
-                self.grid[int(cy)][x1] = DOOR
-            else:
-                self.grid[int(cy)][x0] = DOOR
+            # open_entrance=True leaves a permanent archway instead of a door that has
+            # to be found and opened (used where a Bible page is inside the building).
+            gate = EMPTY if open_entrance else DOOR
+            # An open archway is 3 tiles wide so it is easy to walk through and to spot.
+            span = (-1, 0, 1) if open_entrance else (0,)
+            for off in span:
+                if door_side == 'south':
+                    self.grid[y1][int(cx) + off] = gate
+                elif door_side == 'north':
+                    self.grid[y0][int(cx) + off] = gate
+                elif door_side == 'east':
+                    self.grid[int(cy) + off][x1] = gate
+                else:
+                    self.grid[int(cy) + off][x0] = gate
 
         # Three weathered village houses, each with a usable doorway.
         building(65, 70, 4, 3, WALL_WOOD, 'south')
         building(83, 70, 4, 3, WALL_WOOD, 'south')
         building(75, 91, 4, 3, WALL_WOOD, 'north')
 
-        # A stone-ringed limestone cave mouth with a single openable entrance.
-        building(69, 202, 5, 4, WALL_STONE, 'east')
+        # A stone-ringed limestone cave mouth with a single open entrance. It holds a Bible
+        # page, so it is an archway rather than a door the player might never open.
+        building(69, 202, 5, 4, WALL_STONE, 'east', open_entrance=True)
 
         # Main ruin complex at the heart of the ancient grove.
         building(130, 130, 8, 7, WALL_STONE, 'south')
@@ -493,6 +500,7 @@ class GameMap:
             {'type': 'bible_page', 'x': 211.5, 'y': 101.5, 'amount': 1, 'active': True},
             {'type': 'ammo_revolver', 'x': 183.5, 'y': 54.5, 'amount': 6, 'active': True},
             {'type': 'bible_page', 'x': 227.5, 'y': 190.5, 'amount': 1, 'active': True},
+            {'type': 'bible_page', 'x': 69.5, 'y': 202.5, 'amount': 1, 'active': True},
             {'type': 'health', 'x': 225.5, 'y': 149.5, 'amount': 25, 'active': True},
         ]
         self.enemies = [

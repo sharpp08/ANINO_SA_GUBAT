@@ -22,6 +22,7 @@ from audio_synth import audio_mgr
 from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from objective import next_objective, nearest_page, relative_bearing, direction_word
+from page_arrow import PageArrow
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
@@ -99,15 +100,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
     surf.blit(fe_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
 
-    # Survival objective and night clock
-    pages = min(5, getattr(player, 'pages_this_chapter', 0))
-    clock_left = max(0, getattr(player, 'survival_time_left', 420.0))
-    minutes_left = int(clock_left // 60)
-    seconds_left = int(clock_left % 60)
-    objective = font_sm.render(f'BIBLE PAGES  {pages}/5     SURVIVE UNTIL 7:00 AM', True, SACRED_GOLD)
-    surf.blit(objective, (sw // 2 - objective.get_width() // 2, 12))
-    clock_text = font_tiny.render(f'{minutes_left:02d}:{seconds_left:02d} UNTIL SUNRISE', True, WHITE)
-    surf.blit(clock_text, (sw // 2 - clock_text.get_width() // 2, 32))
+    # (Pages / sunrise clock / objective arrow: see draw_top_hud)
 
     # ── Right Column (Weapon & Ammo Panel) ───────────────────────────────────
     panel_w, panel_h = 140, 65
@@ -237,35 +230,50 @@ def draw_win(surf, font_lg, font_sm, chapter, final=False):
     surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 30))
 
 
-def draw_objective(surf, player, game_map, font_tiny):
-    """Top-centre line telling the player what to do next, with an arrow pointing at it."""
+def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
+    """Compact top-centre panel: Bible pages, sunrise clock and a compass arrow to the next goal.
+
+    The arrow points at the nearest uncollected Bible page (the exit once enough pages are
+    held): up = straight ahead, right = the target is on your right.
+    Returns the y of the panel's bottom edge so notifications can sit just below it.
+    """
+    sw = surf.get_width()
     needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
-    have = getattr(player, 'pages_this_chapter', 0)
+    have = min(needed, getattr(player, 'pages_this_chapter', 0))
+    left = max(0, getattr(player, 'survival_time_left', 420.0))
+    line1 = f"PAGES {have}/{needed}   SUNRISE {int(left // 60):02d}:{int(left % 60):02d}"
+
     obj = next_objective(player.x, player.y, game_map.pickups, game_map.exit_pos,
                          have, needed, REQUIRE_PAGES_FOR_EXIT)
-    if obj is None:
-        return
-    if obj['kind'] == 'page':
-        text = f"FIND BIBLE PAGES {have}/{needed}  -  {int(obj['dist'])}m"
-    else:
-        text = f"REACH THE EXIT  -  {int(obj['dist'])}m"
-    label = font_tiny.render(text, True, SACRED_GOLD)
-    sw = surf.get_width()
-    lh = label.get_height()
-    total_w = label.get_width() + 22
-    x0 = sw // 2 - total_w // 2
-    y0 = 8 + font_tiny.get_height() + 6      # sits just below the notification line
-    bg = pygame.Surface((total_w + 8, lh + 6), pygame.SRCALPHA)
-    bg.fill((10, 10, 15, 170))
-    surf.blit(bg, (x0 - 4, y0 - 3))
-    # Arrow: up = straight ahead, rotating towards the right as the target moves right
-    rel = relative_bearing(player.x, player.y, player.angle, obj['x'], obj['y'])
-    acx, acy = x0 + 8, y0 + lh // 2
-    tip = (acx + math.sin(rel) * 7, acy - math.cos(rel) * 7)
-    lft = (acx + math.sin(rel + 2.5) * 6, acy - math.cos(rel + 2.5) * 6)
-    rgt = (acx + math.sin(rel - 2.5) * 6, acy - math.cos(rel - 2.5) * 6)
-    pygame.draw.polygon(surf, SACRED_GOLD, [tip, lft, rgt])
-    surf.blit(label, (x0 + 20, y0))
+    line2 = None
+    rel = 0.0
+    if obj is not None:
+        rel = relative_bearing(player.x, player.y, player.angle, obj['x'], obj['y'])
+        what = 'NEAREST PAGE' if obj['kind'] == 'page' else 'EXIT'
+        line2 = f"{what} {int(obj['dist'])}m {direction_word(rel).upper()}"
+
+    img1 = font.render(line1, True, SACRED_GOLD)
+    img2 = font.render(line2, True, WHITE) if line2 else None
+    arrow_w = arrow.size + 4 if line2 else 0
+    text_w = max(img1.get_width(), img2.get_width() if img2 else 0)
+    th = img1.get_height()
+    pad = 4
+    panel_w = arrow_w + text_w + pad * 2
+    panel_h = max(arrow.size if line2 else 0, th * (2 if img2 else 1) + 2) + pad * 2
+    x0 = sw // 2 - panel_w // 2
+    y0 = 4
+
+    bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    bg.fill((10, 10, 15, 150))
+    surf.blit(bg, (x0, y0))
+
+    tx = x0 + pad + arrow_w
+    ty = y0 + (panel_h - (th * (2 if img2 else 1) + 2)) // 2
+    surf.blit(img1, (tx, ty))
+    if img2:
+        surf.blit(img2, (tx, ty + th + 2))
+        arrow.draw(surf, x0 + pad + arrow.size // 2, y0 + panel_h // 2, rel, t_ms)
+    return y0 + panel_h
 
 
 # ─── Save / Load ─────────────────────────────────────────────────────────────
@@ -363,6 +371,8 @@ class Game:
         self.font_lg   = pygame.font.SysFont('consolas', 32, bold=True)
         self.font_sm   = pygame.font.SysFont('consolas', 18)
         self.font_tiny = pygame.font.SysFont('consolas', 13)
+        self.font_micro = pygame.font.SysFont('consolas', 11)   # compact top-of-screen HUD text
+        self.page_arrow = PageArrow(36)                          # compass arrow to the next Bible page
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Initializing Display & Subsystems...", 0.1)
 
@@ -537,7 +547,8 @@ class Game:
             elif k == pygame.K_F6:
                 self._cycle_quality('prev')
             elif k == pygame.K_F3:
-                self.renderer.show_debug = not self.renderer.show_debug
+                # F3 cycles the debug text: compact -> full -> off
+                self.renderer.debug_mode = (self.renderer.debug_mode + 1) % 3
             elif k == pygame.K_F4:
                 self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
                 self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
@@ -862,20 +873,28 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
+                                        self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_tiny, pygame.time.get_ticks())
+                            self.font_micro, pygame.time.get_ticks())
 
-            # Notification
+            # Notification: centred just under the top panel (the top-left corner is the debug text)
             if self.notif_t > 0:
-                nt = self.font_tiny.render(self.notif, True, SACRED_GOLD)
-                self.internal.blit(nt, (8, 8))
+                nt = self.font_micro.render(self.notif, True, SACRED_GOLD)
+                nx = self.internal.get_width() // 2 - nt.get_width() // 2
+                nbg = pygame.Surface((nt.get_width() + 8, nt.get_height() + 4), pygame.SRCALPHA)
+                nbg.fill((10, 10, 15, 150))
+                self.internal.blit(nbg, (nx - 4, panel_bottom + 3))
+                self.internal.blit(nt, (nx, panel_bottom + 5))
 
         elif self.state == STATE_PAUSED:
             self.renderer.render_frame(
                 self.player, self.game_map, alive_enemies, self.effects, dt)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            draw_top_hud(self.internal, self.player, self.game_map,
+                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_tiny, pygame.time.get_ticks())
+                            self.font_micro, pygame.time.get_ticks())
             draw_paused(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:

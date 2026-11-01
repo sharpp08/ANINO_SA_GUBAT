@@ -31,9 +31,9 @@ import pygame
 
 # scipy's FFT is ~2x faster and multi-threaded; numpy's is the dependency-free fallback.
 try:
-    from scipy import fft as _fftmod
+    import scipy.fft as _fftmod
     _FFT_KW = {'workers': -1}
-except Exception:                                   # pragma: no cover
+except ImportError:
     _fftmod = np.fft
     _FFT_KW = {}
 
@@ -288,13 +288,27 @@ AMBIENCE_RESERVED = 2          # channels 0/1 hold the wind + cricket beds
 
 class SoundManager:
     def __init__(self):
+        # If something already started the mixer with driver defaults (small buffer,
+        # format negotiation), restart it with our settings.
         try:
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            cur = pygame.mixer.get_init()
+            if cur and (cur[0] != 44100 or cur[1] != -16 or cur[2] != 2):
+                pygame.mixer.quit()
         except Exception:
+            pass
+        # allowedchanges=0 stops SDL from silently switching the sample format /
+        # rate to whatever the Windows driver prefers (a source of resampling noise).
+        for kwargs in (
+            dict(frequency=44100, size=-16, channels=2, buffer=1024, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=2048),
+            dict(frequency=22050, size=-16, channels=2, buffer=1024),
+        ):
             try:
-                pygame.mixer.init(frequency=22050, size=-16, channels=2)
+                pygame.mixer.init(**kwargs)
+                break
             except Exception:
-                pass
+                continue
         mixer_init = pygame.mixer.get_init()
         self.sample_rate = mixer_init[0] if mixer_init else 44100
         self.rate = self.sample_rate
@@ -315,7 +329,16 @@ class SoundManager:
     # ── low level helpers (kept for backwards compatibility) ─────────────────
     def _generate_sound(self, samples):
         stereo = _stereo(samples)
-        stereo = np.clip(stereo * 32767, -32768, 32767).astype(np.int16)
+        # Soft-knee limiter above 0.95 (instead of a hard clip, which sounds harsh),
+        # then TPDF dither so quiet tails/reverb don't turn into quantisation grit.
+        a = np.abs(stereo)
+        over = a > 0.95
+        if np.any(over):
+            stereo = np.where(over, np.sign(stereo) * (0.95 + 0.05 * np.tanh((a - 0.95) / 0.05)), stereo)
+        rng = np.random.default_rng(12345)
+        dither = (rng.random(stereo.shape) - rng.random(stereo.shape)) / 32768.0
+        stereo = np.clip((stereo + dither) * 32767, -32768, 32767)
+        stereo = np.rint(stereo).astype(np.int16)
         try:
             return pygame.mixer.Sound(buffer=stereo.tobytes())
         except Exception:
@@ -342,18 +365,21 @@ class SoundManager:
             loud = np.nonzero(env > top * 3e-4)[0]
             if len(loud):
                 x = x[:loud[-1] + 1]
-            x = fade(x, self.rate, fade_out=fade_ms / 1000.0)
-        x = x - x.mean(axis=0)
+        x = x - x.mean(axis=0)              # remove DC *before* fading so both ends land on zero
+        if not loop:
+            # ~2 ms anti-click fade-in: many one-shots otherwise start mid-waveform,
+            # which is heard as a pop on every play.
+            x = fade(x, self.rate, fade_in=0.002, fade_out=fade_ms / 1000.0)
         x = x * (peak / max(float(np.max(np.abs(x))), 1e-9))
         return self._generate_sound(x)
 
     def _mix(self, parts, length=None):
-        """Sum [(offset_s, array)] into one array."""
+        """Sum [(offset_s, array)] into one array.
+        Mono parts are broadcast to both channels when mixed with stereo parts."""
         r = self.rate
         total = length or max(int(o * r) + len(a) for o, a in parts)
         out = None
         for off, a in parts:
-            a = _stereo(a) if getattr(a, 'ndim', 1) == 2 else a
             if out is None:
                 out = np.zeros((total, 2)) if a.ndim == 2 else np.zeros(total)
             if a.ndim == 2 and out.ndim == 1:
@@ -361,7 +387,10 @@ class SoundManager:
             s = int(off * r)
             e = min(total, s + len(a))
             if e > s:
-                out[s:e] += a[:e - s]
+                seg = a[:e - s]
+                if out.ndim == 2 and seg.ndim == 1:
+                    seg = np.column_stack((seg, seg))
+                out[s:e] += seg
         return out
 
     # ── building blocks ───────────────────────────────────────────────────────
@@ -779,7 +808,7 @@ class SoundManager:
         if snd is None:
             return None
         try:
-            vol = max(0.0, min(1.0, volume))
+            vol = max(0.0, min(1.0, volume)) * 0.85     # headroom: many channels sum in the mixer
             pan = max(-1.0, min(1.0, pan))
             theta = (pan + 1.0) * math.pi / 4.0
             left = min(1.0, vol * math.cos(theta) * math.sqrt(2.0))
