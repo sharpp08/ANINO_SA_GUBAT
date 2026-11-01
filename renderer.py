@@ -29,6 +29,7 @@ import pygame
 import numpy as np
 from settings import *
 from floor_fast import fill_floor
+from raycast_fast import cast_rays, visible_runs
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
@@ -251,6 +252,9 @@ class Renderer:
         self._ray_angle_array = np.asarray(self.ray_angles, dtype=np.float32)
         self._ray_cos = np.cos(self._ray_angle_array)
         self._ray_sin = np.sin(self._ray_angle_array)
+        # float64 copies for the wall raycaster (same precision as the old scalar loop)
+        self._ray_ang64 = np.asarray(self.ray_angles, dtype=np.float64)
+        self._ray_cos64 = np.cos(self._ray_ang64)
 
         # Coarse spatial buckets avoid scanning the entire forest each frame.
         self._sprite_bucket_size = 8.0
@@ -260,7 +264,18 @@ class Renderer:
         self._sprite_lit_cache = {}  # bounded cache of scaled+lit billboards
 
         # Z-buffer for sprite occlusion (one entry per ray)
-        self.z_buffer = [0.0] * self.num_rays
+        self.z_buffer = np.zeros(self.num_rays, dtype=np.float64)
+        # screen column -> z-buffer index, so sprite depth tests are one numpy lookup
+        self._col_to_ray = (np.arange(self.w) * self.num_rays // self.w).astype(np.int64)
+        # numpy view of the tile grid for the vectorised raycaster (rebuilt when the map changes)
+        self._grid_np = None
+        self._grid_src = None
+        self._grid_rev = -1
+        # reusable full-screen overlay surfaces (allocated once, not every frame)
+        self._flash_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        self._dbg_key = None
+        self._dbg_surf = None
 
         # Floor/ceiling cache & procedural forest assets
         from asset_generator import generate_tree_billboard, generate_undergrowth_sprite, generate_world_ground_texture
@@ -698,7 +713,8 @@ class Renderer:
         if player.health < 35 or (ENABLE_SANITY and player.sanity < 30):
             urgency = max((35 - player.health) / 35.0, (30 - player.sanity) / 30.0)
             urgency = max(0.0, min(1.0, urgency))
-            blood_vig = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            blood_vig = self._blood_surf
+            blood_vig.fill((0, 0, 0, 0))
             alpha = int(urgency * 120 + math.sin(pygame.time.get_ticks() * 0.006) * 30)
             pygame.draw.rect(blood_vig, (180, 0, 0, max(0, min(200, alpha))), (0, 0, self.w, self.h), max(1, int(20 * urgency)))
             self.surface.blit(blood_vig, (0, 0))
@@ -709,7 +725,7 @@ class Renderer:
 
         # Damage flash
         if player.damage_flash > 0:
-            flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            flash = self._flash_surf
             alpha = max(0, min(255, int(player.damage_flash * 120)))
             flash.fill((200, 0, 0, alpha))
             self.surface.blit(flash, (0, 0))
@@ -834,94 +850,124 @@ class Renderer:
         self._blit_debug_lines(lines, font)
 
     def _blit_debug_lines(self, lines, font, warn_idx=None):
-        """Draw debug text top-left on a translucent backing so it stays readable but small."""
-        step = font.get_linesize()
-        rendered = []
-        for idx, line in enumerate(lines):
-            if idx == warn_idx or "Warnings" in line:
-                col = (255, 100, 100)
-            elif "OK" in line or idx == 0:
-                col = (0, 255, 100)
-            else:
-                col = (220, 220, 220)
-            rendered.append(font.render(line, True, col))
-        w = max(t.get_width() for t in rendered) + 8
-        bg = pygame.Surface((w, step * len(rendered) + 4), pygame.SRCALPHA)
-        bg.fill((0, 0, 0, 120))
-        self.surface.blit(bg, (4, 4))
-        for idx, txt in enumerate(rendered):
-            self.surface.blit(txt, (8, 6 + idx * step))
+        """Draw debug text top-left on a translucent backing so it stays readable but small.
+
+        The composite is cached and only rebuilt when the text changes.
+        """
+        key = (tuple(lines), warn_idx)
+        if key != self._dbg_key:
+            step = font.get_linesize()
+            rendered = []
+            for idx, line in enumerate(lines):
+                if idx == warn_idx or "Warnings" in line:
+                    col = (255, 100, 100)
+                elif "OK" in line or idx == 0:
+                    col = (0, 255, 100)
+                else:
+                    col = (220, 220, 220)
+                rendered.append(font.render(line, True, col))
+            w = max(t.get_width() for t in rendered) + 8
+            surf = pygame.Surface((w + 4, step * len(rendered) + 4), pygame.SRCALPHA)
+            surf.fill((0, 0, 0, 120), (0, 0, w, step * len(rendered) + 4))
+            for idx, txt in enumerate(rendered):
+                surf.blit(txt, (4, 2 + idx * step))
+            self._dbg_key = key
+            self._dbg_surf = surf
+        self.surface.blit(self._dbg_surf, (4, 4))
 
     # ─── Walls ────────────────────────────────────────────────────────────
+    def _grid_array(self, game_map):
+        """int32 numpy view of the tile grid, rebuilt only when the map changes."""
+        grid = game_map.grid
+        rev = getattr(game_map, 'grid_rev', 0)
+        if self._grid_np is None or grid is not self._grid_src or rev != self._grid_rev:
+            self._grid_np = np.asarray(grid, dtype=np.int32)
+            self._grid_src = grid
+            self._grid_rev = rev
+        return self._grid_np
+
     def _cast_rays(self, player, game_map):
-        """Cast rays for wall rendering."""
+        """Cast rays for wall rendering (all rays walk the grid together in numpy)."""
         px, py = player.x, player.y
-        pa = player.angle
         pitch_offset = int(player.pitch * self.h)
         far = float(MAX_DEPTH) + 1.0
+        h = self.h
 
-        for i in range(self.num_rays):
-            ray_angle = pa + self.ray_angles[i]
-            sin_a = math.sin(ray_angle)
-            cos_a = math.cos(ray_angle)
+        ang = player.angle + self._ray_ang64
+        dist, tile, frac, side, hit = cast_rays(
+            self._grid_array(game_map), game_map.width, game_map.height,
+            px, py, np.cos(ang), np.sin(ang), MAX_DEPTH, EMPTY)
 
-            # DDA raycasting
-            dist, wall_type, hit_x_frac, side = self._dda_cast(px, py, cos_a, sin_a, game_map)
+        # Fish-eye correction + z-buffer. Rays that hit nothing within MAX_DEPTH
+        # draw no wall and never hide a sprite.
+        corrected = dist * self._ray_cos64
+        seen = hit & (dist < MAX_DEPTH)
+        zb = self.z_buffer
+        zb[:] = far
+        zb[seen] = corrected[seen]
 
-            # Ray hit nothing within MAX_DEPTH: no wall to draw, sprites are never hidden
-            if dist >= MAX_DEPTH:
-                self.z_buffer[i] = far
-                continue
+        drawable = seen & (corrected >= 0.01)
+        if not drawable.any():
+            return
 
-            # Fish-eye correction
-            cos_diff = math.cos(self.ray_angles[i])
-            corrected_dist = dist * cos_diff
+        # Per-ray wall geometry and lighting buckets, computed for all rays at once.
+        safe = np.maximum(corrected, 1e-9)
+        wall_h = np.minimum((WALL_HEIGHT_SCALE / (safe * TILE_SIZE)).astype(np.int64), h * 3)
+        draw_start = h // 2 - wall_h // 2 + pitch_offset
+        # Quantised scale + lighting buckets: the same (tex, column, height
+        # bucket, light bucket, face) reuses a cached surface, so we avoid 640
+        # pygame.transform.scale calls + full-column fills per frame.
+        wh_q = np.maximum(4, (wall_h + 3) // 4 * 4)
+        shade = np.maximum(0.15, 1.0 - corrected / MAX_DEPTH)
+        dark_a = np.minimum(255, ((1.0 - shade) * 220).astype(np.int64) + np.where(side == 1, 35, 0))
+        v_q = np.minimum(255, (255 - dark_a + 8) // 16 * 16)
 
-            self.z_buffer[i] = corrected_dist
+        cols_idx = np.flatnonzero(drawable).tolist()
+        tiles = tile.tolist()
+        fracs = frac.tolist()
+        starts = draw_start.tolist()
+        whs = wh_q.tolist()
+        vqs = v_q.tolist()
+        sides = side.tolist()
+        dists = corrected.tolist()
+        ends = (draw_start + wall_h).tolist()
 
-            if corrected_dist < 0.01:
-                continue
-
-            # Wall height
-            wall_h = int(WALL_HEIGHT_SCALE / (corrected_dist * TILE_SIZE))
-            if wall_h > self.h * 3:
-                wall_h = self.h * 3
-
-            draw_start = self.h // 2 - wall_h // 2 + pitch_offset
-            draw_end = draw_start + wall_h
-
-            # Texture mapping
-            tex = self._get_wall_texture(wall_type)
+        cache = self._wall_col_lit_cache
+        tex_for = {}
+        blits = []
+        for i in cols_idx:
+            wt = tiles[i]
+            entry = tex_for.get(wt)
+            if entry is None:
+                tex = self._get_wall_texture(wt)
+                entry = (tex, self._wall_columns(tex) if tex else None)
+                tex_for[wt] = entry
+            tex, cols = entry
+            ds = starts[i]
             if tex:
-                cols = self._wall_columns(tex)
-                tex_x = int(hit_x_frac * len(cols)) % len(cols)
-                # Quantised scale + lighting buckets: same (tex, column, height
-                # bucket, light bucket, face) reuses the cached surface so we
-                # avoid 640 pygame.transform.scale + full-column fills/frame.
-                wh_q = max(4, (wall_h + 3) // 4 * 4)  # round up to 4px bucket
-                shade = max(0.15, 1.0 - corrected_dist / MAX_DEPTH)
-                dark_a = min(255, int((1 - shade) * 220) + (35 if side == 1 else 0))
-                v = 255 - dark_a
-                v_q = min(255, (v + 8) // 16 * 16)
-                lit_key = (id(tex), tex_x, wh_q, v_q, side)
-                shaded = self._wall_col_lit_cache.get(lit_key)
+                y0 = ds if ds > 0 else 0
+                if y0 >= h:
+                    continue
+                ncols = len(cols)
+                tex_x = int(fracs[i] * ncols) % ncols
+                wq = whs[i]
+                lit_key = (id(tex), tex_x, wq, vqs[i], sides[i])
+                shaded = cache.get(lit_key)
                 if shaded is None:
-                    base = pygame.transform.scale(cols[tex_x], (1, wh_q))
-                    base.fill((v_q, v_q, v_q), special_flags=pygame.BLEND_RGB_MULT)
-                    self._wall_col_lit_cache[lit_key] = base
-                    if len(self._wall_col_lit_cache) > 8192:
-                        self._wall_col_lit_cache.clear()
-                    shaded = base
-
-                self.surface.blit(shaded, (i, max(0, draw_start)),
-                                  (0, max(0, -draw_start), 1, min(wh_q, self.h - max(0, draw_start))))
+                    v = vqs[i]
+                    shaded = pygame.transform.scale(cols[tex_x], (1, wq))
+                    shaded.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+                    cache[lit_key] = shaded
+                    if len(cache) > 8192:
+                        cache.clear()
+                blits.append((shaded, (i, y0), (0, y0 - ds, 1, min(wq, h - y0))))
             else:
                 # Fallback solid color
-                color = self._get_wall_color(wall_type, corrected_dist)
-                if draw_start < self.h and draw_end > 0:
-                    ds = max(0, draw_start)
-                    de = min(self.h, draw_end)
-                    pygame.draw.line(self.surface, color, (i, ds), (i, de))
+                if ds < h and ends[i] > 0:
+                    color = self._get_wall_color(wt, dists[i])
+                    pygame.draw.line(self.surface, color, (i, max(0, ds)), (i, min(h, ends[i])))
+        if blits:
+            self.surface.blits(blits, False)
 
     def _wall_columns(self, tex):
         """Return the 1px-wide column subsurfaces of a wall texture (sliced once, zero-copy)."""
@@ -1053,29 +1099,21 @@ class Renderer:
         x1 = min(self.w, x + iw)
         if x1 <= x0:
             return 0
-        zb = self.z_buffer
-        nr = self.num_rays
-        w = self.w
-        run = None
-        drawn = 0
-        for col in range(x0, x1 + 1):
-            vis = False
-            if col < x1:
-                zi = col * nr // w
-                vis = zb[zi] > dist
-            if vis:
-                if run is None:
-                    run = col
-            elif run is not None:
-                self.surface.blit(img, (run, y), (run - x, 0, col - run, ih))
-                drawn += col - run
-                run = None
-        return drawn
+        runs = visible_runs(self.z_buffer, self._col_to_ray, x0, x1, dist)
+        if not runs:
+            return 0
+        surface = self.surface
+        if len(runs) == 1:
+            a, b = runs[0]
+            surface.blit(img, (a, y), (a - x, 0, b - a, ih))
+            return b - a
+        surface.blits([(img, (a, y), (a - x, 0, b - a, ih)) for a, b in runs], False)
+        return sum(b - a for a, b in runs)
 
     def _col_visible(self, col, dist):
         if col < 0 or col >= self.w:
             return False
-        return self.z_buffer[col * self.num_rays // self.w] > dist
+        return bool(self.z_buffer[self._col_to_ray[col]] > dist)
 
     def _light_sprite(self, img, dist):
         """Distance-darken a sprite WITHOUT touching its alpha channel."""
@@ -1304,10 +1342,43 @@ class Renderer:
             sw = max(1, int(sh * aspect))
         if sh < 2 or sw < 1:
             return 0
+        if sh > self.h * 2 or sw > self.w * 2:
+            return self._draw_one_cropped(img, cx, bottom, sw, sh, dist, stats)
         scaled, qsw, qsh = self._lit_sprite(img, sw, sh, dist)
         x = int(cx - qsw / 2)
         y = int(bottom - qsh)
         n = self._blit_zbuf(scaled, x, y, dist)
+        stats['drawn'] += 1 if n > 0 else 0
+        return n
+
+    def _draw_one_cropped(self, img, cx, bottom, sw, sh, dist, stats):
+        """Draw a sprite much larger than the screen (a tree right next to the player).
+
+        Scaling the whole billboard to e.g. 4000px tall and caching it would
+        allocate and light megapixels per frame as the player walks, so only
+        the part that lands on screen is cropped out of the source and scaled.
+        """
+        iw, ih = img.get_size()
+        x = int(cx - sw / 2)
+        y = int(bottom - sh)
+        vx0, vx1 = max(0, x), min(self.w, x + sw)
+        vy0, vy1 = max(0, y), min(self.h, y + sh)
+        if vx1 <= vx0 or vy1 <= vy0:
+            return 0
+        # source rectangle covering the visible destination area (rounded outwards)
+        sx0 = max(0, int((vx0 - x) * iw / sw))
+        sx1 = min(iw, int(math.ceil((vx1 - x) * iw / sw)))
+        sy0 = max(0, int((vy0 - y) * ih / sh))
+        sy1 = min(ih, int(math.ceil((vy1 - y) * ih / sh)))
+        if sx1 <= sx0 or sy1 <= sy0:
+            return 0
+        cw = max(1, int(round((sx1 - sx0) * sw / iw)))
+        ch = max(1, int(round((sy1 - sy0) * sh / ih)))
+        crop = pygame.transform.scale(img.subsurface((sx0, sy0, sx1 - sx0, sy1 - sy0)), (cw, ch))
+        shade = max(MIN_SPRITE_LIGHT, 1.0 - 0.55 * min(1.0, dist / max(1.0, float(MAX_DEPTH))))
+        v = min(255, (int(255 * shade) + 8) // 16 * 16)
+        crop.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
+        n = self._blit_zbuf(crop, x + int(sx0 * sw / iw), y + int(sy0 * sh / ih), dist)
         stats['drawn'] += 1 if n > 0 else 0
         return n
 

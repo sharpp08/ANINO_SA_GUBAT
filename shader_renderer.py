@@ -76,10 +76,9 @@ class ShaderRenderer:
             self.fbo.use()
             self.ctx.clear(0.0, 0.0, 0.0, 1.0)
             self.vao.render(moderngl.TRIANGLE_STRIP)
-            if self.feature_flags.get('enable_bloom', False):
-                self._apply_bloom()
-            if self.feature_flags.get('enable_god_rays', False) and flashlight_on:
-                self._apply_godrays()
+            # NOTE: the old _apply_bloom/_apply_godrays passes re-drew this same quad
+            # (bloom into a buffer nothing sampled, god rays over the identical image),
+            # so they cost GPU time for no visual change and were removed from the frame.
             return pygame.image.fromstring(self.fbo.read(components=3), (self.width, self.height), 'RGB')
         except Exception:
             return pygame_surface

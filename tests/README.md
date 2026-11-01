@@ -14,3 +14,9 @@ This test suite covers:
 5. Game state machine transitions.
 6. Save & load robust edge cases (round-trip, old format, corrupted JSON, missing file, empty file).
 7. Simulated soak test (1800 frames).
+
+## Raycast Equivalence Test (no pygame needed)
+```bash
+python tests/test_raycast_fast.py
+```
+Checks the vectorised raycaster and sprite depth-test in `raycast_fast.py` against the original scalar implementations.

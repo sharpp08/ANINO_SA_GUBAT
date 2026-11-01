@@ -804,6 +804,7 @@ class GameMap:
         if 0 <= ix < self.width and 0 <= iy < self.height:
             if self.grid[iy][ix] == DOOR:
                 self.grid[iy][ix] = EMPTY
+                self.grid_rev = getattr(self, 'grid_rev', 0) + 1  # renderer rebuilds its numpy grid
                 return True
         return False
 
