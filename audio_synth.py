@@ -381,12 +381,12 @@ class SoundManager:
         return self._generate_sound(x)
 
     def _mix(self, parts, length=None):
-        """Sum [(offset_s, array)] into one array."""
+        """Sum [(offset_s, array)] into one array.
+        Mono parts are broadcast to both channels when mixed with stereo parts."""
         r = self.rate
         total = length or max(int(o * r) + len(a) for o, a in parts)
         out = None
         for off, a in parts:
-            a = _stereo(a) if getattr(a, 'ndim', 1) == 2 else a
             if out is None:
                 out = np.zeros((total, 2)) if a.ndim == 2 else np.zeros(total)
             if a.ndim == 2 and out.ndim == 1:
@@ -394,7 +394,10 @@ class SoundManager:
             s = int(off * r)
             e = min(total, s + len(a))
             if e > s:
-                out[s:e] += a[:e - s]
+                seg = a[:e - s]
+                if out.ndim == 2 and seg.ndim == 1:
+                    seg = np.column_stack((seg, seg))
+                out[s:e] += seg
         return out
 
     # ── building blocks ───────────────────────────────────────────────────────
