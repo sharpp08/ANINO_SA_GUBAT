@@ -72,7 +72,8 @@ class Enemy:
         self.speed = stats['speed']
         self.attack_range = stats['attack_range']
         self.detect_range = stats['detect_range']
-        self.attack_cooldown_max = stats['attack_cooldown']
+        # Shorter recovery between attacks makes close-range pressure relentless.
+        self.attack_cooldown_max = stats['attack_cooldown'] * 0.75
         self.vulnerabilities = stats['vulnerabilities']
         self.resistances = stats['resistances']
 
@@ -85,6 +86,10 @@ class Enemy:
         self.patrol_angle = random.uniform(0, math.pi * 2)
         self.size = 0.3
         self.alive = True
+        self.death_timer = 0.0
+        self.death_duration = 1.9
+        self.death_drop_created = False
+        self.death_variant = random.random()
         self.hit_flash = 0
         self.stalk_timer = 0
 
@@ -197,6 +202,13 @@ class Enemy:
     def update(self, dt, player_x, player_y, game_map):
         """Update enemy AI state machine."""
         if not self.alive:
+            if self.death_timer > 0:
+                self.death_timer = max(0.0, self.death_timer - dt)
+                self.anim_time += dt
+                if self.anim_time >= 1.0 / 10.0:
+                    self.anim_time -= 1.0 / 10.0
+                    self.anim_frame = min(5, self.anim_frame + 1)
+                self.animation_state = 'death'
             return
 
         # Update effects
@@ -219,21 +231,22 @@ class Enemy:
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
                 return
 
-        # Path recalculation: repath when player moves far or timer expires
-        if self.state in (EnemyState.INVESTIGATE, EnemyState.STALK, EnemyState.ATTACK):
-            self._repath_timer -= dt
-            dx = player_x - self._last_player_pos[0]
-            dy = player_y - self._last_player_pos[1]
-            player_moved = math.sqrt(dx*dx + dy*dy) > self._last_repath_dist
-            if self._repath_timer <= 0 or player_moved:
-                self._repath_timer = 3.0
-                self._last_player_pos = (player_x, player_y)
-                try:
-                    from pathfinder import NavGrid
-                    nav = NavGrid(game_map)
-                    self._path = nav.find_path((self.x, self.y), (player_x, player_y))
-                except Exception:
-                    self._path = None
+        # Relentless pursuit: refresh the route frequently, regardless of
+        # distance, visibility, or the enemy's previous state.
+        self._repath_timer -= dt
+        dx = player_x - self._last_player_pos[0]
+        dy = player_y - self._last_player_pos[1]
+        player_moved = math.sqrt(dx*dx + dy*dy) > 0.8
+        if self._repath_timer <= 0 or player_moved:
+            self._repath_timer = 0.65
+            self._last_player_pos = (player_x, player_y)
+            try:
+                from pathfinder import NavGrid
+                nav = NavGrid(game_map)
+                self._path = nav.find_path((self.x, self.y), (player_x, player_y))
+                self._path_index = 0
+            except Exception:
+                self._path = None
 
         if self.shield_debuff:
             self.shield_debuff_timer -= dt
@@ -248,8 +261,12 @@ class Enemy:
 
         dist = self.distance_to(player_x, player_y)
         self.state_timer -= dt
-        # Reset flag at start of each frame so it's only set on actual transition
+        # Every living enemy is permanently hostile. No detection cutoff,
+        # passive patrol, stalking at range, or low-health retreat.
         prev_state = self.state
+        if self.state != EnemyState.ATTACK:
+            self.just_entered_chase = True
+        self.state = EnemyState.ATTACK
 
         self.anim_time += dt
         
@@ -294,143 +311,23 @@ class Enemy:
         else:
             self.animation_state = 'idle'
 
-        if self.state == EnemyState.IDLE:
-            if dist < self.detect_range:
-                if self.type == 'aswang':
-                    self.state = EnemyState.STALK
-                    self.state_timer = 3.0 + random.random() * 2
-                    self.just_entered_chase = True
-                else:
-                    self.state = EnemyState.INVESTIGATE
-                    self.state_timer = 2.0
-                    self.just_entered_chase = True
-            elif self.state_timer <= 0:
-                self.state = EnemyState.PATROL
-                self.patrol_angle = random.uniform(0, math.pi * 2)
-                self.state_timer = 3.0 + random.random() * 3
-
-        elif self.state == EnemyState.PATROL:
-            move_speed = self.speed * 0.3 * dt
-            new_x = self.x + math.cos(self.patrol_angle) * move_speed
-            new_y = self.y + math.sin(self.patrol_angle) * move_speed
-            if not self._try_move(game_map, new_x, new_y, self.patrol_angle, move_speed):
-                self.patrol_angle = random.uniform(0, math.pi * 2)
-
-            if dist < self.detect_range:
-                self.state = EnemyState.INVESTIGATE
-                self.state_timer = 1.5
-                self.just_entered_chase = True
-            elif self.state_timer <= 0:
-                self.state = EnemyState.IDLE
-                self.state_timer = 2.0 + random.random() * 3
-
-        elif self.state == EnemyState.INVESTIGATE:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-            # Use pathfinding if available and path is stale
-            if hasattr(self, '_path') and self._path:
-                if not self._move_along_path(game_map, self._path, dt, self.speed * 0.6):
-                    pass  # still following path
-                elif dist < self.attack_range:
-                    self.state = EnemyState.ATTACK
-                    self.state_timer = 0.5
-                    self.just_entered_chase = True
-                elif dist > self.detect_range * 1.5:
-                    self.state = EnemyState.IDLE
-                    self.state_timer = 3.0
-                return
-            # Fallback to direct movement
-            move_speed = self.speed * 0.6 * dt
-            new_x = self.x + math.cos(angle) * move_speed
-            new_y = self.y + math.sin(angle) * move_speed
-            self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if dist < self.attack_range:
-                self.state = EnemyState.ATTACK
-                self.state_timer = 0.5
-                self.just_entered_chase = True
-            elif dist > self.detect_range * 1.5:
-                self.state = EnemyState.IDLE
-                self.state_timer = 3.0
-
-        elif self.state == EnemyState.STALK:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-            # Stalk: move toward but try to stay at medium range
-            desired_dist = self.detect_range * 0.5
-            if dist > desired_dist + 1:
-                move_speed = self.speed * 0.4 * dt
+        # Aggressive pursuit: keep closing distance from anywhere on the map.
+        angle = self.angle_to(player_x, player_y)
+        self.facing_angle = angle
+        if dist > self.attack_range * 0.82:
+            chase_speed = self.speed * 1.45
+            following_path = False
+            if self._path:
+                following_path = self._move_along_path(
+                    game_map, self._path, dt, chase_speed)
+            if not following_path:
+                # Direct movement is a fallback for open ground or unavailable
+                # pathfinding; _try_move still slides along collision geometry.
+                move_speed = chase_speed * dt
                 new_x = self.x + math.cos(angle) * move_speed
                 new_y = self.y + math.sin(angle) * move_speed
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
-            elif dist < desired_dist - 1:
-                move_speed = self.speed * 0.3 * dt
-                new_x = self.x - math.cos(angle) * move_speed
-                new_y = self.y - math.sin(angle) * move_speed
-                self._try_move(game_map, new_x, new_y, angle, move_speed)
-            else:
-                # Strafe around player
-                strafe_angle = angle + math.pi / 2
-                move_speed = self.speed * 0.3 * dt
-                new_x = self.x + math.cos(strafe_angle) * move_speed
-                new_y = self.y + math.sin(strafe_angle) * move_speed
-                self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            self.stalk_timer += dt
-            if self.stalk_timer > 5.0 or dist < self.attack_range * 1.5:
-                self.state = EnemyState.ATTACK if dist < self.attack_range * 2 else EnemyState.INVESTIGATE
-                self.stalk_timer = 0
-                self.state_timer = 0.5
-                self.just_entered_chase = True
-
-        elif self.state == EnemyState.ATTACK:
-            angle = self.angle_to(player_x, player_y)
-            self.facing_angle = angle
-
-            if dist > self.attack_range:
-                # Use pathfinding for chase
-                if hasattr(self, '_path') and self._path:
-                    if not self._move_along_path(game_map, self._path, dt, self.speed):
-                        pass  # still following
-                    else:
-                        pass  # reached end of path
-                else:
-                    # Fallback direct chase
-                    move_speed = self.speed * dt
-                    new_x = self.x + math.cos(angle) * move_speed
-                    new_y = self.y + math.sin(angle) * move_speed
-                    self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if dist > self.detect_range * 2:
-                self.state = EnemyState.IDLE
-                self.state_timer = 3.0
-
-            # Check for retreat if low health
-            if self.health < self.max_health * 0.25 and self.type in ('aswang', 'sigbin'):
-                self.state = EnemyState.RETREAT
-                self.state_timer = 3.0
-        elif self.state == EnemyState.RECOVER:
-            if self.state_timer <= 0:
-                prev_state = self.state
-                self.state = EnemyState.ATTACK if dist < self.detect_range else EnemyState.IDLE
-                self.state_timer = 1.0
-                if prev_state != self.state:
-                    self.just_entered_chase = True
-
-        elif self.state == EnemyState.RETREAT:
-            angle = self.angle_to(player_x, player_y) + math.pi
-            move_speed = self.speed * dt
-            new_x = self.x + math.cos(angle) * move_speed
-            new_y = self.y + math.sin(angle) * move_speed
-            self._try_move(game_map, new_x, new_y, angle, move_speed)
-
-            if self.state_timer <= 0 or dist > self.detect_range * 2:
-                if self.type == 'aswang':
-                    self.state = EnemyState.STALK
-                    self.stalk_timer = 0
-                else:
-                    self.state = EnemyState.IDLE
-                self.state_timer = 3.0
+        self.state = EnemyState.ATTACK
 
     def can_attack(self, player_x, player_y):
         """Check if enemy can attack the player."""
@@ -465,6 +362,9 @@ class Enemy:
             self.health = 0
             self.alive = False
             self.state = EnemyState.DEFEATED
+            self.death_timer = self.death_duration
+            self.animation_state = 'death'
+            self.anim_frame = 0
         else:
             # Stagger
             if self.state != EnemyState.RETREAT:
@@ -558,6 +458,43 @@ class EnemyManager:
             enemy = Enemy(edata['type'], edata['x'], edata['y'])
             self.enemies.append(enemy)
 
+    def update_drops(self, game_map):
+        """Create one randomized, type-aware loot drop for each defeated enemy."""
+        drop_tables = {
+            'aswang': [('health', 0.28, 15), ('ammo_revolver', 0.48, 4), ('garlic', 0.24, 1)],
+            'manananggal': [('faith', 0.42, 12), ('ammo_revolver', 0.38, 5), ('battery', 0.20, 18)],
+            'tikbalang': [('ammo_shotgun', 0.48, 4), ('salt', 0.32, 1), ('health', 0.20, 12)],
+            'kapre': [('health', 0.40, 25), ('ammo_shotgun', 0.40, 6), ('faith', 0.20, 15)],
+            'white_lady': [('faith', 0.48, 18), ('battery', 0.30, 25), ('health', 0.22, 15)],
+            'multo': [('faith', 0.45, 12), ('ammo_revolver', 0.35, 4), ('battery', 0.20, 15)],
+            'sigbin': [('ammo_revolver', 0.45, 3), ('ammo_shotgun', 0.35, 3), ('health', 0.20, 10)],
+        }
+        for enemy in self.enemies:
+            if enemy.alive or enemy.death_drop_created:
+                continue
+            enemy.death_drop_created = True
+            choices = drop_tables.get(enemy.type, [('health', 0.4, 10), ('ammo_revolver', 0.6, 3)])
+            total = sum(item[1] for item in choices)
+            roll = random.random() * total
+            chosen = choices[-1]
+            for item in choices:
+                roll -= item[1]
+                if roll <= 0:
+                    chosen = item
+                    break
+            ptype, _weight, amount = chosen
+            angle = random.uniform(0, math.tau)
+            radius = random.uniform(0.25, 0.55)
+            x = enemy.x + math.cos(angle) * radius
+            y = enemy.y + math.sin(angle) * radius
+            try:
+                if game_map.is_solid(x, y):
+                    x, y = enemy.x, enemy.y
+            except Exception:
+                x, y = enemy.x, enemy.y
+            game_map.pickups.append({'type': ptype, 'x': x, 'y': y,
+                                     'amount': amount, 'active': True, 'dropped': True})
+
     def update(self, dt, player_x, player_y, game_map, player=None):
         """Update all enemies with noise sensing, flashlight reaction, and sanity drain."""
         for enemy in self.enemies:
@@ -616,6 +553,7 @@ class EnemyManager:
         w_damage = weapon_info['damage']
         w_spread = weapon_info.get('spread', 0)
         pellets = weapon_info.get('pellets', 1)
+        revolver_candidates = []
 
         for enemy in self.enemies:
             if not enemy.alive:
@@ -650,10 +588,20 @@ class EnemyManager:
                         enemy.take_damage(total_dmg, 'physical')
                         hits.append(enemy)
             elif w_type == 'revolver':
-                if abs(angle_diff) < 0.15:
-                    falloff = max(0.5, 1.0 - dist / w_range * 0.3)
-                    enemy.take_damage(w_damage * falloff, 'physical')
-                    hits.append(enemy)
+                # Revolver is a single-target hitscan: use the enemy's apparent
+                # angular size instead of a fixed cone, then damage only the
+                # closest valid target. This keeps distant shots precise while
+                # making close-range hits register consistently.
+                target_angle = math.atan2(max(0.12, enemy.size), max(0.1, dist))
+                if abs(angle_diff) <= target_angle:
+                    revolver_candidates.append((dist, enemy))
+
+        if w_type == 'revolver' and revolver_candidates:
+            _, target = min(revolver_candidates, key=lambda item: item[0])
+            dist = target.distance_to(player_x, player_y)
+            falloff = max(0.5, 1.0 - dist / w_range * 0.3)
+            target.take_damage(w_damage * falloff, 'physical')
+            hits.append(target)
 
         return hits
 
