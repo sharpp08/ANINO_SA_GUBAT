@@ -795,13 +795,23 @@ class Game:
         for enemy in self.enemy_manager.enemies:
             if not enemy.alive:
                 continue
+
+            # Keep the original attack vocalization clear: stalking clicks must
+            # never overlap an enemy that has entered its attack animation/state.
+            enemy_state = getattr(getattr(enemy, 'state', None), 'value', getattr(enemy, 'state', None))
+            if enemy_state == 'attack':
+                enemy._tiktik_timer = max(getattr(enemy, '_tiktik_timer', 0.0), 0.35)
+                continue
+
             dist = enemy.distance_to(p.x, p.y)
             if not hasattr(enemy, '_tiktik_timer'):
                 enemy._tiktik_timer = random.uniform(0.25, 2.4)
             enemy._tiktik_timer -= dt
             if dist <= 22.0 and enemy._tiktik_timer <= 0.0:
                 proximity = max(0.0, min(1.0, 1.0 - dist / 22.0))
-                intensity = 0.28 + proximity * 0.72
+                # Quiet background layer; the enemy's original attack/alert sounds
+                # remain dominant and are not modified.
+                intensity = 0.12 + proximity * 0.28
                 try:
                     enemy_audio_mgr.play_spatial(
                         enemy.type, 'tiktik',
