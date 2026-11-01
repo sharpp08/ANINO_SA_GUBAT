@@ -1473,10 +1473,19 @@ class Renderer:
 
         # The custom bolo / shotgun art fills its whole surface, so size it to the
         # screen height (works at any internal resolution); other weapons keep 3x.
-        from asset_generator import SHOTGUN_ANCHORS
+        from asset_generator import SHOTGUN_ANCHORS, REVOLVER_ANCHORS
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
+        custom_revolver = (wname == 'revolver' and bool(REVOLVER_ANCHORS))
         sprite = self.weapon_sprites.get(wname)
-        scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
+        if wname == 'bolo' or custom_shotgun:
+            scale = self.h * 0.85 / sprite.get_height()
+        elif custom_revolver:
+            # A sidearm: about half the screen height, tucked in the lower right so
+            # the crosshair and the view ahead stay clear (the old 3x procedural
+            # sprite was taller than the whole 360px screen).
+            scale = self.h * 0.5 / sprite.get_height()
+        else:
+            scale = 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
         vm_key = (wname, id(sprite))
@@ -1488,7 +1497,7 @@ class Renderer:
         # The revolver art is drawn as a three-quarter view (front of the
         # cylinder and bore visible, barrel up toward the crosshair).  Anchor
         # its grip near bottom-center so it reads as a held gun.
-        if wname == 'revolver':
+        if wname == 'revolver' and not custom_revolver:
             base_x = self.w // 2 - sw // 2 + 8
             base_y = self.h - int(sh * 0.82)
 
@@ -1678,6 +1687,12 @@ class Renderer:
             pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
             pygame.draw.circle(self.surface, skin_color, (lx, ly), 8)
             pygame.draw.circle(self.surface, glove_color, (lx - 3, ly + 3), 5)
+        elif player.alive and custom_revolver:
+            # One-handed: the hand wraps the wooden grip of the custom art
+            rx = int(final_x + REVOLVER_ANCHORS['right'][0] * sw)
+            ry = int(final_y + REVOLVER_ANCHORS['right'][1] * sh)
+            pygame.draw.circle(self.surface, skin_color, (rx, ry), 9)
+            pygame.draw.circle(self.surface, glove_color, (rx - 3, ry + 3), 6)
         elif player.alive:
             # Right hand knuckles / fingers on grip
             pygame.draw.circle(self.surface, skin_color, (int(rh_x - 15), int(rh_y + 10)), 8)

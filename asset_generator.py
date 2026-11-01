@@ -728,6 +728,9 @@ BOLO_ANCHORS = {'pivot': (0.47, 1.0), 'grip': (0.47, 0.85)}
 # Empty until the custom sprite loads (the renderer then uses its default hand spots).
 SHOTGUN_ANCHORS = {}
 SHOTGUN_GEOM = {}         # source-canvas -> viewmodel-surface mapping of the shotgun art
+# Right-hand spot on the custom revolver viewmodel, as a fraction of its 128px surface.
+# Empty until the custom sprite loads (the renderer then uses the procedural revolver).
+REVOLVER_ANCHORS = {}
 # [(surface, (dest_x, dest_y), right_hand_frac, left_hand_frac), ...] from the pump sheet
 SHOTGUN_FIRE_FRAMES = []
 # Share of the shotgun cooldown each fire frame (sheet frames 1..5) stays on screen
@@ -815,6 +818,44 @@ def _load_custom_shotgun_sprite(size=128) -> Optional[pygame.Surface]:
         return None
 
 
+def _load_custom_revolver_sprite(size=128) -> Optional[pygame.Surface]:
+    """Load assets/sprites/weapons/revolver/revolver_hero.png as the revolver viewmodel.
+
+    Same treatment as the shotgun: the pack art has the grip at the top-left and the
+    barrel pointing down-right, so it is rotated 180 degrees (grip bottom-right,
+    barrel up-left for a right-handed first-person view), cropped to its visible
+    pixels, smooth-scaled to fit size x size (aspect preserved) and anchored
+    bottom-right. Returns None if the file is missing or can't be loaded so the
+    procedural revolver is used instead.
+    """
+    path = os.path.join(ASSET_DIR, 'sprites', 'weapons', 'revolver', 'revolver_hero.png')
+    try:
+        if not os.path.exists(path):
+            return None
+        img = pygame.image.load(path).convert_alpha()
+        img = pygame.transform.rotate(img, 180)
+        bbox = img.get_bounding_rect()
+        if bbox.width == 0 or bbox.height == 0:
+            return None
+        img = img.subsurface(bbox).copy()
+        k = min(size / img.get_width(), size / img.get_height())
+        new_w = max(1, int(img.get_width() * k))
+        new_h = max(1, int(img.get_height() * k))
+        img = pygame.transform.smoothscale(img, (new_w, new_h))
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        ox, oy = size - new_w, size - new_h
+        surf.blit(img, (ox, oy))
+
+        # Hand spot measured on the rotated 640px art: the wooden grip centres at
+        # about (477, 473) inside the 80..560 x 40..600 bbox.
+        def frac(sx, sy):
+            return ((ox + (sx - bbox.x) * k) / size, (oy + (sy - bbox.y) * k) / size)
+        REVOLVER_ANCHORS['right'] = frac(470, 455)
+        return surf
+    except Exception:
+        return None
+
+
 def _stock_centroid(surf):
     """Centroid (x, y) in pixels of the brown stock pixels, or None."""
     sx = sy = n = 0
@@ -873,11 +914,12 @@ def generate_all_weapons():
     """Generate all weapon sprites."""
     bolo = _load_custom_bolo_sprite(128)
     shotgun = _load_custom_shotgun_sprite(128)
+    revolver = _load_custom_revolver_sprite(128)
     SHOTGUN_FIRE_FRAMES[:] = _load_shotgun_fire_frames(128) if shotgun is not None else []
     return {
         'bolo': bolo or generate_weapon_sprite('bolo', 128, 128),
         'shotgun': shotgun or generate_weapon_sprite('shotgun', 128, 128),
-        'revolver': generate_weapon_sprite('revolver', 128, 128),
+        'revolver': revolver or generate_weapon_sprite('revolver', 128, 128),
     }
 
 
