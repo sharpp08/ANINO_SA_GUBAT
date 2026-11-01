@@ -83,8 +83,8 @@ ENEMY_AUDIO_EVENTS = {
     'death':     {'time': 1.20, 'pitch': 0.80, 'sweep': -0.55, 'bump': 0.05, 'att': 0.04,  'decay': 2.2, 'gain': 0.90, 'breath': 2.0, 'drive': 0.8},
     'jumpscare': {'time': 0.85, 'pitch': 1.15, 'sweep': 0.45,  'bump': 0.10, 'att': 0.015, 'decay': 0.9, 'gain': 1.00, 'breath': 1.4, 'drive': 1.8},
     # Dedicated chase screams; the enemy anatomy/profile makes each one distinct.
-    'scream':    {'time': 1.55, 'pitch': 1.38, 'sweep': 0.78, 'bump': 0.30, 'att': 0.006, 'decay': 0.56, 'gain': 1.28, 'breath': 2.15, 'drive': 2.35},
-    'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.004, 'decay': 1.8, 'gain': 0.92, 'breath': 0.0, 'drive': 1.0},
+    'scream':    {'time': 1.70, 'pitch': 1.42, 'sweep': 0.88, 'bump': 0.34, 'att': 0.004, 'decay': 0.50, 'gain': 1.55, 'breath': 2.35, 'drive': 2.65},
+    'tiktik':    {'time': 0.72, 'pitch': 1.0, 'sweep': 0.0, 'bump': 0.0, 'att': 0.003, 'decay': 1.55, 'gain': 1.25, 'breath': 0.0, 'drive': 1.0},
 }
 
 # Each creature has its own Tik-Tik signature. These affect ONLY the added
