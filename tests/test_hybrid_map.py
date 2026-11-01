@@ -31,7 +31,9 @@ def test_handcrafted_buildings_and_doorways():
     gm = GameMap(1)
     assert sum(row.count(WALL_WOOD) for row in gm.grid) >= 40
     assert sum(row.count(WALL_STONE) for row in gm.grid) >= 100
-    assert sum(row.count(DOOR) for row in gm.grid) >= 5
+    # 3 village houses + the ruin have real doors; the cave entrance is an open archway
+    # (it holds a Bible page, so it must not depend on the player finding a door).
+    assert sum(row.count(DOOR) for row in gm.grid) >= 4
     # All doors can be opened through the existing map API.
     doors = [(x, y) for y, row in enumerate(gm.grid) for x, tile in enumerate(row) if tile == DOOR]
     for x, y in doors:

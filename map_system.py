@@ -419,7 +419,7 @@ class GameMap:
 
     def _build_hybrid_landmarks(self):
         """Place handcrafted village huts, cave entrance and central ancient ruins."""
-        def building(cx, cy, half_w, half_h, wall_tile, door_side='south'):
+        def building(cx, cy, half_w, half_h, wall_tile, door_side='south', open_entrance=False):
             x0, x1 = int(cx - half_w), int(cx + half_w)
             y0, y1 = int(cy - half_h), int(cy + half_h)
             for x in range(x0, x1 + 1):
@@ -428,22 +428,26 @@ class GameMap:
             for y in range(y0, y1 + 1):
                 self.grid[y][x0] = wall_tile
                 self.grid[y][x1] = wall_tile
+            # open_entrance=True leaves a permanent archway instead of a door that has
+            # to be found and opened (used where a Bible page is inside the building).
+            gate = EMPTY if open_entrance else DOOR
             if door_side == 'south':
-                self.grid[y1][int(cx)] = DOOR
+                self.grid[y1][int(cx)] = gate
             elif door_side == 'north':
-                self.grid[y0][int(cx)] = DOOR
+                self.grid[y0][int(cx)] = gate
             elif door_side == 'east':
-                self.grid[int(cy)][x1] = DOOR
+                self.grid[int(cy)][x1] = gate
             else:
-                self.grid[int(cy)][x0] = DOOR
+                self.grid[int(cy)][x0] = gate
 
         # Three weathered village houses, each with a usable doorway.
         building(65, 70, 4, 3, WALL_WOOD, 'south')
         building(83, 70, 4, 3, WALL_WOOD, 'south')
         building(75, 91, 4, 3, WALL_WOOD, 'north')
 
-        # A stone-ringed limestone cave mouth with a single openable entrance.
-        building(69, 202, 5, 4, WALL_STONE, 'east')
+        # A stone-ringed limestone cave mouth with a single open entrance. It holds a Bible
+        # page, so it is an archway rather than a door the player might never open.
+        building(69, 202, 5, 4, WALL_STONE, 'east', open_entrance=True)
 
         # Main ruin complex at the heart of the ancient grove.
         building(130, 130, 8, 7, WALL_STONE, 'south')
