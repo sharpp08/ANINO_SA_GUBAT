@@ -13,6 +13,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
 
+# The renderer copies resolution/quality constants from settings at import time,
+# and main.py applies settings.json's quality_tier on import. So the preset must
+# be chosen BEFORE importing main/renderer, which means one process per preset
+# (see __main__ below). Without this every preset measured the same resolution.
+_PRESET = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ('low', 'medium', 'high') else None
+import settings as _settings
+if _PRESET:
+    _orig_load_settings = _settings.load_settings
+    _settings.load_settings = lambda *a, **k: {**_orig_load_settings(*a, **k), 'quality_tier': _PRESET}
+    _settings.apply_quality_preset(_PRESET)
+
 import pygame
 pygame.init()
 
@@ -22,9 +33,6 @@ from main import Game, STATE_PLAYING
 
 def run_benchmark(preset_name='medium', num_frames=300):
     print(f"\n=== RUNNING PERFORMANCE BENCHMARK [Preset: {preset_name}] ===")
-    
-    # Apply quality preset
-    apply_quality_preset(preset_name)
     
     game = Game()
     game.load_chapter(1)
@@ -84,8 +92,13 @@ def run_benchmark(preset_name='medium', num_frames=300):
 
 
 if __name__ == '__main__':
-    os.makedirs('reports', exist_ok=True)
-    results = {}
-    for preset in ['low', 'medium', 'high']:
-        results[preset] = run_benchmark(preset, num_frames=150)
-    print("[PASS] Performance profiling and benchmarking completed successfully.")
+    if _PRESET:
+        # Child process: measure exactly one preset.
+        run_benchmark(_PRESET, num_frames=150)
+    else:
+        # Parent: one fresh interpreter per preset so the settings really apply.
+        import subprocess
+        os.makedirs('reports', exist_ok=True)
+        for preset in ['low', 'medium', 'high']:
+            subprocess.run([sys.executable, os.path.abspath(__file__), preset], check=True)
+        print("[PASS] Performance profiling and benchmarking completed successfully.")

@@ -28,6 +28,7 @@ import heapq
 import pygame
 import numpy as np
 from settings import *
+from floor_fast import fill_floor
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
@@ -356,6 +357,8 @@ class Renderer:
             })
         # Pre-rendered particle surfaces (cached per size) to avoid per-frame allocation
         self._particle_cache = {}
+        self._sky_fx_cache = {}      # prebuilt cloud / aurora surfaces
+        self._viewmodel_cache = {}   # scaled / rotated weapon surfaces
 
         # Debug overlay (F3)
         self.debug_mode = 1   # 0 = off, 1 = compact (default), 2 = full; F3 cycles
@@ -553,12 +556,16 @@ class Renderer:
         horizon_y = max(0, half_h + pitch_offset)
 
         # 1. Sky Gradient (SKY_COLOR to blue-green haze (24,34,42))
-        for y in range(horizon_y):
-            t = y / max(1, horizon_y)
-            r = int(SKY_COLOR[0] * (1 - t) + 24 * t)
-            g = int(SKY_COLOR[1] * (1 - t) + 34 * t)
-            b = int(SKY_COLOR[2] * (1 - t) + 42 * t)
-            pygame.draw.line(self.surface, (r, g, b), (0, y), (self.w, y))
+        # One vectorised write instead of ~180 draw.line calls per frame.
+        sky_rows = min(horizon_y, self.h)
+        if sky_rows > 0:
+            t = np.arange(sky_rows, dtype=np.float32) / max(1, horizon_y)
+            sky_cols = np.empty((sky_rows, 3), dtype=np.uint8)
+            for c, haze in enumerate((24, 34, 42)):
+                sky_cols[:, c] = (SKY_COLOR[c] * (1 - t) + haze * t).astype(np.uint8)
+            sky_arr = pygame.surfarray.pixels3d(self.surface)
+            sky_arr[:, :sky_rows, :] = sky_cols[None, :, :]
+            del sky_arr
 
         if horizon_y > 0:
             # Stars (260 stars, local Random(999))
@@ -596,8 +603,13 @@ class Renderer:
                 cy = int(horizon_y * (0.15 + c_idx * 0.12))
                 alpha = max(30, 80 - c_idx * 15)
                 if 0 <= cy < horizon_y:
-                    cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
-                    pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
+                    # Built once per cloud, not once per frame.
+                    ckey = ('cloud', c_idx)
+                    cloud_surf = self._sky_fx_cache.get(ckey)
+                    if cloud_surf is None:
+                        cloud_surf = pygame.Surface((180, 40), pygame.SRCALPHA)
+                        pygame.draw.ellipse(cloud_surf, (40 + c_idx * 10, 45 + c_idx * 8, 60 + c_idx * 5, alpha), (0, 0, 180, 40))
+                        self._sky_fx_cache[ckey] = cloud_surf
                     self.surface.blit(cloud_surf, (cx, cy))
 
             # Subtle aurora borealis effect at horizon
@@ -607,8 +619,12 @@ class Renderer:
                     aurora_x = int((a_idx * 250 + aurora_t * 50) % (self.w + 200) - 100)
                     aurora_w = 60 + a_idx * 20
                     aurora_alpha = max(5, 25 - a_idx * 5)
-                    aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
-                    pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+                    akey = ('aurora', a_idx)
+                    aurora_surf = self._sky_fx_cache.get(akey)
+                    if aurora_surf is None:
+                        aurora_surf = pygame.Surface((aurora_w, 30), pygame.SRCALPHA)
+                        pygame.draw.ellipse(aurora_surf, (40, 80 + a_idx * 30, 100, aurora_alpha), (0, 0, aurora_w, 30))
+                        self._sky_fx_cache[akey] = aurora_surf
                     self.surface.blit(aurora_surf, (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
         # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
@@ -616,50 +632,19 @@ class Renderer:
         if floor_h > 0 and hasattr(self, '_ground_arr'):
             mist_phase = t_ticks * 0.0003
             arr_3d = pygame.surfarray.pixels3d(self.surface)
-            gw, gh, _ = self._ground_arr.shape
             px, py, pa = player.x, player.y, player.angle
-            
+
             cos_pa = math.cos(pa)
             sin_pa = math.sin(pa)
             ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
             ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
-            
-            for y in range(horizon_y, self.h):
-                row_y = y - half_h - pitch_offset
-                if row_y <= 0:
-                    continue
-                dist = (self.h * 0.5) / row_y
-                wx = px + dist * ray_dx
-                wy = py + dist * ray_dy
-                
-                tx = np.clip(np.abs((wx * 8.0) % gw).astype(np.int32), 0, gw - 1)
-                ty = np.clip(np.abs((wy * 8.0) % gh).astype(np.int32), 0, gh - 1)
-                
-                tex_cols = self._ground_arr[tx, ty] # shape (w, 3)
-                terrain_grid = getattr(game_map, 'terrain_grid', None)
-                if terrain_grid is not None:
-                    map_x = np.clip(np.floor(wx).astype(np.int32), 0, game_map.width - 1)
-                    map_y = np.clip(np.floor(wy).astype(np.int32), 0, game_map.height - 1)
-                    terrain_ids = np.clip(terrain_grid[map_y, map_x], 0,
-                                          len(self._terrain_tint_lut) - 1)
-                    tex_cols = np.clip(
-                        tex_cols.astype(np.float32) * self._terrain_tint_lut[terrain_ids],
-                        0, 255
-                    ).astype(np.uint8)
-                
-                fog = 1.0 - math.exp(-((dist * 0.07) ** 2))
-                shade = max(0.08, 1.0 - fog)
-                
-                shaded_cols = (tex_cols.astype(np.float32) * shade).astype(np.uint8)
-                
-                floor_t = (y - horizon_y) / max(1, floor_h)
-                if floor_t < 0.45:
-                    mist_strength = (0.45 - floor_t) / 0.45
-                    mist_wave = math.sin(mist_phase + y * 0.08) * 0.5 + 0.5
-                    mist_alpha = mist_strength * mist_wave * 0.25
-                    shaded_cols = (shaded_cols.astype(np.float32) * (1 - mist_alpha) + np.array([30, 40, 38], dtype=np.float32) * mist_alpha).astype(np.uint8)
-                
-                arr_3d[:, y, :] = shaded_cols
+
+            # Whole floor in one vectorised pass (see floor_fast.py).
+            fill_floor(arr_3d, self._ground_arr, self._terrain_tint_lut,
+                       getattr(game_map, 'terrain_grid', None),
+                       game_map.width, game_map.height,
+                       px, py, ray_dx, ray_dy,
+                       self.h, half_h, horizon_y, pitch_offset, mist_phase)
             del arr_3d
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
@@ -980,6 +965,10 @@ class Renderer:
         wall_type = WALL_STONE
 
         for _ in range(MAX_DEPTH * 4):
+            # Past view distance nothing can be drawn: stop instead of walking
+            # the grid out to 4x MAX_DEPTH on rays that hit nothing.
+            if (x_dist if x_dist < y_dist else y_dist) > MAX_DEPTH:
+                break
             if x_dist < y_dist:
                 x_dist += dx
                 map_x += x_step
@@ -1450,6 +1439,29 @@ class Renderer:
         except Exception:
             pass
 
+    def _vm_scaled(self, key, surf, size):
+        """Cached pygame.transform.scale for viewmodel art (same inputs every frame)."""
+        ck = ('scale', key, size)
+        got = self._viewmodel_cache.get(ck)
+        if got is None:
+            got = pygame.transform.scale(surf, size)
+            self._viewmodel_cache[ck] = got
+            if len(self._viewmodel_cache) > 400:
+                self._viewmodel_cache.pop(next(iter(self._viewmodel_cache)))
+        return got
+
+    def _vm_rotated(self, key, surf, angle):
+        """Cached rotate, angle quantised to 0.5 degree (invisible, but reusable)."""
+        q = round(angle * 2.0) / 2.0
+        ck = ('rot', key, q)
+        got = self._viewmodel_cache.get(ck)
+        if got is None:
+            got = pygame.transform.rotate(surf, q)
+            self._viewmodel_cache[ck] = got
+            if len(self._viewmodel_cache) > 400:
+                self._viewmodel_cache.pop(next(iter(self._viewmodel_cache)))
+        return got
+
     def _draw_player_viewmodel(self, player, dt):
         """Draw immersive first-person procedural hands, forearms, sleeves, and weapon viewmodel."""
         weapon_names = ['bolo', 'shotgun', 'revolver']
@@ -1467,7 +1479,8 @@ class Renderer:
         scale = (self.h * 0.85 / sprite.get_height()) if (wname == 'bolo' or custom_shotgun) else 3
         sw = int(sprite.get_width() * scale)
         sh = int(sprite.get_height() * scale)
-        scaled = pygame.transform.scale(sprite, (sw, sh))
+        vm_key = (wname, id(sprite))
+        scaled = self._vm_scaled(vm_key, sprite, (sw, sh))
 
         # Base screen position (shifted to right arm perspective)
         base_x = self.w // 2 - sw // 3 + 50
@@ -1546,7 +1559,7 @@ class Renderer:
         # Rotate viewmodel if sprinting, reloading, or dying
         total_rot = sprint_tilt + reload_rot + revolver_tilt
         if total_rot != 0:
-            draw_surf = pygame.transform.rotate(scaled, total_rot)
+            draw_surf = self._vm_rotated(vm_key, scaled, total_rot)
         else:
             draw_surf = scaled
 
@@ -1572,7 +1585,7 @@ class Renderer:
 
                 pivot_x = pre_x + piv_x + dx * hk
                 pivot_y = pre_y + piv_y + dy * hk
-                surf = pygame.transform.rotate(scaled, angle + total_rot)
+                surf = self._vm_rotated(vm_key, scaled, angle + total_rot)
                 # the pivot sits (piv - center) from the sprite center; rotate that
                 # offset to find where the rotated surface must be blitted
                 off_x, off_y = rot(piv_x - sw / 2, piv_y - sh / 2)
@@ -1611,8 +1624,9 @@ class Renderer:
                 f_surf, f_dest, f_right, f_left = SHOTGUN_FIRE_FRAMES[idx]
                 kx = sw / sprite.get_width()
                 ky = sh / sprite.get_height()
-                draw_surf = pygame.transform.scale(
-                    f_surf, (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
+                draw_surf = self._vm_scaled(
+                    ('shotgun_fire', idx), f_surf,
+                    (int(f_surf.get_width() * kx), int(f_surf.get_height() * ky)))
                 base_x, base_y = final_x, final_y
                 final_x = base_x + int(f_dest[0] * kx)
                 final_y = base_y + int(f_dest[1] * ky)
