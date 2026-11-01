@@ -336,6 +336,18 @@ class SoundManager:
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver gunshot: {exc}')
 
+        # Recorded revolver reload sound (used only when a revolver reload starts).
+        custom_revolver_reload = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'assets', 'audio', 'revolver_reload.mp3'
+        )
+        if os.path.isfile(custom_revolver_reload):
+            try:
+                self.sounds['revolver_reload'] = pygame.mixer.Sound(custom_revolver_reload)
+                print('[Audio] Loaded custom revolver reload sound.')
+            except Exception as exc:
+                print(f'[Audio] Could not load custom revolver reload sound: {exc}')
+
     # ── low level helpers (kept for backwards compatibility) ─────────────────
     def _generate_sound(self, samples):
         stereo = _stereo(samples)
