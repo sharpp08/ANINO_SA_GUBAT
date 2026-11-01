@@ -25,6 +25,7 @@ set_ambience_active, update_ambience.
 import math
 import random
 import zlib
+import os
 
 import numpy as np
 import pygame
@@ -325,6 +326,15 @@ class SoundManager:
         self._amb_active = False
         self._amb_timers = {}
         self._generate_sounds()
+        # Prefer the supplied real pistol recording; keep procedural fallback if absent.
+        custom_revolver = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       'assets', 'audio', 'revolver_gunshot.mp3')
+        if os.path.isfile(custom_revolver):
+            try:
+                self.sounds['revolver'] = pygame.mixer.Sound(custom_revolver)
+                print('[Audio] Loaded custom revolver gunshot.')
+            except Exception as exc:
+                print(f'[Audio] Could not load custom revolver gunshot: {exc}')
 
     # ── low level helpers (kept for backwards compatibility) ─────────────────
     def _generate_sound(self, samples):
