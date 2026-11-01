@@ -431,14 +431,17 @@ class GameMap:
             # open_entrance=True leaves a permanent archway instead of a door that has
             # to be found and opened (used where a Bible page is inside the building).
             gate = EMPTY if open_entrance else DOOR
-            if door_side == 'south':
-                self.grid[y1][int(cx)] = gate
-            elif door_side == 'north':
-                self.grid[y0][int(cx)] = gate
-            elif door_side == 'east':
-                self.grid[int(cy)][x1] = gate
-            else:
-                self.grid[int(cy)][x0] = gate
+            # An open archway is 3 tiles wide so it is easy to walk through and to spot.
+            span = (-1, 0, 1) if open_entrance else (0,)
+            for off in span:
+                if door_side == 'south':
+                    self.grid[y1][int(cx) + off] = gate
+                elif door_side == 'north':
+                    self.grid[y0][int(cx) + off] = gate
+                elif door_side == 'east':
+                    self.grid[int(cy) + off][x1] = gate
+                else:
+                    self.grid[int(cy) + off][x0] = gate
 
         # Three weathered village houses, each with a usable doorway.
         building(65, 70, 4, 3, WALL_WOOD, 'south')
