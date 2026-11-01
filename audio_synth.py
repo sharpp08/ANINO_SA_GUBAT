@@ -372,8 +372,11 @@ class SoundManager:
             loud = np.nonzero(env > top * 3e-4)[0]
             if len(loud):
                 x = x[:loud[-1] + 1]
-            x = fade(x, self.rate, fade_out=fade_ms / 1000.0)
-        x = x - x.mean(axis=0)
+        x = x - x.mean(axis=0)              # remove DC *before* fading so both ends land on zero
+        if not loop:
+            # ~2 ms anti-click fade-in: many one-shots otherwise start mid-waveform,
+            # which is heard as a pop on every play.
+            x = fade(x, self.rate, fade_in=0.002, fade_out=fade_ms / 1000.0)
         x = x * (peak / max(float(np.max(np.abs(x))), 1e-9))
         return self._generate_sound(x)
 
