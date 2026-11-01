@@ -874,7 +874,7 @@ class SoundManager:
         return self.play_object(self.muffled(snd, level), volume, pan)
 
     # ── ambience ──────────────────────────────────────────────────────────────
-    _BEDS = (('wind_bed', 0.0, 0.22), ('crickets_bed', 1.0, 0.11))
+    _BEDS = (('wind_bed', 0.0, 0.08), ('crickets_bed', 1.0, 0.04))
 
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
@@ -905,7 +905,7 @@ class SoundManager:
         """Sparse forest one-shots (owl, leaves, distant twig snap)."""
         if not self._amb_active:
             return
-        schedule = {'owl': (40, 90, 0.10, 0.22), 'rustle': (8, 24, 0.10, 0.25), 'snap': (30, 80, 0.18, 0.35)}
+        schedule = {'owl': (40, 90, 0.04, 0.09), 'rustle': (8, 24, 0.035, 0.10), 'snap': (30, 80, 0.06, 0.13)}
         for key, (lo, hi, v0, v1) in schedule.items():
             self._amb_timers[key] = self._amb_timers.get(key, random.uniform(lo, hi)) - dt
             if self._amb_timers[key] <= 0.0:
