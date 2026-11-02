@@ -553,30 +553,31 @@ class Cinematic:
                 pass
             return True
         t = self.time
-        # Always retain the procedural scene cues as a safety net. The supplied
-        # score can fail silently on some Windows mixer/device configurations;
-        # suppressing every cue merely because Sound.play() returned a channel
-        # made the entire cinematic silent in that case.
-        if 0.5 <= t < 1.0 and 1 not in self.cues:
-            self.cues.add(1); self._play('intro_wind', 0.6)
-        elif 12.0 <= t < 12.5 and 2 not in self.cues:
-            self.cues.add(2)
-            try:
-                audio_mgr.play_drone(0.4)
-            except Exception:
-                pass
-        elif 26.0 <= t < 26.5 and 3 not in self.cues:
-            self.cues.add(3); self._play('creature_call', 0.7)
-        elif 41.0 <= t < 41.5 and 4 not in self.cues:
-            self.cues.add(4); self._play('flashlight_click', 0.8)
-        elif 56.0 <= t < 56.5 and 5 not in self.cues:
-            self.cues.add(5); self._play('page_rustle', 0.7)
-        elif 64.5 <= t < 65.0 and 6 not in self.cues:
-            self.cues.add(6); self._play('title_sting', 1.0)
-        for i, ta in enumerate(self.eye_abs):          # heartbeat thump per pair of eyes
-            if t >= ta and i not in self.eye_cues:
-                self.eye_cues.add(i)
-                self._play('heartbeat', 0.5)
+        # The recorded intro score is the complete cinematic soundtrack. Do not
+        # fire procedural ambience/one-shots over it: those cues can mask the
+        # score and sound like it has been replaced. Keep them only as fallback
+        # when the score could not be loaded or started.
+        if not getattr(audio_mgr, 'intro_score_active', False):
+            if 0.5 <= t < 1.0 and 1 not in self.cues:
+                self.cues.add(1); self._play('intro_wind', 0.6)
+            elif 12.0 <= t < 12.5 and 2 not in self.cues:
+                self.cues.add(2)
+                try:
+                    audio_mgr.play_drone(0.4)
+                except Exception:
+                    pass
+            elif 26.0 <= t < 26.5 and 3 not in self.cues:
+                self.cues.add(3); self._play('creature_call', 0.7)
+            elif 41.0 <= t < 41.5 and 4 not in self.cues:
+                self.cues.add(4); self._play('flashlight_click', 0.8)
+            elif 56.0 <= t < 56.5 and 5 not in self.cues:
+                self.cues.add(5); self._play('page_rustle', 0.7)
+            elif 64.5 <= t < 65.0 and 6 not in self.cues:
+                self.cues.add(6); self._play('title_sting', 1.0)
+            for i, ta in enumerate(self.eye_abs):          # heartbeat thump per pair of eyes
+                if t >= ta and i not in self.eye_cues:
+                    self.eye_cues.add(i)
+                    self._play('heartbeat', 0.5)
         return False
 
     # ─── main render ──────────────────────────────────────────────────────
