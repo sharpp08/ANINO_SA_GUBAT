@@ -70,9 +70,6 @@ class Player:
 
         # Chapter/checkpoint
         self.current_chapter = 1
-        self.checkpoint_x = x
-        self.checkpoint_y = y
-        self.checkpoint_angle = angle
 
         # Animation & Physics Springs
         if ENABLE_ANIMATIONS and ENABLE_SPRING_PHYSICS:
@@ -470,23 +467,6 @@ class Player:
             return True
         return False
 
-    def set_checkpoint(self, x, y):
-        """Set a checkpoint position."""
-        self.checkpoint_x = x
-        self.checkpoint_y = y
-        self.checkpoint_angle = self.angle
-
-    def respawn(self):
-        """Respawn at checkpoint."""
-        self.x = self.checkpoint_x
-        self.y = self.checkpoint_y
-        self.angle = self.checkpoint_angle
-        self.health = PLAYER_MAX_HEALTH
-        self.sanity = SANITY_MAX
-        self.stamina = STAMINA_MAX
-        self.alive = True
-        self.damage_flash = 0
-
     def get_state(self):
         """Get serializable player state."""
         return {
@@ -508,8 +488,6 @@ class Player:
             'journal_entries': self.journal_entries[:],
             'relics': self.relics[:],
             'current_chapter': self.current_chapter,
-            'checkpoint_x': self.checkpoint_x,
-            'checkpoint_y': self.checkpoint_y,
         }
 
     def load_state(self, state):
@@ -536,6 +514,4 @@ class Player:
         self.journal_entries = state.get('journal_entries', [])
         self.relics = state.get('relics', [])
         self.current_chapter = state.get('current_chapter', 1)
-        self.checkpoint_x = state.get('checkpoint_x', self.x)
-        self.checkpoint_y = state.get('checkpoint_y', self.y)
         self.alive = True
