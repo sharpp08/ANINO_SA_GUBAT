@@ -971,7 +971,7 @@ class SoundManager:
                 self.stop_intro_ambience()
                 ch = score.play()
                 if ch is not None:
-                    ch.set_volume(1.0, 1.0)
+                    ch.set_volume(self.master_volume * self.music_volume, self.master_volume * self.music_volume)
                     self.intro_score_active = True
                     return
             except Exception:
@@ -1073,7 +1073,7 @@ class SoundManager:
             if active:
                 self._frenzy_ambience_channel.play(
                     self._frenzy_ambience_sound, loops=-1, fade_ms=1800)
-                self._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME)
+                self._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME * self.master_volume * self.ambient_volume)
             else:
                 self._frenzy_ambience_channel.fadeout(1200)
         except Exception as exc:
