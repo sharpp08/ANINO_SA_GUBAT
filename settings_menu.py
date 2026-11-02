@@ -93,8 +93,9 @@ class SettingsMenu:
 
     def _set_value(self, key, value):
         if key in ("forward", "backward", "strafe_left", "strafe_right", "interact",
-                   "sprint", "crouch", "flashlight", "reload"):
-            controls = dict(self.values.get("controls", cfg.CONTROLS))
+                   "sprint", "crouch", "flashlight", "reload", "salt", "garlic",
+                   "rosary", "cross", "ward_menu", "ward_1", "ward_2", "ward_3", "ward_4", "ward_5"):
+            controls = dict(self.values.get("controls", cfg.DEFAULT_CONTROLS))
             controls[key] = value
             self.values["controls"] = controls
         elif key in ("master_volume", "music_volume", "sfx_volume", "ambient_volume", "enemy_volume", "ui_volume"):
@@ -187,7 +188,8 @@ class SettingsMenu:
             elif mx >= 300 and 82 <= my <= 298:
                 index = int((my - 82) // 18)
                 if 0 <= index < len(self._items()):
-                    self.row = index
+                    visible_start = max(0, min(self.row - 10, max(0, len(self._items()) - 12)))
+                    self.row = visible_start + index
                     self._change(1)
             elif my > 320 and mx >= 520:
                 return "apply"
