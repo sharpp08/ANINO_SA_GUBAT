@@ -637,8 +637,17 @@ class Game:
             master = max(0.0, min(1.0, float(values.get("master_volume", 0.7))))
             music = max(0.0, min(1.0, float(values.get("music_volume", 0.4))))
             sfx = max(0.0, min(1.0, float(values.get("sfx_volume", 0.8))))
+            # Keep the procedural audio engine in sync with the live sliders.
+            # The intro score and cinematic cues use SoundManager channels, not
+            # pygame.mixer.music, so changing only the music stream leaves them
+            # with stale/default gains.
+            audio_mgr.master_volume = master
+            audio_mgr.music_volume = music
+            audio_mgr.sfx_volume = sfx
+            audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
+            audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
             pygame.mixer.music.set_volume(master * music)
-            for channel_index in range(pygame.mixer.get_num_channels()):
+            for channel_index in range(4, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
         except Exception:
             pass
