@@ -18,6 +18,14 @@ A first-person, pseudo-3D horror-survival game inspired by Philippine folklore. 
 
 ## Features
 
+### Settings menu
+- Open Settings from the main menu or pause menu with `S`.
+- The atmospheric settings screen includes Video, Audio, Controls, Gameplay and Accessibility categories.
+- Use arrow keys to navigate and change values, Enter to edit, Tab to switch categories, and Escape to return.
+- Select **Apply** to save preferences to `settings.json`; **Reset** restores defaults.
+- Graphics quality, display mode, FPS cap, mouse sensitivity and mixer volume are applied at runtime. Other options are saved as preferences for supported systems.
+
+
 ### Survival and exploration
 - Two chapters with carry-over progression.
 - A large, seeded forest with trails, village structures, a limestone cave, swamp, ruins and shrine.
