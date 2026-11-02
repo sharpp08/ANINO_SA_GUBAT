@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from settings import (
-    EMPTY, REVOLVER_COOLDOWN, REVOLVER_RELOAD_TIME,
+    BOLO_COOLDOWN, EMPTY, REVOLVER_COOLDOWN, REVOLVER_RELOAD_TIME,
     SHOTGUN_COOLDOWN, SHOTGUN_RELOAD_TIME,
 )
 from player import Player
@@ -255,6 +255,54 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(renderer.revolver_fire_timer, 0.0)
         renderer.trigger_revolver_fire()
         self.assertEqual(renderer.revolver_fire_timer, 0.16)
+
+    def test_bolo_melee_hits_in_range_but_not_out_of_range(self):
+        shot = {"type": "bolo", "damage": 25, "range": 1.5, "spread": 0}
+        near = Enemy("aswang", 1.0, 0.0)
+        manager = EnemyManager()
+        manager.enemies = [near]
+        self.assertEqual(manager.apply_weapon_hit(0, 0, 0, shot), [near])
+        self.assertEqual(near.health, near.max_health - 25)
+
+        far = Enemy("aswang", 1.6, 0.0)
+        manager.enemies = [far]
+        self.assertEqual(manager.apply_weapon_hit(0, 0, 0, shot), [])
+        self.assertEqual(far.health, far.max_health)
+
+    def test_range_limits_are_enforced_for_shotgun_and_revolver(self):
+        cases = (
+            (Enemy("aswang", 8.1, 0.0),
+             {"type": "shotgun", "damage": 40, "range": 8,
+              "spread": 0.1, "pellets": 5}),
+            (Enemy("aswang", 15.1, 0.0),
+             {"type": "revolver", "damage": 30, "range": 15, "spread": 0}),
+        )
+        for enemy, shot in cases:
+            with self.subTest(weapon=shot["type"]):
+                manager = EnemyManager()
+                manager.enemies = [enemy]
+                with patch("enemies.random.uniform", return_value=0.0):
+                    self.assertEqual(manager.apply_weapon_hit(0, 0, 0, shot), [])
+                self.assertEqual(enemy.health, enemy.max_health)
+
+    def test_bolo_fire_uses_cooldown_without_ammunition(self):
+        player = Player()
+        player.current_weapon = 0
+        shot = player.fire_weapon()
+        self.assertEqual(shot["type"], "bolo")
+        self.assertEqual(player.weapon_cooldown, BOLO_COOLDOWN)
+        self.assertIsNone(player.fire_weapon())
+
+    def test_empty_fire_starts_reload_when_reserve_is_available(self):
+        player = Player()
+        player.current_weapon = 1
+        player.shotgun_mag = 0
+        player.ammo_shotgun = 2
+
+        self.assertIsNone(player.fire_weapon())
+        self.assertTrue(player.reloading)
+        self.assertEqual(player.reload_weapon, 1)
+        self.assertEqual(player.ammo_shotgun, 2)
 
     def test_enemy_health_stops_at_zero_and_death_is_one_way(self):
         enemy = Enemy("aswang", 3.0, 3.0)
