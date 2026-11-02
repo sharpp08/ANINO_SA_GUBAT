@@ -286,7 +286,8 @@ def synth_voice(rate, f0, vowel_a='a', vowel_b=None, morph=None, tilt=1.6,
 MUFFLE_CUTOFFS = (None, 5000.0, 2400.0, 1100.0)
 FRENZY_AMBIENCE_CHANNEL = 2
 JUMPSCARE_CHANNEL = 3
-AMBIENCE_RESERVED = 4          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
+INTRO_SCORE_CHANNEL = 5
+AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare, 4 rain, 5 intro score
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
@@ -333,6 +334,7 @@ class SoundManager:
         self._muffle_keep = []
         self._frenzy_ambience_active = False
         self._frenzy_ambience_channel = pygame.mixer.Channel(FRENZY_AMBIENCE_CHANNEL)
+        self._intro_score_channel = pygame.mixer.Channel(INTRO_SCORE_CHANNEL)
         self._frenzy_ambience_sound = None
         self._amb_active = False
         self._amb_timers = {}
@@ -995,9 +997,15 @@ class SoundManager:
         if score is not None:
             try:
                 self.stop_intro_ambience()
-                ch = score.play()
-                if ch is not None:
-                    ch.set_volume(self.master_volume * self.music_volume, self.master_volume * self.music_volume)
+                # Use a dedicated reserved channel. Sound.play() relies on the
+                # automatic channel allocator, which can return None when all
+                # non-reserved channels are busy; the intro must not depend on it.
+                self._intro_score_channel.play(score)
+                self._intro_score_channel.set_volume(
+                    self.master_volume * self.music_volume,
+                    self.master_volume * self.music_volume,
+                )
+                if self._intro_score_channel.get_busy():
                     self.intro_score_active = True
                     return
             except Exception:
@@ -1008,6 +1016,8 @@ class SoundManager:
         """Silence one-shots (intro score, wind, drone, calls) but keep the forest beds."""
         self.intro_score_active = False
         try:
+            # Stop the dedicated cinematic score separately from ordinary SFX.
+            self._intro_score_channel.stop()
             for i in range(AMBIENCE_RESERVED, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(i).stop()
         except Exception:
