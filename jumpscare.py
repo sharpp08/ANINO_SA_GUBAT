@@ -228,13 +228,18 @@ class JumpscareManager:
             return
         # 3) generic fallback
         print(f"[Jumpscare] audio: generic fallback for {etype}")
-        self._play(self.scream_sound, 1.0)
-        self._play(self.stinger_sound, 0.9)
+        played = self._play_forced(self.scream_sound, 1.0)
+        if not played:
+            played = self._play_forced(self.stinger_sound, 0.9)
         try:
-            from audio_synth import audio_mgr
-            audio_mgr.play('creature_call', volume=1.0)
-        except Exception:
-            pass
+            from audio_synth import audio_mgr, JUMPSCARE_CHANNEL
+            fallback = audio_mgr.sounds.get('creature_call')
+            if fallback is not None:
+                channel = pygame.mixer.Channel(JUMPSCARE_CHANNEL)
+                channel.play(fallback)
+                channel.set_volume(max(0.0, min(1.0, audio_mgr.master_volume * audio_mgr.enemy_volume)))
+        except Exception as exc:
+            print(f"[Jumpscare] Generated fallback audio failed: {exc}")
 
     # ── trigger / update ──────────────────────────────────────────────────
     def trigger(self, enemy_type=None, distance=0.0):
