@@ -1378,7 +1378,7 @@ class Game:
 
                 elif self.state == STATE_PAUSED:
                     if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_ESCAPE:
+                        if event.key == control_key('pause', 'escape'):
                             self.state = STATE_PLAYING
                             safe_set_relative_mouse(True)
                         elif event.key == pygame.K_s:
