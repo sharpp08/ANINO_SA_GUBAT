@@ -157,7 +157,14 @@ class SettingsMenu:
                 return "stay"
             if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
                 return "back"
-            if event.key in (pygame.K_UP, pygame.K_w):
+            if event.key == pygame.K_F5:
+                return "apply"
+            if event.key == pygame.K_F6:
+                self.values = self._default_values()
+                self.dirty = True
+                self.waiting_for_key = None
+                self._message("Defaults restored • press F5 to keep")
+            elif event.key in (pygame.K_UP, pygame.K_w):
                 self.row = (self.row - 1) % max(1, len(self._items()))
             elif event.key in (pygame.K_DOWN, pygame.K_s):
                 self.row = (self.row + 1) % max(1, len(self._items()))
@@ -194,7 +201,12 @@ class SettingsMenu:
                 if 0 <= index < len(self._items()):
                     visible_start = max(0, min(self.row - 10, max(0, len(self._items()) - 12)))
                     self.row = visible_start + index
-                    self._change(1)
+                    _, key, kind, _ = self._items()[self.row]
+                    if kind == "bind":
+                        self.waiting_for_key = key
+                        self._message("Press a key to bind • ESC cancels")
+                    else:
+                        self._change(1)
             elif my > 320 and mx >= 520:
                 return "apply"
             elif my > 320 and 300 <= mx < 520:
@@ -305,7 +317,7 @@ class SettingsMenu:
         apply = font_tiny.render("APPLY", True, (230, 220, 205))
         surf.blit(reset, (346, 326))
         surf.blit(apply, (565, 326))
-        hint = "ARROWS: SELECT / CHANGE     ENTER: EDIT     ESC: BACK"
+        hint = "ARROWS: SELECT / CHANGE   ENTER: EDIT   F5: APPLY   F6: RESET   ESC: BACK"
         hint_img = font_tiny.render(hint, True, (112, 112, 103))
         surf.blit(hint_img, (18, sh - 17))
         if self.notice and pygame.time.get_ticks() < self.notice_until:
