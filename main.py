@@ -299,7 +299,7 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
             marker_col = (int(130 + pulse * 75), int(83 + pulse * 35), 45)
             pygame.draw.rect(surf, marker_col, (panel_x + 2, y + 2, 2, row_h - 7))
 
-    footer = font_tiny.render("THE TREES ARE LISTENING", True, (105, 105, 92))
+    footer = font_tiny.render("S  SETTINGS   •   THE TREES ARE LISTENING", True, (105, 105, 92))
     surf.blit(footer, (margin, sh - footer.get_height() - 9))
 
 
@@ -619,7 +619,8 @@ class Game:
         FULLSCREEN = requested_fullscreen
         if display_changed:
             self.screen = self._set_display_mode()
-        self.target_fps = 60 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        self.target_fps = 240 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        self.vsync_enabled = bool(values.get("vsync", True))
         tier = str(values.get("quality_tier", "medium")).lower()
         if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
             try:
@@ -688,7 +689,7 @@ class Game:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
             rate = 0
-        vsync = 1 if 55 <= rate <= 65 else 0
+        vsync = 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
         except Exception:
