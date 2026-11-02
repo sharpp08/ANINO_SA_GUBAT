@@ -1541,12 +1541,14 @@ class Renderer:
 
         # Revolver: crisp backward kick, muzzle lift, and quick return.
         revolver_kick_x = revolver_kick_y = revolver_tilt = 0
-        if wname == 'revolver' and self.revolver_fire_timer > 0:
-            fire_p = max(0.0, min(1.0, self.revolver_fire_timer / 0.16))
-            kick = math.sin(fire_p * math.pi) ** 0.7
-            revolver_kick_x = int(12 * kick)
-            revolver_kick_y = int(25 * kick)
-            revolver_tilt = -7.0 * kick
+        if self.revolver_fire_timer > 0:
+            if wname == 'revolver':
+                fire_p = max(0.0, min(1.0, self.revolver_fire_timer / 0.16))
+                kick = math.sin(fire_p * math.pi) ** 0.7
+                revolver_kick_x = int(12 * kick)
+                revolver_kick_y = int(25 * kick)
+                revolver_tilt = -7.0 * kick
+            # Transient timers must expire even when another weapon is equipped.
             self.revolver_fire_timer = max(0.0, self.revolver_fire_timer - dt)
 
         # Damage / Death
@@ -1715,12 +1717,13 @@ class Renderer:
             self.surface.blit(flash, (0, 0))
 
     def trigger_muzzle_flash(self):
+        """Start the generic firearm muzzle flash and recoil."""
         self.muzzle_flash = 1.0
         self.weapon_recoil = 1.0
-        # Short, sharp revolver kick; animation is applied only while equipped.
+
+    def trigger_revolver_fire(self):
+        """Start the revolver-only viewmodel kick."""
         self.revolver_fire_timer = 0.16
-        self.muzzle_flash = 1.0
-        self.weapon_recoil = 1.0
 
     def trigger_shotgun_fire(self):
         """Start the shotgun fire animation (lasts as long as the shotgun cooldown)."""
