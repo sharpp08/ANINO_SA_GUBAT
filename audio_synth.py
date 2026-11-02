@@ -284,7 +284,9 @@ def synth_voice(rate, f0, vowel_a='a', vowel_b=None, morph=None, tilt=1.6,
 #  Sound manager
 # ─────────────────────────────────────────────────────────────────────────────
 MUFFLE_CUTOFFS = (None, 5000.0, 2400.0, 1100.0)
-AMBIENCE_RESERVED = 2          # channels 0/1 hold the wind + cricket beds
+AMBIENCE_RESERVED = 3          # channels 0/1 are forest beds; channel 2 is reserved for Frenzy music
+FRENZY_AMBIENCE_CHANNEL = 2
+FRENZY_AMBIENCE_VOLUME = 0.10  # deliberately subtle, below normal gameplay SFX
 
 
 class SoundManager:
@@ -323,6 +325,9 @@ class SoundManager:
         self.variants = {}
         self._muffle_cache = {}
         self._muffle_keep = []
+        self._frenzy_ambience_active = False
+        self._frenzy_ambience_channel = pygame.mixer.Channel(FRENZY_AMBIENCE_CHANNEL)
+        self._frenzy_ambience_sound = None
         self._amb_active = False
         self._amb_timers = {}
         self._generate_sounds()
@@ -370,6 +375,17 @@ class SoundManager:
                 print('[Audio] Loaded custom shotgun reload sound.')
             except Exception as exc:
                 print(f'[Audio] Could not load custom shotgun reload sound: {exc}')
+
+        # Optional supplied background track for Frenzy Mode.
+        frenzy_track = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    'assets', 'audio', 'frenzy_mode_ambience.mp3')
+        if os.path.isfile(frenzy_track):
+            try:
+                self._frenzy_ambience_sound = pygame.mixer.Sound(frenzy_track)
+                self._frenzy_ambience_sound.set_volume(1.0)
+                print('[Audio] Loaded Frenzy Mode ambience.')
+            except Exception as exc:
+                print(f'[Audio] Could not load Frenzy Mode ambience: {exc}')
 
         self._load_thunder()
         self._load_footsteps()
@@ -1041,6 +1057,23 @@ class SoundManager:
 
     # ── ambience ──────────────────────────────────────────────────────────────
     _BEDS = (('wind_bed', 0.0, 0.018), ('crickets_bed', 1.0, 0.008))
+
+    def set_frenzy_ambience(self, active):
+        """Loop the quiet Frenzy bed only while Frenzy is active during gameplay."""
+        active = bool(active and self._frenzy_ambience_sound is not None)
+        if active == self._frenzy_ambience_active:
+            return
+        self._frenzy_ambience_active = active
+        try:
+            if active:
+                self._frenzy_ambience_channel.play(
+                    self._frenzy_ambience_sound, loops=-1, fade_ms=1800)
+                self._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME)
+            else:
+                self._frenzy_ambience_channel.fadeout(1200)
+        except Exception as exc:
+            self._frenzy_ambience_active = False
+            print(f'[Audio] Frenzy ambience playback failed: {exc}')
 
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
