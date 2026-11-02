@@ -199,6 +199,8 @@ class SettingsMenu:
             if mx < 150 and 115 <= my <= 285:
                 index = int((my - 115) // 29)
                 if 0 <= index < len(self.CATEGORIES):
+                    if self.CATEGORIES[index] == "BACK":
+                        return "back"
                     self.category = index
                     self.row = 0
             elif mx >= 300 and 65 <= my <= 310:
@@ -208,9 +210,12 @@ class SettingsMenu:
                     self._change(1)
             elif my > 320 and mx > 300:
                 return "apply"
+            elif my > 320 and 300 <= mx < 470:
+                self.values = cfg.load_settings(path="__anino_default_settings__.json")
+                self.dirty = True
+                self.waiting_for_key = None
+                self._message("Defaults restored • press APPLY to keep")
             elif my > 320 and mx < 300:
-                self.values = dict(self.previous_values)
-                self.dirty = False
                 return "back"
         return "stay"
 
