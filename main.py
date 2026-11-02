@@ -42,7 +42,10 @@ STATE_WIN      = 'win'
 def control_key(action, fallback):
     name = CONTROLS.get(action, fallback)
     try:
-        return pygame.key.key_code(name) if name else fallback
+        aliases = {'lshift': pygame.K_LSHIFT, 'rshift': pygame.K_RSHIFT,
+                   'lctrl': pygame.K_LCTRL, 'rctrl': pygame.K_RCTRL,
+                   'lalt': pygame.K_LALT, 'ralt': pygame.K_RALT}
+        return aliases.get(str(name).lower(), pygame.key.key_code(name) if name else fallback)
     except (ValueError, TypeError):
         return fallback
 
@@ -633,7 +636,7 @@ class Game:
         FULLSCREEN = requested_fullscreen
         if display_changed:
             self.screen = self._set_display_mode()
-        self.target_fps = 240 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        self.target_fps = 0 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
         self.vsync_enabled = bool(values.get("vsync", True))
         tier = str(values.get("quality_tier", "medium")).lower()
         if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
@@ -679,6 +682,10 @@ class Game:
             pygame.mixer.music.set_volume(master * music)
             for channel_index in range(pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
+            for _, channel_index, base_volume in getattr(audio_mgr, "_BEDS", ()):
+                pygame.mixer.Channel(int(channel_index)).set_volume(base_volume * master * audio_mgr.ambient_volume)
+            if getattr(audio_mgr, "_frenzy_ambience_channel", None):
+                audio_mgr._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME * master * audio_mgr.ambient_volume)
         except Exception:
             pass
 
@@ -729,7 +736,7 @@ class Game:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
             rate = 0
-        vsync = 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
+        vsync = 1 if getattr(self, "vsync_enabled", True) else 0
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
         except Exception:
