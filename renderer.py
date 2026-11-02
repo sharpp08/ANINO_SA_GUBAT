@@ -251,6 +251,20 @@ class Renderer:
         self.wind_strength = 0.3
         self.wind_gust_timer = 0.0
 
+        # Lightweight screen-space rain: fixed particle pool, no per-frame allocation.
+        self.rain_drops = []
+        rain_rng = random.Random(20261102)
+        for _ in range(150):
+            self.rain_drops.append([
+                rain_rng.uniform(0, self.w),
+                rain_rng.uniform(-self.h, self.h),
+                rain_rng.uniform(260.0, 430.0),
+                rain_rng.uniform(8.0, 15.0),
+                rain_rng.uniform(0.22, 0.55),
+            ])
+        self.rain_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        self.sunrise_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+
         # Precompute ray angles
         self.fov_rad = math.radians(FOV)
         self.half_fov = self.fov_rad / 2
@@ -624,7 +638,7 @@ class Renderer:
         return s
 
     # ─── Frame ────────────────────────────────────────────────────────────
-    def render_frame(self, player, game_map, enemies, effects, dt):
+    def render_frame(self, player, game_map, enemies, effects, dt, sunrise_progress=0.0):
         """Render a complete frame with correct pipeline order."""
         t_anim_start = pygame.time.get_ticks()
         
@@ -678,20 +692,21 @@ class Renderer:
             # Lock once for the whole loop: set_at() locks/unlocks per call,
             # which is the slow path.  One lock amortises it across all stars.
             self.surface.lock()
-            for s_az, s_el, phase, big in self.stars:
-                az_diff = s_az - player.angle
-                while az_diff > math.pi: az_diff -= 2 * math.pi
-                while az_diff < -math.pi: az_diff += 2 * math.pi
-                if abs(az_diff) < self.half_fov + 0.3:
-                    sx = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
-                    sy = int(horizon_y - s_el * (0.8 * self.h))
-                    if 0 <= sx < self.w and 0 <= sy < horizon_y:
-                        twinkle = int(185 + 55 * math.sin(t_ticks * 0.003 + phase))
-                        col = (twinkle, twinkle, min(255, twinkle + 30))
-                        if big:
-                            pygame.draw.rect(self.surface, col, (sx, sy, 2, 2))
-                        else:
-                            self.surface.set_at((sx, sy), col)
+            if sunrise_progress < 0.98:
+                for s_az, s_el, phase, big in self.stars:
+                    az_diff = s_az - player.angle
+                    while az_diff > math.pi: az_diff -= 2 * math.pi
+                    while az_diff < -math.pi: az_diff += 2 * math.pi
+                    if abs(az_diff) < self.half_fov + 0.3:
+                        sx = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
+                        sy = int(horizon_y - s_el * (0.8 * self.h))
+                        if 0 <= sx < self.w and 0 <= sy < horizon_y:
+                            twinkle = int(185 + 55 * math.sin(t_ticks * 0.003 + phase))
+                            col = (twinkle, twinkle, min(255, twinkle + 30))
+                            if big:
+                                pygame.draw.rect(self.surface, col, (sx, sy, 2, 2))
+                            else:
+                                self.surface.set_at((sx, sy), col)
             self.surface.unlock()
 
             # Moon (fixed world azimuth pi/4, elevation 0.42)
@@ -703,7 +718,7 @@ class Renderer:
             moon_screen_x = int(self.w // 2 + (az_diff / self.fov_rad) * self.w)
             moon_screen_y = int(horizon_y - moon_world_el * (0.8 * self.h))
 
-            if -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= horizon_y + 40:
+            if sunrise_progress < 0.82 and -80 <= moon_screen_x <= self.w + 80 and 0 <= moon_screen_y <= horizon_y + 40:
                 self.surface.blit(self.moon_surf, (moon_screen_x - self.moon_size // 2, moon_screen_y - self.moon_size // 2))
 
             # Enhanced atmospheric clouds with layered depth
@@ -830,6 +845,9 @@ class Renderer:
             self._draw_muzzle_flash()
             self.muzzle_flash -= dt * 8
 
+        # Rain and sunrise are composited before the viewmodel so weapon/hands stay crisp.
+        self._draw_rain_and_sunrise(dt, sunrise_progress)
+
         # Draw player viewmodel (hands, sleeves, weapon)
         self._draw_player_viewmodel(player, dt)
 
@@ -848,6 +866,32 @@ class Renderer:
             if s > 0 and self.w > s * 2 and self.h > s * 2:
                 self.surface.scroll(random.randint(-s, s), random.randint(-s, s))
             self.screen_shake = max(0.0, self.screen_shake - dt * 20)
+
+    def _draw_rain_and_sunrise(self, dt, sunrise_progress):
+        """Draw cinematic rain and a gradual warm dawn, using a bounded particle pool."""
+        progress = max(0.0, min(1.0, sunrise_progress))
+        rain = self.rain_surf
+        rain.fill((0, 0, 0, 0))
+        # Rain eases out as daylight arrives; drops are drawn as short diagonal streaks.
+        rain_strength = 1.0 - max(0.0, min(1.0, (progress - 0.45) / 0.55))
+        if rain_strength > 0.01:
+            for drop in self.rain_drops:
+                drop[0] -= drop[4] * 95.0 * dt
+                drop[1] += drop[2] * dt
+                if drop[1] > self.h + 18 or drop[0] < -18:
+                    drop[0] = random.uniform(0, self.w + 40)
+                    drop[1] = random.uniform(-self.h * 0.35, -8)
+                alpha = int(105 * drop[4] * rain_strength)
+                x, y = int(drop[0]), int(drop[1])
+                pygame.draw.line(rain, (166, 194, 218, alpha),
+                                 (x, y), (x - int(drop[3] * 0.42), y + int(drop[3])),
+                                 1)
+            self.surface.blit(rain, (0, 0))
+        # Slow, cinematic exposure shift: cold blue night -> warm golden dawn.
+        if progress > 0.0:
+            dawn_alpha = int(112 * (progress ** 1.35))
+            self.sunrise_surf.fill((255, 190, 125, dawn_alpha))
+            self.surface.blit(self.sunrise_surf, (0, 0))
 
     # ─── Horror feedback ──────────────────────────────────────────────────
     def _danger_effects(self, player, enemies, dt):
