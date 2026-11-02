@@ -889,7 +889,7 @@ class Renderer:
             self.surface.blit(rain, (0, 0))
         # Slow, cinematic exposure shift: cold blue night -> warm golden dawn.
         if progress > 0.0:
-            dawn_alpha = int(112 * (progress ** 1.35))
+            dawn_alpha = int(185 * (progress ** 1.35))
             self.sunrise_surf.fill((255, 190, 125, dawn_alpha))
             self.surface.blit(self.sunrise_surf, (0, 0))
 
