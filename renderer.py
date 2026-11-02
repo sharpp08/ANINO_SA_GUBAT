@@ -194,7 +194,7 @@ class Flashlight:
             return
 
         cx = int(self.w // 2 + self.sway_x)
-        cy = int(self.h // 2 + player.pitch * self.h + self.sway_y)
+        cy = int(self.h // 2 + self.sway_y)
         cx = max(0, min(self.w, cx))     # keep the 2w x 2h mask covering the screen
         cy = max(0, min(self.h, cy))
         pos = (cx - self.w, cy - self.h)
