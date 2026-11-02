@@ -22,6 +22,7 @@ from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from objective import next_objective, nearest_page, relative_bearing, direction_word
 from page_arrow import PageArrow
+from settings_menu import SettingsMenu
 from asset_generator import (
     generate_all_textures, generate_all_weapons,
     generate_all_enemies, generate_all_pickups, generate_crosshair
@@ -32,6 +33,7 @@ STATE_MENU     = 'menu'
 STATE_INTRO    = 'intro'
 STATE_PLAYING  = 'playing'
 STATE_PAUSED   = 'paused'
+STATE_SETTINGS = 'settings'
 STATE_GAMEOVER = 'gameover'
 STATE_WIN      = 'win'
 
@@ -308,7 +310,7 @@ def draw_paused(surf, font_lg, font_sm):
     sw, sh = surf.get_size()
     t = font_lg.render("PAUSED", True, WHITE)
     surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 80))
-    for i, line in enumerate(["ESC  -  Resume", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
+    for i, line in enumerate(["ESC  -  Resume", "S  -  Settings", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
         lt = font_sm.render(line, True, (200, 200, 200))
         surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 - 20 + i * 32))
 
@@ -600,6 +602,50 @@ class Game:
         # Graphics quality manager for runtime switching
         self._graphics_mgr = None
         self._try_init_graphics_manager()
+        self.settings_menu = SettingsMenu()
+        self.settings_return_state = STATE_MENU
+        self.target_fps = FPS
+
+    def _apply_settings(self, values):
+        """Apply settings that affect live game systems."""
+        global FULLSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_ROT_SPEED
+        resolution = values.get("resolution", "1280 x 720")
+        try:
+            SCREEN_WIDTH, SCREEN_HEIGHT = [int(part.strip()) for part in resolution.split("x")]
+        except (ValueError, AttributeError):
+            SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
+        requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
+        display_changed = requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
+        FULLSCREEN = requested_fullscreen
+        if display_changed:
+            self.screen = self._set_display_mode()
+        self.target_fps = 60 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        tier = str(values.get("quality_tier", "medium")).lower()
+        if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
+            try:
+                self._graphics_mgr.apply_tier(tier)
+            except Exception as exc:
+                print(f"[SETTINGS] Quality apply failed: {exc}")
+        try:
+            import player as player_module
+            player_module.PLAYER_ROT_SPEED = float(values.get("mouse_sensitivity", 0.002))
+        except Exception:
+            pass
+        try:
+            master = max(0.0, min(1.0, float(values.get("master_volume", 0.7))))
+            music = max(0.0, min(1.0, float(values.get("music_volume", 0.4))))
+            sfx = max(0.0, min(1.0, float(values.get("sfx_volume", 0.8))))
+            pygame.mixer.music.set_volume(master * music)
+            for channel_index in range(pygame.mixer.get_num_channels()):
+                pygame.mixer.Channel(channel_index).set_volume(master * sfx)
+        except Exception:
+            pass
+
+    def _open_settings(self, return_state):
+        self.settings_return_state = return_state
+        self.settings_menu = SettingsMenu()
+        self.state = STATE_SETTINGS
+        safe_set_relative_mouse(False)
 
     def _try_init_graphics_manager(self):
         """Initialize graphics manager after renderer is created."""
@@ -1192,6 +1238,9 @@ class Game:
         elif self.state == STATE_MENU:
             draw_menu(self.internal, self.font_lg, self.font_sm, self.font_tiny)
 
+        elif self.state == STATE_SETTINGS:
+            self.settings_menu.draw(self.internal, self.font_lg, self.font_sm, self.font_tiny)
+
         elif self.state == STATE_INTRO:
             self.cinematic.render()
 
@@ -1237,7 +1286,7 @@ class Game:
         mouse_dy  = 0
 
         while running:
-            dt = min(self.clock.tick(FPS) / 1000.0, 0.05)
+            dt = min(self.clock.tick(getattr(self, 'target_fps', FPS)) / 1000.0, 0.05)
             mouse_dx = 0
             mouse_dy = 0
 
@@ -1265,6 +1314,8 @@ class Game:
                             safe_set_relative_mouse(False)
                         elif event.key == pygame.K_ESCAPE:
                             running = False
+                        elif event.key == pygame.K_s:
+                            self._open_settings(STATE_MENU)
                         elif event.key == pygame.K_F11:
                             self.toggle_fullscreen()
 
@@ -1279,11 +1330,30 @@ class Game:
                         if event.key == pygame.K_ESCAPE:
                             self.state = STATE_PLAYING
                             safe_set_relative_mouse(True)
+                        elif event.key == pygame.K_s:
+                            self._open_settings(STATE_PAUSED)
                         elif event.key == pygame.K_F11:
                             self.toggle_fullscreen()
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
                             safe_set_relative_mouse(False)
+
+                elif self.state == STATE_SETTINGS:
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        scaled_event = pygame.event.Event(event.type, {
+                            "pos": (int(event.pos[0] * self.internal.get_width() / max(1, self.screen.get_width())),
+                                    int(event.pos[1] * self.internal.get_height() / max(1, self.screen.get_height()))),
+                            "button": event.button
+                        })
+                        action = self.settings_menu.handle_event(scaled_event)
+                    else:
+                        action = self.settings_menu.handle_event(event)
+                    if action == "back":
+                        self.state = self.settings_return_state
+                        if self.state == STATE_PLAYING:
+                            safe_set_relative_mouse(True)
+                    elif action == "apply":
+                        self.settings_menu.apply(self._apply_settings)
 
                 elif self.state == STATE_GAMEOVER:
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
