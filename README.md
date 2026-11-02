@@ -23,7 +23,7 @@ A first-person, pseudo-3D horror-survival game inspired by Philippine folklore. 
 - A large, seeded forest with trails, village structures, a limestone cave, swamp, ruins and shrine.
 - Five Bible pages per chapter, a sealed exit, sunrise countdown and compass guidance.
 - Flashlight battery, stamina, health, armor, Faith and sanity management.
-- Checkpoints and JSON save/load support.
+- In-run checkpoints for respawning; each new run starts from the beginning with no save/load persistence.
 - A rotating radar mini-map for nearby enemies, obstacles and pickups.
 
 ### Sanity and Frenzy
@@ -136,8 +136,8 @@ The game starts at 1280 × 720. On first launch, procedural assets and the cache
 | `F11` | Toggle fullscreen |
 
 ### Menu controls
-- **Main menu:** `Enter` starts a new game, `L` loads a save, `I` replays the intro, `Esc` quits.
-- **Pause menu:** `Esc` resumes, `S` saves, `M` returns to the main menu.
+- **Main menu:** `Enter` starts a fresh run, `I` replays the intro, `Esc` quits.
+- **Pause menu:** `Esc` resumes, `M` returns to the main menu. Saving and loading runs are disabled for competitive fairness.
 - **Game over:** `R` respawns at a checkpoint; `M` returns to the main menu.
 - **Chapter complete:** `Enter` continues; `M` returns to the main menu.
 
@@ -157,7 +157,7 @@ Quality tier switching is handled by `F5` (next tier) and `F6` (previous tier); 
 3. Conserve flashlight battery and stay in lit areas when possible to protect sanity.
 4. Keep distance from enemies when your sanity is low: Frenzy makes them faster and more dangerous.
 5. Use the bolo when you need a quieter option. Gunfire and reloads can attract attention.
-6. Save at the cabin checkpoint when available.
+6. Reach in-run checkpoints to set your respawn location; progress is not saved between sessions.
 7. Use salt, garlic and Faith-powered wards to control dangerous encounters.
 
 ---
@@ -166,7 +166,7 @@ Quality tier switching is handled by `F5` (next tier) and `F6` (previous tier); 
 
 ```text
 ANINO_SA_GUBAT/
-├── main.py              # Game loop, states, HUD, objectives and save/load
+├── main.py              # Game loop, states, HUD and objectives
 ├── player.py            # Player movement, stats, weapons, items and wards
 ├── enemies.py           # Enemy AI, Frenzy, loot and combat reactions
 ├── map_system.py        # Forest generation, world entities and collision
@@ -192,7 +192,6 @@ ANINO_SA_GUBAT/
 ├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
 ├── assets/              # Optional audio/art and generated caches
 │   └── audio/frenzy_mode_ambience.mp3  # Bundled Frenzy Mode background ambience (recorded SFX optional)
-├── saves/               # JSON save files (created as needed)
 └── tools/               # Development and asset utilities
 ```
 
@@ -219,12 +218,12 @@ The game combines procedural ambience and creature sounds with optional recorded
 
 The Frenzy Mode background layer ships with the repository at `assets/audio/frenzy_mode_ambience.mp3`. It loops on a dedicated mixer channel at 10% volume with fade-in/fade-out, and only plays while Frenzy is active during gameplay. The source MP3 is intentionally attenuated and the playback level was restored to an audible 10% (see changelog). If the file is absent or cannot be loaded, the game continues silently without interrupting other audio.
 
-## Save data and configuration
+## Configuration and local data
 
-- Save data is stored as JSON under `saves/`.
 - User settings are stored in `settings.json`; the file is created when settings are saved.
 - Generated ground/cache data is stored under `assets/cache/`.
 - Crash details are written to `crash.log` when an unhandled error is captured.
+- Gameplay progress is never written to disk; every new run begins at Chapter 1.
 
 ## Build a Windows executable
 
