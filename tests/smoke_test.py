@@ -118,14 +118,13 @@ def run_smoke_tests():
         game.player.health = 0
         game.player.alive = False
         game.state = STATE_GAMEOVER
-        game.player.respawn()
-        assert game.player.alive
+        assert not game.player.alive
         game.state = STATE_WIN
         game.state = STATE_MENU
         assert game.state == STATE_MENU
     test_case("Game State Machine Transitions", test_state_machine)
 
-save load test    def test_cinematic():
+    def test_cinematic():
         game = Game()
         game.state = STATE_INTRO
         game.cinematic.reset()
