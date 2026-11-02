@@ -67,7 +67,8 @@ class SettingsMenu:
 
     def _value(self, key, kind):
         if key in ("forward", "backward", "strafe_left", "strafe_right", "interact",
-                   "sprint", "crouch", "flashlight", "reload"):
+                   "sprint", "crouch", "flashlight", "reload", "salt", "garlic",
+                   "rosary", "cross", "ward_menu", "ward_1", "ward_2", "ward_3", "ward_4", "ward_5"):
             return self.values.get("controls", cfg.CONTROLS).get(key, cfg.CONTROLS.get(key, ""))
         value = self.values.get(key)
         if value is None:
@@ -126,7 +127,7 @@ class SettingsMenu:
             step = 1 if high <= 100 else 5
             self._set_value(key, max(low, min(high, int(current) + direction * step)))
         elif kind == "action":
-            self.values["controls"] = dict(cfg.CONTROLS)
+            self.values["controls"] = dict(cfg.DEFAULT_CONTROLS)
             self.dirty = True
             self._message("Controls reset")
 
@@ -176,7 +177,7 @@ class SettingsMenu:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             # Coordinates are supplied in internal-surface space by the game.
-            if mx < 150 and 115 <= my <= 285:
+            if mx < 150 and 112 <= my <= 286:
                 index = int((my - 112) // 29)
                 if 0 <= index < len(self.CATEGORIES):
                     if self.CATEGORIES[index] == "BACK":
@@ -210,7 +211,7 @@ class SettingsMenu:
             "enable_camera_shake": True, "mouse_sensitivity": cfg.PLAYER_ROT_SPEED,
             "invert_mouse_y": False, "sprint_toggle": "hold", "crouch_toggle": "hold",
             "hud_visible": True, "high_contrast_ui": False, "reduce_camera_shake": False,
-            "reduce_flashing": False, "ui_scale": "100%", "controls": dict(cfg.CONTROLS),
+            "reduce_flashing": False, "ui_scale": "100%", "controls": dict(cfg.DEFAULT_CONTROLS),
         })
         return defaults
 
