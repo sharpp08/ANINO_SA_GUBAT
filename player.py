@@ -115,7 +115,7 @@ class Player:
         self.angle += mouse_dx * PLAYER_ROT_SPEED
         self.angle %= math.pi * 2
         invert_y = bool(getattr(_cfg, 'RUNTIME_SETTINGS', {}).get('invert_mouse_y', False))
-        self.pitch += mouse_dy * PLAYER_ROT_SPEED * (0.5 if invert_y else -0.5)
+        self.pitch += mouse_dy * PLAYER_ROT_SPEED * (-0.5 if invert_y else 0.5)
         self.pitch = max(-0.5, min(0.5, self.pitch))
 
         # Sprint & Crouch with Stamina
