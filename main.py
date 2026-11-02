@@ -603,13 +603,14 @@ class Game:
                 p.selected_ward = (p.selected_ward + 1) % 5
         if event.type == pygame.MOUSEWHEEL:
             if event.y > 0:
-                p.current_weapon = (p.current_weapon - 1) % 3
+                p.switch_weapon((p.current_weapon - 1) % 3)
             elif event.y < 0:
-                p.current_weapon = (p.current_weapon + 1) % 3
-            try:
-                audio_mgr.play('click')
-            except Exception:
-                pass
+                p.switch_weapon((p.current_weapon + 1) % 3)
+            if event.y:
+                try:
+                    audio_mgr.play('click')
+                except Exception:
+                    pass
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._fire()
 
@@ -629,7 +630,7 @@ class Game:
                     self.renderer.emit_casing(self.renderer.w // 2 + 60, self.renderer.h - 30, random.uniform(40, 90), random.uniform(-110, -60))
                     self.renderer.emit_smoke(self.renderer.w // 2, self.renderer.h // 2, random.uniform(-10, 10), random.uniform(-30, -10))
                     self.renderer.camera_shake.add(0.3, 0.25)
-            hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi)
+            hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi, self.game_map)
             if hits:
                 self.renderer.trigger_screen_shake(4)
                 for enemy in hits:
@@ -765,7 +766,7 @@ class Game:
                     pass
 
         # Enemy attacks
-        dmg = self.enemy_manager.check_attacks(p.x, p.y)
+        dmg = self.enemy_manager.check_attacks(p.x, p.y, self.game_map)
         attackers = self.enemy_manager.last_attackers
 
         for enemy in attackers:
