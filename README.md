@@ -141,10 +141,8 @@ The game starts at 1280 × 720. On first launch, procedural assets and the cache
 - **Game over:** death is permanent for that run; `M` returns to the main menu.
 - **Chapter complete:** `Enter` continues; `M` returns to the main menu.
 
-### Debug keys
+### Debug overlay
 - `F3`: Cycle the debug overlay (compact -> full -> off), including build information and FPS.
-- `F4`: Toggle the raw-scene diagnostic view.
-- `F7`: Defeat all enemies (chapter-progression testing).
 
 Quality tier switching is handled by `F5` (next tier) and `F6` (previous tier); see Quality settings below.
 
