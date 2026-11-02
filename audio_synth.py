@@ -396,6 +396,17 @@ class SoundManager:
         self._load_thunder()
         self._load_footsteps()
 
+        # Optional recorded rain loop supplied in assets/audio.
+        self._rain_ambience_sound = None
+        rain_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'assets', 'audio', 'rain_ambience.mp3')
+        if os.path.isfile(rain_path):
+            try:
+                self._rain_ambience_sound = pygame.mixer.Sound(rain_path)
+                print('[Audio] Loaded recorded rain ambience.')
+            except Exception as exc:
+                print(f'[Audio] Could not load rain ambience: {exc}')
+
     # ── recorded footsteps ───────────────────────────────────────────────────
     FOOTSTEP_PEAK = 0.85          # every recorded step is levelled to this peak so none stands out
 
@@ -1123,6 +1134,17 @@ class SoundManager:
                         channel.set_volume(vol * self.master_volume * self.ambient_volume)
                 elif channel.get_busy():
                     channel.fadeout(900)
+
+            # Rain is a continuous layer alongside the forest beds, controlled
+            # by the same Ambient Volume slider and gameplay ambience state.
+            rain_channel = pygame.mixer.Channel(4)
+            rain = getattr(self, '_rain_ambience_sound', None)
+            if active and rain is not None:
+                if not rain_channel.get_busy():
+                    rain_channel.play(rain, loops=-1, fade_ms=2500)
+                rain_channel.set_volume(0.38 * self.master_volume * self.ambient_volume)
+            elif rain_channel.get_busy():
+                rain_channel.fadeout(1200)
         except Exception as exc:
             print(f'[Audio] Forest ambience update failed: {exc}')
 
