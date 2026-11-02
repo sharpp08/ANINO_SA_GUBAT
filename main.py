@@ -1311,7 +1311,7 @@ class Game:
                 and self.renderer.shader_renderer.enabled):
             time_sec = pygame.time.get_ticks() / 1000.0
             fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
-            sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
+            sup_int = 0.0 if _settings_mod.RUNTIME_SETTINGS.get('reduce_flashing', False) else (1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0)
             shaded = self.renderer.shader_renderer.render(
                 self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
             )
