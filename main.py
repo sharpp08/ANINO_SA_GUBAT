@@ -987,8 +987,10 @@ class Game:
         render_enemies = self.enemy_manager.get_renderable_enemies()
 
         if self.state == STATE_PLAYING:
+            sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
+            sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
-                self.player, self.game_map, render_enemies, self.effects, dt)
+                self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
                                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
