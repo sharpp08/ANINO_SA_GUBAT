@@ -185,23 +185,27 @@ class JumpscareManager:
         if snd is None:
             return
         try:
-            snd.set_volume(volume)
-            snd.play()
-        except Exception:
-            pass
+            from audio_synth import audio_mgr
+            effective = max(0.0, min(1.0, volume * audio_mgr.master_volume * audio_mgr.enemy_volume))
+            channel = snd.play()
+            if channel is not None:
+                channel.set_volume(effective)
+        except Exception as exc:
+            print(f"[Jumpscare] Secondary audio failed: {exc}")
 
     def _play_forced(self, snd, volume=1.0):
-        """Play on a forced channel so the sound can never be dropped."""
+        """Use a dedicated reserved channel; never steal or silence the forest beds."""
+        if snd is None:
+            return False
         try:
-            snd.set_volume(volume)
-            ch = pygame.mixer.find_channel(True)
-            if ch is not None:
-                ch.play(snd)
-            else:
-                snd.play()
+            from audio_synth import audio_mgr, JUMPSCARE_CHANNEL
+            channel = pygame.mixer.Channel(JUMPSCARE_CHANNEL)
+            channel.play(snd)
+            effective = max(0.0, min(1.0, volume * audio_mgr.master_volume * audio_mgr.enemy_volume))
+            channel.set_volume(effective)
             return True
-        except Exception as e:
-            print(f"[Jumpscare] Could not play audio: {e}")
+        except Exception as exc:
+            print(f"[Jumpscare] Could not play audio: {exc}")
             return False
 
     def _play_enemy_audio(self):
