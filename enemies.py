@@ -712,12 +712,20 @@ class EnemyManager:
                 self.frenzy_active = sanity < SANITY_FRENZY_THRESHOLD
 
         for enemy in self.enemies:
+            was_frenzy = enemy.frenzy
             enemy.set_frenzy(self.frenzy_active)
             if self.frenzy_active and enemy.alive:
                 if enemy.state != EnemyState.ATTACK:
                     enemy.just_entered_chase = True
                 enemy.state = EnemyState.ATTACK
                 enemy.state_timer = 0.0
+                enemy._path = None
+                enemy._path_index = 0
+                enemy._repath_timer = 0.0
+            elif was_frenzy and enemy.alive and enemy.state == EnemyState.ATTACK:
+                # Drop the forced pursuit cleanly once the player regains composure.
+                enemy.state = EnemyState.INVESTIGATE
+                enemy.state_timer = 2.0
                 enemy._path = None
                 enemy._path_index = 0
                 enemy._repath_timer = 0.0
