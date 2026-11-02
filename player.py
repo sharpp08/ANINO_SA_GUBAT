@@ -3,7 +3,17 @@ Player module - handles player state, movement, and collision.
 """
 import math
 import pygame
+import settings as _cfg
 from settings import *
+
+
+def _bound_key(action, fallback):
+    name = _cfg.CONTROLS.get(action, fallback)
+    try:
+        return pygame.key.key_code(name) if name else fallback
+    except (ValueError, TypeError):
+        return fallback
+
 
 
 class Player:
@@ -14,6 +24,10 @@ class Player:
         self.y = y
         self.angle = angle
         self.pitch = 0
+        self._sprint_toggle_active = False
+        self._crouch_toggle_active = False
+        self._prev_sprint_key = False
+        self._prev_crouch_key = False
 
         # Stats
         self.health = PLAYER_MAX_HEALTH
@@ -95,11 +109,33 @@ class Player:
         # Mouse look
         self.angle += mouse_dx * PLAYER_ROT_SPEED
         self.angle %= math.pi * 2
-        self.pitch -= mouse_dy * PLAYER_ROT_SPEED * 0.5
+        invert_y = bool(_cfg.load_settings().get('invert_mouse_y', False))
+        self.pitch += mouse_dy * PLAYER_ROT_SPEED * (0.5 if invert_y else -0.5)
         self.pitch = max(-0.5, min(0.5, self.pitch))
 
         # Sprint & Crouch with Stamina
-        wants_sprint = keys[pygame.K_LSHIFT] and (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d])
+        forward_key = _bound_key('forward', pygame.K_w)
+        backward_key = _bound_key('backward', pygame.K_s)
+        left_key = _bound_key('strafe_left', pygame.K_a)
+        right_key = _bound_key('strafe_right', pygame.K_d)
+        sprint_key = _bound_key('sprint', pygame.K_LSHIFT)
+        crouch_key = _bound_key('crouch', pygame.K_LCTRL)
+        moving_keys = keys[forward_key] or keys[backward_key] or keys[left_key] or keys[right_key]
+        sprint_down, crouch_down = bool(keys[sprint_key]), bool(keys[crouch_key])
+        saved_settings = _cfg.load_settings()
+        if saved_settings.get('sprint_toggle', 'hold') == 'toggle':
+            if sprint_down and not self._prev_sprint_key:
+                self._sprint_toggle_active = not self._sprint_toggle_active
+            wants_sprint = self._sprint_toggle_active and moving_keys
+        else:
+            wants_sprint = sprint_down and moving_keys
+        if saved_settings.get('crouch_toggle', 'hold') == 'toggle':
+            if crouch_down and not self._prev_crouch_key:
+                self._crouch_toggle_active = not self._crouch_toggle_active
+            self.is_crouching = self._crouch_toggle_active
+        else:
+            self.is_crouching = crouch_down
+        self._prev_sprint_key, self._prev_crouch_key = sprint_down, crouch_down
 
         if getattr(self, 'exhausted', False):
             if self.stamina >= 30.0:
@@ -119,7 +155,6 @@ class Player:
             self.is_sprinting = False
             self.stamina = min(STAMINA_MAX, self.stamina + STAMINA_REGEN_RATE * dt)
 
-        self.is_crouching = keys[pygame.K_LCTRL]
 
         # Movement speed
         speed = PLAYER_SPRINT_SPEED if self.is_sprinting else PLAYER_SPEED
@@ -132,16 +167,16 @@ class Player:
         move_x = 0
         move_y = 0
 
-        if keys[pygame.K_w]:
+        if keys[forward_key]:
             move_x += math.cos(self.angle)
             move_y += math.sin(self.angle)
-        if keys[pygame.K_s]:
+        if keys[backward_key]:
             move_x -= math.cos(self.angle)
             move_y -= math.sin(self.angle)
-        if keys[pygame.K_a]:
+        if keys[left_key]:
             move_x += math.cos(self.angle - math.pi / 2)
             move_y += math.sin(self.angle - math.pi / 2)
-        if keys[pygame.K_d]:
+        if keys[right_key]:
             move_x += math.cos(self.angle + math.pi / 2)
             move_y += math.sin(self.angle + math.pi / 2)
 
@@ -267,7 +302,7 @@ class Player:
             self.damage_flash -= dt * 3
 
         if ENABLE_ANIMATIONS and ENABLE_SPRING_PHYSICS and self.spring_bob:
-            moving = 1.0 if (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]) else 0.0
+            moving = 1.0 if moving_keys else 0.0
             self.spring_bob.update(dt, moving * (5.0 if self.is_sprinting else 3.0))
             self.spring_sway.update(dt, mouse_dx * 0.1, mouse_dy * 0.1)
 
