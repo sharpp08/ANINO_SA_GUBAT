@@ -62,6 +62,20 @@ Other effects include dynamic wind, rain and lightning, fog, glowing eyes and pi
 
 ---
 
+## Changelog
+
+### BUILD 2026.11.02-SURVIVAL-AUDIO (November 2, 2026)
+
+- **Frenzy Mode ambience (new audio layer):** a quiet looping background track plays only while Frenzy is active during gameplay. It loops on a dedicated mixer channel with fade-in/fade-out and stops on Frenzy end, pause or exit. The track `assets/audio/frenzy_mode_ambience.mp3` now ships with the repository; if it is missing or cannot be loaded, the game continues silently without affecting other audio.
+- **Frenzy ambience volume fix:** the source MP3 was attenuated but the playback level had been dropped to 5%, making the layer inaudible. Playback was restored to the intended 10% channel volume (`FRENZY_AMBIENCE_VOLUME`).
+- **ModernGL hybrid GPU post-processing:** optional fragment-shader pass for color grading, flashlight treatment, fog, vignette and supernatural distortion, with a Pygame fallback when no OpenGL context is available. `moderngl` and `glcontext` were added to `requirements.txt`; see [GPU_RENDERING.md](GPU_RENDERING.md).
+- **Sanity HUD and spawn scaling:** the sanity bar is now displayed in the HUD, and survival-mode enemy spawn intervals scale with sanity (down to 55% of the normal interval at zero sanity).
+- **Frenzy AI fixes:** enemy AI is restored when the sanity Frenzy ends, and a per-frame pathfinding spike that occurred during Frenzy was fixed.
+- **Recorded SFX and storm audio:** optional custom recordings in `assets/audio/` for revolver/shotgun fire and reload, walk-cycle footsteps, near/far thunder and the intro cinematic score, with procedural fallbacks for every missing file.
+- **Windows executable rebuilt:** the bundled `ANINO_SA_GUBAT.exe` was recompiled from the PyInstaller spec so the shipped binary includes all of the above audio and rendering changes.
+
+---
+
 ## Requirements
 
 - Python 3.10 or newer
@@ -128,10 +142,11 @@ The game starts at 1280 × 720. On first launch, procedural assets and the cache
 - **Chapter complete:** `Enter` continues; `M` returns to the main menu.
 
 ### Debug keys
-- `F3`: Toggle the debug overlay, including build information and FPS.
+- `F3`: Cycle the debug overlay (compact -> full -> off), including build information and FPS.
 - `F4`: Toggle the raw-scene diagnostic view.
-- `F6`: Teleport near the nearest living enemy.
 - `F7`: Defeat all enemies (chapter-progression testing).
+
+Quality tier switching is handled by `F5` (next tier) and `F6` (previous tier); see Quality settings below.
 
 ---
 
@@ -176,7 +191,7 @@ ANINO_SA_GUBAT/
 ├── GPU_RENDERING.md     # ModernGL setup and current renderer limitations
 ├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
 ├── assets/              # Optional audio/art and generated caches
-│   └── audio/frenzy_mode_ambience.mp3  # Optional Frenzy Mode background ambience
+│   └── audio/frenzy_mode_ambience.mp3  # Bundled Frenzy Mode background ambience (recorded SFX optional)
 ├── saves/               # JSON save files (created as needed)
 └── tools/               # Development and asset utilities
 ```
@@ -202,7 +217,7 @@ If performance is poor, try the low preset first and compare stable frame rate a
 
 The game combines procedural ambience and creature sounds with optional recorded sound assets in `assets/audio/`. When supported custom recordings are missing or cannot be loaded, procedural sounds provide a fallback. The audio engine uses the Pygame mixer and NumPy-generated sound.
 
-For the Frenzy Mode background layer, place the supplied track at `assets/audio/frenzy_mode_ambience.mp3`. It loops on a dedicated mixer channel at 10% volume with fade-in/fade-out, and only plays while Frenzy is active during gameplay. If the file is absent or cannot be loaded, the game continues silently without interrupting other audio.
+The Frenzy Mode background layer ships with the repository at `assets/audio/frenzy_mode_ambience.mp3`. It loops on a dedicated mixer channel at 10% volume with fade-in/fade-out, and only plays while Frenzy is active during gameplay. The source MP3 is intentionally attenuated and the playback level was restored to an audible 10% (see changelog). If the file is absent or cannot be loaded, the game continues silently without interrupting other audio.
 
 ## Save data and configuration
 
@@ -213,14 +228,34 @@ For the Frenzy Mode background layer, place the supplied track at `assets/audio/
 
 ## Build a Windows executable
 
-Install PyInstaller, then run:
+The spec builds a standalone one-file executable (hidden console; UPX compression when available). From the project directory:
 
 ```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
+
+python -m pip install -r requirements.txt
 python -m pip install pyinstaller
-pyinstaller --clean ANINO_SA_GUBAT.spec
+
+# Build (clean discards stale PyInstaller caches; rebuild after any code, audio or rendering change)
+python -m PyInstaller --clean ANINO_SA_GUBAT.spec
 ```
 
-The packaged output is written under `dist/`.
+Steps to produce the latest binary:
+
+1. Run the command above; PyInstaller writes `dist/ANINO_SA_GUBAT/ANINO_SA_GUBAT.exe`.
+2. Copy it to the project root (the location tracked in git) and optionally to `release/` for distribution:
+
+   ```bash
+   copy dist\ANINO_SA_GUBAT\ANINO_SA_GUBAT.exe ANINO_SA_GUBAT.exe
+   copy dist\ANINO_SA_GUBAT\ANINO_SA_GUBAT.exe release\
+   ```
+
+3. Keep the `assets/` folder next to the executable: the game resolves `assets/`, `saves/` and `settings.json` relative to the folder the exe lives in. The bundled recorded SFX (including `assets/audio/frenzy_mode_ambience.mp3`) must live under `assets/audio/` for custom sound to play; without them the procedural audio fallbacks are used and the Frenzy layer stays silent.
+4. Commit the updated root `ANINO_SA_GUBAT.exe` alongside the source changes so the shipped binary always matches the code.
 
 ## Current technical caveats
 
