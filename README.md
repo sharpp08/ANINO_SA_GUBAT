@@ -33,6 +33,7 @@ Darkness and nearby enemies reduce sanity; light and certain restorative actions
 - Enemy attack cooldowns are shortened.
 - Survival-mode enemy spawn intervals become shorter as sanity falls, reaching 55% of the normal interval at zero sanity.
 - Frenzy uses a recovery threshold of 36 sanity to prevent rapid toggling around the activation threshold.
+- A quiet, looping background ambience fades in when Frenzy activates and fades out when it ends or gameplay is paused/exited.
 
 Keep your flashlight charged, use protective items and wards, and avoid letting sanity collapse.
 
@@ -175,6 +176,7 @@ ANINO_SA_GUBAT/
 ├── GPU_RENDERING.md     # ModernGL setup and current renderer limitations
 ├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
 ├── assets/              # Optional audio/art and generated caches
+│   └── audio/frenzy_mode_ambience.mp3  # Optional Frenzy Mode background ambience
 ├── saves/               # JSON save files (created as needed)
 └── tools/               # Development and asset utilities
 ```
