@@ -14,6 +14,8 @@ class NavGrid:
         self.cell_size = cell_size
         self.width = game_map.width
         self.height = game_map.height
+        # Bounded per-cell cache shared by all enemy path queries on this map.
+        self._walkable_cache = {}
 
     def _cell(self, x, y):
         return int(x / self.cell_size), int(y / self.cell_size)
@@ -25,14 +27,23 @@ class NavGrid:
         cx, cy = self._cell(wx, wy)
         if not (0 <= cx < self.width and 0 <= cy < self.height):
             return False
+        key = (cx, cy)
+        cached = self._walkable_cache.get(key)
+        if cached is not None:
+            return cached
+
         tile = self.gm.grid[cy][cx]
-        if tile == WALL_STONE:
-            return False
-        if tile == DOOR:
-            return False
-        if tile == WATER:
-            return True
-        return not self.gm.is_tree_solid(wx, wy, radius=radius)
+        if tile == WALL_STONE or tile == DOOR:
+            walkable = False
+        elif tile == WATER:
+            walkable = True
+        else:
+            # Navigation is cell-based, so evaluate tree collision at the cell
+            # centre once rather than repeating spatial-hash queries per A* edge.
+            cell_x, cell_y = self._world(cx, cy)
+            walkable = not self.gm.is_tree_solid(cell_x, cell_y, radius=radius)
+        self._walkable_cache[key] = walkable
+        return walkable
 
     def heuristic(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
