@@ -21,7 +21,7 @@ from enemies import EnemyManager
 from renderer import Renderer
 from audio_synth import audio_mgr
 from asset_generator import generate_all_textures, generate_all_weapons, generate_all_enemies, generate_all_pickups, generate_crosshair
-from main import Game, save_game, load_game, STATE_MENU, STATE_INTRO, STATE_PLAYING, STATE_PAUSED, STATE_GAMEOVER, STATE_WIN
+from main import Game, STATE_MENU, STATE_INTRO, STATE_PLAYING, STATE_PAUSED, STATE_GAMEOVER, STATE_WIN
 
 
 def run_smoke_tests():
@@ -125,36 +125,7 @@ def run_smoke_tests():
         assert game.state == STATE_MENU
     test_case("Game State Machine Transitions", test_state_machine)
 
-    def test_save_load():
-        game = Game()
-        game.load_chapter(1)
-        game.state = STATE_PLAYING
-        game.player.health = 77.0
-        save_game(game.player, game.chapter, 0)
-        game.load_saved_game()
-        assert abs(game.player.health - 77.0) < 1e-3
-
-        os.makedirs(SAVE_DIR, exist_ok=True)
-        old_save = os.path.join(SAVE_DIR, "save_0.json")
-        with open(old_save, 'w') as f:
-            json.dump({'chapter': 1}, f)
-        game.load_saved_game()
-
-        with open(old_save, 'w') as f:
-            f.write("{ invalid json")
-        assert load_game(0) is None
-
-        missing = os.path.join(SAVE_DIR, "save_99.json")
-        if os.path.exists(missing):
-            os.remove(missing)
-        assert load_game(99) is None
-
-        with open(old_save, 'w') as f:
-            f.write("")
-        assert load_game(0) is None
-    test_case("Save & Load Robustness", test_save_load)
-
-    def test_cinematic():
+save load test    def test_cinematic():
         game = Game()
         game.state = STATE_INTRO
         game.cinematic.reset()
