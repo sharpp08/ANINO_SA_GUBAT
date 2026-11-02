@@ -728,7 +728,7 @@ class Game:
         self.cinematic.reset()
         safe_set_relative_mouse(False)
 
-load_saved_game method    def notify(self, text, duration=2.5):
+    def notify(self, text, duration=2.5):
         self.notif   = text
         self.notif_t = duration
 
