@@ -284,8 +284,9 @@ def synth_voice(rate, f0, vowel_a='a', vowel_b=None, morph=None, tilt=1.6,
 #  Sound manager
 # ─────────────────────────────────────────────────────────────────────────────
 MUFFLE_CUTOFFS = (None, 5000.0, 2400.0, 1100.0)
-AMBIENCE_RESERVED = 3          # channels 0/1 are forest beds; channel 2 is reserved for Frenzy music
 FRENZY_AMBIENCE_CHANNEL = 2
+JUMPSCARE_CHANNEL = 3
+AMBIENCE_RESERVED = 4          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
@@ -990,6 +991,24 @@ class SoundManager:
     def play_drone(self, vol=0.4):
         self.play('drone', vol)
 
+    def play_ambient(self, name, volume=1.0, pan=0.0):
+        """Play a forest one-shot using the Ambient slider, not the SFX slider."""
+        variants = self.variants.get(name)
+        snd = random.choice(variants) if variants else self.sounds.get(name)
+        if snd is None:
+            return None
+        try:
+            vol = max(0.0, min(1.0, volume)) * self.master_volume * self.ambient_volume
+            pan = max(-1.0, min(1.0, pan))
+            theta = (pan + 1.0) * math.pi / 4.0
+            channel = snd.play()
+            if channel is not None:
+                channel.set_volume(min(1.0, vol * math.cos(theta) * math.sqrt(2.0)),
+                                   min(1.0, vol * math.sin(theta) * math.sqrt(2.0)))
+            return channel
+        except Exception:
+            return None
+
     def play_object(self, snd, volume=1.0, pan=0.0, headroom=0.85):
         """Play a Sound with equal-power panning.  Returns the channel."""
         if snd is None:
@@ -1083,21 +1102,20 @@ class SoundManager:
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
         active = bool(active)
-        if active == self._amb_active:
-            return
         self._amb_active = active
         try:
             for name, ch_index, vol in self._BEDS:
                 channel = pygame.mixer.Channel(int(ch_index))
                 if active:
                     snd = self.sounds.get(name)
-                    if snd is not None:
+                    if snd is not None and not channel.get_busy():
                         channel.play(snd, loops=-1, fade_ms=2500)
-                        channel.set_volume(vol * self.master_volume * self.ambient_volume)        # after play(): playing resets the channel volume
-                else:
+                    if snd is not None:
+                        channel.set_volume(vol * self.master_volume * self.ambient_volume)
+                elif channel.get_busy():
                     channel.fadeout(900)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f'[Audio] Forest ambience update failed: {exc}')
         if active:
             self._amb_timers = {
                 'owl': random.uniform(12, 30),
@@ -1114,7 +1132,7 @@ class SoundManager:
             self._amb_timers[key] = self._amb_timers.get(key, random.uniform(lo, hi)) - dt
             if self._amb_timers[key] <= 0.0:
                 self._amb_timers[key] = random.uniform(lo, hi)
-                self.play(key, volume=random.uniform(v0, v1), pan=random.uniform(-1.0, 1.0))
+                self.play_ambient(key, volume=random.uniform(v0, v1), pan=random.uniform(-1.0, 1.0))
 
 
 audio_mgr = SoundManager()
