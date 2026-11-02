@@ -1177,7 +1177,26 @@ class Game:
                         self.intro_to_menu = False
                         self.state = STATE_MENU
                     else:
+                        # Give players a clear loading screen when they skip the
+                        # cinematic, before the chapter's map and enemies are built.
+                        if self.cinematic.skipped:
+                            draw_loading_step(
+                                self.screen, self.clock, self.font_lg, self.font_sm,
+                                "Cinematic skipped. Preparing your journey...", 0.12)
+                            draw_loading_step(
+                                self.screen, self.clock, self.font_lg, self.font_sm,
+                                "Generating the forest and its paths...", 0.38)
+
                         self.load_chapter(1)
+
+                        if self.cinematic.skipped:
+                            draw_loading_step(
+                                self.screen, self.clock, self.font_lg, self.font_sm,
+                                "Summoning the forest entities...", 0.86)
+                            draw_loading_step(
+                                self.screen, self.clock, self.font_lg, self.font_sm,
+                                "Entering the forest...", 1.0)
+
                         self.state = STATE_PLAYING
                         safe_set_relative_mouse(True)
 
