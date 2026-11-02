@@ -39,19 +39,6 @@ STATE_WIN      = 'win'
 
 
 # ─── HUD helpers ─────────────────────────────────────────────────────────────
-def control_key(action, fallback):
-    name = CONTROLS.get(action, fallback)
-    try:
-        aliases = {'lshift': pygame.K_LSHIFT, 'rshift': pygame.K_RSHIFT,
-                   'lctrl': pygame.K_LCTRL, 'rctrl': pygame.K_RCTRL,
-                   'lalt': pygame.K_LALT, 'ralt': pygame.K_RALT}
-        if str(name).lower() in aliases:
-            return aliases[str(name).lower()]
-        return pygame.key.key_code(name) if name else fallback
-    except (ValueError, TypeError):
-        return fallback
-
-
 def safe_set_relative_mouse(enabled):
     try:
         pygame.mouse.set_relative_mode(enabled)
@@ -70,7 +57,6 @@ def draw_bar(surf, x, y, w, h, value, max_val, fg, bg=(30, 30, 30)):
 def draw_hud(surf, player, font_sm, font_tiny):
     sw, sh = surf.get_size()
     pad = 12
-    ui_text = (255, 255, 255) if _settings_mod.RUNTIME_SETTINGS.get('high_contrast_ui', False) else (190, 190, 190)
 
     # ── Left Column (Faith, Items, HP, AP, STM, BATT) stacked cleanly with zero overlap ──
     current_y = sh - 46
@@ -78,20 +64,20 @@ def draw_hud(surf, player, font_sm, font_tiny):
 
     # 1. Flashlight Battery (bottom of left stack)
     batt_col = (220, 220, 50) if player.flashlight_battery > 30 else HEALTH_RED
-    fl_lbl = font_tiny.render(f"BATT {int(player.flashlight_battery)}%", True, ui_text)
+    fl_lbl = font_tiny.render(f"BATT {int(player.flashlight_battery)}%", True, (180, 180, 180))
     surf.blit(fl_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.flashlight_battery, FLASHLIGHT_MAX_BATTERY, batt_col)
     current_y -= (font_h + 12)
 
     # 2. Stamina
-    stm_lbl = font_tiny.render(f"STM {int(player.stamina)}", True, ui_text)
+    stm_lbl = font_tiny.render(f"STM {int(player.stamina)}", True, (160, 240, 180))
     surf.blit(stm_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.stamina, STAMINA_MAX, (50, 180, 120))
     current_y -= (font_h + 12)
 
     # 3. Armor (if > 0)
     if player.armor > 0:
-        arm_lbl = font_tiny.render(f"AP {int(player.armor)}", True, ui_text)
+        arm_lbl = font_tiny.render(f"AP {int(player.armor)}", True, (180, 210, 255))
         surf.blit(arm_lbl, (pad, current_y - font_h))
         draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
         current_y -= (font_h + 12)
@@ -106,12 +92,12 @@ def draw_hud(surf, player, font_sm, font_tiny):
     ros_cd = f"{player.rosary_cooldown:.1f}s" if player.rosary_cooldown > 0 else "READY"
     crs_cd = f"{player.cross_cooldown:.1f}s" if player.cross_cooldown > 0 else "READY"
     pages_needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
-    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.pages_this_chapter}/{pages_needed} ROS:{ros_cd} CRS:{crs_cd}", True, ui_text)
+    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.pages_this_chapter}/{pages_needed} ROS:{ros_cd} CRS:{crs_cd}", True, (200, 200, 200))
     surf.blit(items_txt, (pad, current_y - font_h))
     current_y -= (font_h + 12)
 
     # 6. Faith
-    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, ui_text)
+    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, (150, 180, 255))
     surf.blit(fe_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
     current_y -= (font_h + 12)
@@ -137,7 +123,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
 
     weapon_names = ['BOLO', 'SHOTGUN', 'REVOLVER']
     wname = weapon_names[player.current_weapon]
-    w_txt = font_sm.render(wname, True, ui_text)
+    w_txt = font_sm.render(wname, True, GOLD)
     surf.blit(w_txt, (px + 10, py + 8))
 
     if player.current_weapon == 1:
@@ -146,7 +132,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
         ammo_str = f"MAG: {player.revolver_mag}/{REVOLVER_MAG_SIZE} ({player.ammo_revolver})"
     else:
         ammo_str = "DUR: 3/3"
-    a_txt = font_tiny.render(ammo_str, True, ui_text)
+    a_txt = font_tiny.render(ammo_str, True, AMMO_YELLOW)
     surf.blit(a_txt, (px + 10, py + 30))
 
     if player.reloading:
@@ -379,8 +365,7 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
         what = 'NEAREST PAGE' if obj['kind'] == 'page' else 'EXIT'
         line2 = f"{what} {int(obj['dist'])}m {direction_word(rel).upper()}"
 
-    contrast = bool(_settings_mod.RUNTIME_SETTINGS.get('high_contrast_ui', False))
-    img1 = font.render(line1, True, WHITE if contrast else SACRED_GOLD)
+    img1 = font.render(line1, True, SACRED_GOLD)
     img2 = font.render(line2, True, WHITE) if line2 else None
     arrow_w = arrow.size + 4 if line2 else 0
     text_w = max(img1.get_width(), img2.get_width() if img2 else 0)
@@ -620,21 +605,11 @@ class Game:
         self.settings_menu = SettingsMenu()
         self.settings_return_state = STATE_MENU
         self.target_fps = FPS
-        self.vsync_enabled = True
-        self._apply_settings(_settings_mod.RUNTIME_SETTINGS)
 
     def _apply_settings(self, values):
         """Apply settings that affect live game systems."""
         global FULLSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_ROT_SPEED
-        _settings_mod.RUNTIME_SETTINGS = dict(values)
-        ui_scale = max(0.75, min(1.5, int(str(values.get("ui_scale", "100%")).replace("%", "")) / 100.0))
-        self.font_lg = pygame.font.SysFont('consolas', max(12, int(32 * ui_scale)), bold=True)
-        self.font_sm = pygame.font.SysFont('consolas', max(10, int(18 * ui_scale)))
-        self.font_tiny = pygame.font.SysFont('consolas', max(8, int(13 * ui_scale)))
-        self.font_micro = pygame.font.SysFont('consolas', max(7, int(11 * ui_scale)))
-        _settings_mod.CONTROLS.update(values.get("controls", {}))
-        CONTROLS.update(values.get("controls", {}))
-        resolution = values.get("resolution", f"{SCREEN_WIDTH} x {SCREEN_HEIGHT}")
+        resolution = values.get("resolution", "1280 x 720")
         try:
             SCREEN_WIDTH, SCREEN_HEIGHT = [int(part.strip()) for part in resolution.split("x")]
         except (ValueError, AttributeError):
@@ -643,10 +618,10 @@ class Game:
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
                            or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", True))
         FULLSCREEN = requested_fullscreen
-        self.vsync_enabled = bool(values.get("vsync", True))
         if display_changed:
             self.screen = self._set_display_mode()
-        self.target_fps = 0 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        self.target_fps = 240 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
+        self.vsync_enabled = bool(values.get("vsync", True))
         tier = str(values.get("quality_tier", "medium")).lower()
         if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
             try:
@@ -658,43 +633,13 @@ class Game:
             player_module.PLAYER_ROT_SPEED = float(values.get("mouse_sensitivity", 0.002))
         except Exception:
             pass
-        _settings_mod.ENABLE_FOG = bool(values.get("enable_fog", True))
-        _settings_mod.ENABLE_PARTICLES = bool(values.get("enable_particles", True))
-        import renderer as renderer_module
-        renderer_module.ENABLE_PARTICLES = _settings_mod.ENABLE_PARTICLES
-        _settings_mod.ENABLE_SANITY = bool(values.get("enable_sanity", True))
-        _settings_mod.ENABLE_CAMERA_SHAKE = bool(values.get("enable_camera_shake", True)) and not bool(values.get("reduce_camera_shake", False))
-        renderer_module.ENABLE_CAMERA_SHAKE = _settings_mod.ENABLE_CAMERA_SHAKE
-        _settings_mod.TERRAIN_BRIGHTNESS = float(values.get("brightness", 1.0))
-        try:
-            self.renderer.fov_rad = math.radians(float(values.get("fov", 75)))
-            self.renderer.half_fov = self.renderer.fov_rad / 2
-            self.renderer.ray_angles = [(i / self.renderer.num_rays - 0.5) * self.renderer.fov_rad for i in range(self.renderer.num_rays)]
-            import numpy as np
-            self.renderer._ray_angle_array = np.asarray(self.renderer.ray_angles, dtype=np.float32)
-            self.renderer._ray_cos = np.cos(self.renderer._ray_angle_array)
-            self.renderer._ray_sin = np.sin(self.renderer._ray_angle_array)
-            self.renderer._ray_ang64 = np.asarray(self.renderer.ray_angles, dtype=np.float64)
-            self.renderer._ray_cos64 = np.cos(self.renderer._ray_ang64)
-            self.renderer._ray_sin64 = np.sin(self.renderer._ray_ang64)
-        except Exception:
-            pass
         try:
             master = max(0.0, min(1.0, float(values.get("master_volume", 0.7))))
             music = max(0.0, min(1.0, float(values.get("music_volume", 0.4))))
             sfx = max(0.0, min(1.0, float(values.get("sfx_volume", 0.8))))
-            audio_mgr.master_volume = master
-            audio_mgr.music_volume = music
-            audio_mgr.sfx_volume = sfx
-            audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
-            audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
             pygame.mixer.music.set_volume(master * music)
             for channel_index in range(pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
-            for _, channel_index, base_volume in getattr(audio_mgr, "_BEDS", ()):
-                pygame.mixer.Channel(int(channel_index)).set_volume(base_volume * master * audio_mgr.ambient_volume)
-            if getattr(audio_mgr, "_frenzy_ambience_channel", None):
-                audio_mgr._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME * master * audio_mgr.ambient_volume)
         except Exception:
             pass
 
@@ -745,7 +690,7 @@ class Game:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
             rate = 0
-        vsync = 1 if getattr(self, "vsync_enabled", True) else 0
+        vsync = 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
         except Exception:
@@ -838,7 +783,7 @@ class Game:
         p = self.player
         if event.type == pygame.KEYDOWN:
             k = event.key
-            if k == control_key('pause', 'escape'):
+            if k == pygame.K_ESCAPE:
                 self.state = STATE_PAUSED
                 safe_set_relative_mouse(False)
             elif k == pygame.K_F11:
@@ -866,7 +811,7 @@ class Game:
                             p.angle = math.atan2(e.y - ny, e.x - nx)
                             self.notify(f"DEBUG: teleported near {e.type}")
                             break
-            elif k == control_key('reload', 'r'):
+            elif k == pygame.K_r:
                 # Play reload recordings only when the corresponding reload can start.
                 can_reload_shotgun = (
                     p.current_weapon == 1 and not p.reloading
@@ -881,19 +826,19 @@ class Game:
                     audio_mgr.play('shotgun_reload', volume=0.80, headroom=1.0)
                 elif can_reload_revolver and p.reloading:
                     audio_mgr.play('revolver_reload', volume=1.0, headroom=1.0)
-            elif k == control_key('flashlight', 'f'):
+            elif k == pygame.K_f:
                 p.flashlight_on = not p.flashlight_on
-            elif k == control_key('interact', 'e'):
+            elif k == pygame.K_e:
                 self._interact()
-            elif k == control_key('salt', 'g'):
+            elif k == pygame.K_g:
                 self._use_salt()
-            elif k == control_key('garlic', 'h'):
+            elif k == pygame.K_h:
                 self._use_garlic()
-            elif k == control_key('rosary', pygame.K_v):
+            elif k == pygame.key.key_code(CONTROLS.get('rosary', 'v')) if CONTROLS.get('rosary') else pygame.K_v:
                 self._use_rosary()
-            elif k == control_key('cross', pygame.K_c):
+            elif k == pygame.key.key_code(CONTROLS.get('cross', 'c')) if CONTROLS.get('cross') else pygame.K_c:
                 self._use_cross()
-            elif k == control_key('ward_1', '1'):
+            elif k == pygame.K_1:
                 if p.flashlight_battery > 0:
                     p.flashlight_on = not p.flashlight_on
                     try:
@@ -902,19 +847,19 @@ class Game:
                         pass
                 else:
                     self.notify("Flashlight battery is dead!")
-            elif k == control_key('ward_2', '2'):
+            elif k == pygame.K_2:
                 p.selected_ward = 1
                 self._cast_selected_ward()
-            elif k == control_key('ward_3', '3'):
+            elif k == pygame.K_3:
                 p.selected_ward = 2
                 self._cast_selected_ward()
-            elif k == control_key('ward_4', '4'):
+            elif k == pygame.K_4:
                 p.selected_ward = 3
                 self._cast_selected_ward()
-            elif k == control_key('ward_5', '5'):
+            elif k == pygame.K_5:
                 p.selected_ward = 4
                 self._cast_selected_ward()
-            elif k == control_key('ward_menu', 'q'):
+            elif k == pygame.K_q:
                 self._cast_selected_ward()
             elif k == pygame.K_TAB:
                 p.selected_ward = (p.selected_ward + 1) % 5
@@ -1265,13 +1210,11 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            panel_bottom = 20
-            if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
-                draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
-                panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
-                                            self.font_micro, self.page_arrow, pygame.time.get_ticks())
-                self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                                self.font_micro, pygame.time.get_ticks())
+            draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
+                                        self.font_micro, self.page_arrow, pygame.time.get_ticks())
+            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                            self.font_micro, pygame.time.get_ticks())
 
             # Notification: centred just under the top panel (the top-left corner is the debug text)
             if self.notif_t > 0:
@@ -1287,12 +1230,11 @@ class Game:
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
-                draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
-                draw_top_hud(self.internal, self.player, self.game_map,
-                             self.font_micro, self.page_arrow, pygame.time.get_ticks())
-                self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                                self.font_micro, pygame.time.get_ticks())
+            draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            draw_top_hud(self.internal, self.player, self.game_map,
+                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
+            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                            self.font_micro, pygame.time.get_ticks())
             draw_paused(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:
@@ -1328,7 +1270,7 @@ class Game:
                 and self.renderer.shader_renderer.enabled):
             time_sec = pygame.time.get_ticks() / 1000.0
             fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
-            sup_int = 0.0 if _settings_mod.RUNTIME_SETTINGS.get('reduce_flashing', False) else (1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0)
+            sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
             shaded = self.renderer.shader_renderer.render(
                 self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
             )
@@ -1387,7 +1329,7 @@ class Game:
 
                 elif self.state == STATE_PAUSED:
                     if event.type == pygame.KEYDOWN:
-                        if event.key == control_key('pause', 'escape'):
+                        if event.key == pygame.K_ESCAPE:
                             self.state = STATE_PLAYING
                             safe_set_relative_mouse(True)
                         elif event.key == pygame.K_s:
