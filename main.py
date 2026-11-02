@@ -70,6 +70,7 @@ def draw_bar(surf, x, y, w, h, value, max_val, fg, bg=(30, 30, 30)):
 def draw_hud(surf, player, font_sm, font_tiny):
     sw, sh = surf.get_size()
     pad = 12
+    ui_text = (255, 255, 255) if _settings_mod.RUNTIME_SETTINGS.get('high_contrast_ui', False) else (190, 190, 190)
 
     # ── Left Column (Faith, Items, HP, AP, STM, BATT) stacked cleanly with zero overlap ──
     current_y = sh - 46
@@ -77,20 +78,20 @@ def draw_hud(surf, player, font_sm, font_tiny):
 
     # 1. Flashlight Battery (bottom of left stack)
     batt_col = (220, 220, 50) if player.flashlight_battery > 30 else HEALTH_RED
-    fl_lbl = font_tiny.render(f"BATT {int(player.flashlight_battery)}%", True, (180, 180, 180))
+    fl_lbl = font_tiny.render(f"BATT {int(player.flashlight_battery)}%", True, ui_text)
     surf.blit(fl_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.flashlight_battery, FLASHLIGHT_MAX_BATTERY, batt_col)
     current_y -= (font_h + 12)
 
     # 2. Stamina
-    stm_lbl = font_tiny.render(f"STM {int(player.stamina)}", True, (160, 240, 180))
+    stm_lbl = font_tiny.render(f"STM {int(player.stamina)}", True, ui_text)
     surf.blit(stm_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.stamina, STAMINA_MAX, (50, 180, 120))
     current_y -= (font_h + 12)
 
     # 3. Armor (if > 0)
     if player.armor > 0:
-        arm_lbl = font_tiny.render(f"AP {int(player.armor)}", True, (180, 210, 255))
+        arm_lbl = font_tiny.render(f"AP {int(player.armor)}", True, ui_text)
         surf.blit(arm_lbl, (pad, current_y - font_h))
         draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.armor, PLAYER_MAX_ARMOR, (100, 160, 255))
         current_y -= (font_h + 12)
@@ -105,12 +106,12 @@ def draw_hud(surf, player, font_sm, font_tiny):
     ros_cd = f"{player.rosary_cooldown:.1f}s" if player.rosary_cooldown > 0 else "READY"
     crs_cd = f"{player.cross_cooldown:.1f}s" if player.cross_cooldown > 0 else "READY"
     pages_needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
-    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.pages_this_chapter}/{pages_needed} ROS:{ros_cd} CRS:{crs_cd}", True, (200, 200, 200))
+    items_txt = font_tiny.render(f"SALT:{player.salt_count} GARLIC:{player.garlic_count} PAGES:{player.pages_this_chapter}/{pages_needed} ROS:{ros_cd} CRS:{crs_cd}", True, ui_text)
     surf.blit(items_txt, (pad, current_y - font_h))
     current_y -= (font_h + 12)
 
     # 6. Faith
-    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, (150, 180, 255))
+    fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, ui_text)
     surf.blit(fe_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
     current_y -= (font_h + 12)
@@ -136,7 +137,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
 
     weapon_names = ['BOLO', 'SHOTGUN', 'REVOLVER']
     wname = weapon_names[player.current_weapon]
-    w_txt = font_sm.render(wname, True, GOLD)
+    w_txt = font_sm.render(wname, True, ui_text)
     surf.blit(w_txt, (px + 10, py + 8))
 
     if player.current_weapon == 1:
@@ -145,7 +146,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
         ammo_str = f"MAG: {player.revolver_mag}/{REVOLVER_MAG_SIZE} ({player.ammo_revolver})"
     else:
         ammo_str = "DUR: 3/3"
-    a_txt = font_tiny.render(ammo_str, True, AMMO_YELLOW)
+    a_txt = font_tiny.render(ammo_str, True, ui_text)
     surf.blit(a_txt, (px + 10, py + 30))
 
     if player.reloading:
@@ -378,7 +379,8 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
         what = 'NEAREST PAGE' if obj['kind'] == 'page' else 'EXIT'
         line2 = f"{what} {int(obj['dist'])}m {direction_word(rel).upper()}"
 
-    img1 = font.render(line1, True, SACRED_GOLD)
+    contrast = bool(_settings_mod.RUNTIME_SETTINGS.get('high_contrast_ui', False))
+    img1 = font.render(line1, True, WHITE if contrast else SACRED_GOLD)
     img2 = font.render(line2, True, WHITE) if line2 else None
     arrow_w = arrow.size + 4 if line2 else 0
     text_w = max(img1.get_width(), img2.get_width() if img2 else 0)
@@ -625,6 +627,11 @@ class Game:
         """Apply settings that affect live game systems."""
         global FULLSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_ROT_SPEED
         _settings_mod.RUNTIME_SETTINGS = dict(values)
+        ui_scale = max(0.75, min(1.5, int(str(values.get("ui_scale", "100%")).replace("%", "")) / 100.0))
+        self.font_lg = pygame.font.SysFont('consolas', max(12, int(32 * ui_scale)), bold=True)
+        self.font_sm = pygame.font.SysFont('consolas', max(10, int(18 * ui_scale)))
+        self.font_tiny = pygame.font.SysFont('consolas', max(8, int(13 * ui_scale)))
+        self.font_micro = pygame.font.SysFont('consolas', max(7, int(11 * ui_scale)))
         _settings_mod.CONTROLS.update(values.get("controls", {}))
         CONTROLS.update(values.get("controls", {}))
         resolution = values.get("resolution", f"{SCREEN_WIDTH} x {SCREEN_HEIGHT}")
