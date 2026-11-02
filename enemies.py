@@ -72,11 +72,15 @@ class Enemy:
         stats = ENEMY_STATS.get(enemy_type, ENEMY_STATS['aswang'])
         self.max_health = stats['health']
         self.health = self.max_health
-        self.damage = stats['damage']
-        self.speed = stats['speed']
+        self.base_damage = stats['damage']
+        self.base_speed = stats['speed']
+        self.base_attack_cooldown_max = stats['attack_cooldown']
+        self.frenzy = False
+        self.damage = self.base_damage
+        self.speed = self.base_speed
         self.attack_range = stats['attack_range']
         self.detect_range = stats['detect_range']
-        self.attack_cooldown_max = stats['attack_cooldown']
+        self.attack_cooldown_max = self.base_attack_cooldown_max
         self.vulnerabilities = stats['vulnerabilities']
         self.resistances = stats['resistances']
 
@@ -143,6 +147,22 @@ class Enemy:
             self.spring_x = None
             self.spring_scale = None
             self.stalk_spring = None
+
+    def set_frenzy(self, active):
+        """Apply or remove the temporary sanity-driven combat buffs."""
+        active = bool(active)
+        if self.frenzy == active:
+            return
+        self.frenzy = active
+        if active:
+            self.speed = self.base_speed * SANITY_FRENZY_SPEED_MULTIPLIER
+            self.damage = self.base_damage * SANITY_FRENZY_DAMAGE_MULTIPLIER
+            self.attack_cooldown_max = self.base_attack_cooldown_max * SANITY_FRENZY_COOLDOWN_MULTIPLIER
+            self.attack_cooldown = min(self.attack_cooldown, self.attack_cooldown_max)
+        else:
+            self.speed = self.base_speed
+            self.damage = self.base_damage
+            self.attack_cooldown_max = self.base_attack_cooldown_max
 
     def distance_to(self, px, py):
         dx = self.x - px
@@ -445,12 +465,13 @@ class Enemy:
                     new_y = self.y + math.sin(angle) * move_speed
                     self._try_move(game_map, new_x, new_y, angle, move_speed)
 
-            if dist > self.detect_range * 2:
+            if dist > self.detect_range * 2 and not self.frenzy:
                 self.state = EnemyState.IDLE
                 self.state_timer = 3.0
 
             # Check for retreat if low health
-            if self.health < self.max_health * 0.25 and self.type in ('aswang', 'sigbin'):
+            if (self.health < self.max_health * 0.25 and self.type in ('aswang', 'sigbin')
+                    and not self.frenzy):
                 self.state = EnemyState.RETREAT
                 self.state_timer = 3.0
         elif self.state == EnemyState.RECOVER:
@@ -672,6 +693,7 @@ class EnemyManager:
         self.enemies = []
         self.active_effects = []  # Salt/garlic zones
         self.last_attackers = []
+        self.frenzy_active = False
 
     def spawn_enemies(self, enemy_list):
         """Spawn enemies from map data."""
@@ -681,8 +703,24 @@ class EnemyManager:
             self.enemies.append(enemy)
 
     def update(self, dt, player_x, player_y, game_map, player=None):
-        """Update all enemies with noise sensing, flashlight reaction, and sanity drain."""
+        """Update enemies, enabling relentless pursuit when player sanity is low."""
+        if player is not None and hasattr(player, 'sanity'):
+            sanity = max(0.0, min(float(player.sanity), SANITY_MAX))
+            if self.frenzy_active:
+                self.frenzy_active = sanity < SANITY_FRENZY_RECOVERY
+            else:
+                self.frenzy_active = sanity < SANITY_FRENZY_THRESHOLD
+
         for enemy in self.enemies:
+            enemy.set_frenzy(self.frenzy_active)
+            if self.frenzy_active and enemy.alive:
+                if enemy.state != EnemyState.ATTACK:
+                    enemy.just_entered_chase = True
+                enemy.state = EnemyState.ATTACK
+                enemy.state_timer = 0.0
+                enemy._path = None
+                enemy._path_index = 0
+                enemy._repath_timer = 0.0
             enemy.update(dt, player_x, player_y, game_map)
             if not enemy.alive:
                 continue
