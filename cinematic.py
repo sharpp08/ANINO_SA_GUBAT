@@ -553,8 +553,10 @@ class Cinematic:
                 pass
             return True
         t = self.time
-        if getattr(audio_mgr, 'intro_score_active', False):
-            return False        # the recorded score carries all intro audio
+        # Always retain the procedural scene cues as a safety net. The supplied
+        # score can fail silently on some Windows mixer/device configurations;
+        # suppressing every cue merely because Sound.play() returned a channel
+        # made the entire cinematic silent in that case.
         if 0.5 <= t < 1.0 and 1 not in self.cues:
             self.cues.add(1); self._play('intro_wind', 0.6)
         elif 12.0 <= t < 12.5 and 2 not in self.cues:
