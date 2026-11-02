@@ -518,3 +518,7 @@ def save_settings(settings, path=SETTINGS_PATH):
             json.dump(settings, f, indent=2)
     except Exception:
         pass
+
+
+# Runtime settings cache; refreshed when the player applies settings.
+RUNTIME_SETTINGS = load_settings()
