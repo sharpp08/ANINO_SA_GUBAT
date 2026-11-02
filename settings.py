@@ -478,7 +478,6 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
-SAVE_DIR = os.path.join(BASE_PATH, 'saves')
 SETTINGS_PATH = os.path.join(BASE_PATH, 'settings.json')
 
 
