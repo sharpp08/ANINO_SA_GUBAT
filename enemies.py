@@ -6,6 +6,27 @@ import random
 from settings import *
 
 
+def _has_clear_line_of_sight(game_map, x0, y0, x1, y1):
+    """Return False when a wall, closed door, or tree trunk blocks the segment."""
+    if game_map is None:
+        return True
+
+    dx = x1 - x0
+    dy = y1 - y0
+    distance = math.hypot(dx, dy)
+    if distance <= 0.1:
+        return True
+
+    # Small samples also catch circular tree trunks, which a tile-only raycast
+    # would miss. Endpoints are excluded because the target itself is not cover.
+    steps = max(1, int(math.ceil(distance / 0.1)))
+    for step in range(1, steps):
+        fraction = step / steps
+        if game_map.is_solid(x0 + dx * fraction, y0 + dy * fraction):
+            return False
+    return True
+
+
 
 
 class EnemyState:
@@ -329,16 +350,19 @@ class Enemy:
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
         self.state = EnemyState.ATTACK
 
-    def can_attack(self, player_x, player_y):
-        """Check if enemy can attack the player."""
+    def can_attack(self, player_x, player_y, game_map=None):
+        """Check range and visibility before allowing a melee hit."""
         if not self.alive or self.bound or self.repelled:
             return False
         if self.attack_cooldown > 0:
             return False
-        if self.state not in (EnemyState.ATTACK,):
+        if self.state != EnemyState.ATTACK:
             return False
         dist = self.distance_to(player_x, player_y)
-        return dist <= self.attack_range
+        if dist > self.attack_range:
+            return False
+        return _has_clear_line_of_sight(
+            game_map, self.x, self.y, player_x, player_y)
 
     def perform_attack(self):
         """Perform attack and return damage."""
@@ -406,12 +430,13 @@ class Enemy:
 
         return False
 
-    def apply_garlic(self):
-        """React to garlic."""
+    def apply_garlic(self, damage=True):
+        """React to garlic; a zone can refresh repulsion without repeating damage."""
         if self.type in ('aswang', 'manananggal'):
             self.repelled = True
             self.repel_timer = 4.0
-            self.take_damage(10, 'sacred')
+            if damage:
+                self.take_damage(10, 'sacred')
             return True
         return False
 
@@ -452,8 +477,10 @@ class EnemyManager:
         self.last_attackers = []
 
     def spawn_enemies(self, enemy_list):
-        """Spawn enemies from map data."""
+        """Spawn enemies from map data and discard chapter-local combat effects."""
         self.enemies.clear()
+        self.active_effects.clear()
+        self.last_attackers.clear()
         for edata in enemy_list:
             enemy = Enemy(edata['type'], edata['x'], edata['y'])
             self.enemies.append(enemy)
@@ -531,30 +558,80 @@ class EnemyManager:
                         if effect['type'] == 'salt':
                             enemy.apply_salt()
                         elif effect['type'] == 'garlic':
-                            enemy.apply_garlic()
+                            affected = effect.setdefault('affected_enemies', set())
+                            first_hit = enemy not in affected
+                            if enemy.apply_garlic(damage=first_hit):
+                                affected.add(enemy)
         for i in reversed(expired):
             self.active_effects.pop(i)
 
-    def check_attacks(self, player_x, player_y):
-        """Check if any enemy attacks the player. Returns total damage."""
+    def check_attacks(self, player_x, player_y, game_map=None):
+        """Check for enemy melee attacks, respecting solid cover."""
         total_damage = 0
         self.last_attackers = []
         for enemy in self.enemies:
-            if enemy.can_attack(player_x, player_y):
+            if enemy.can_attack(player_x, player_y, game_map):
                 total_damage += enemy.perform_attack()
                 self.last_attackers.append(enemy)
         return total_damage
 
-    def apply_weapon_hit(self, player_x, player_y, player_angle, weapon_info):
-        """Apply weapon damage to enemies in range."""
+    def apply_weapon_hit(self, player_x, player_y, player_angle, weapon_info, game_map=None):
+        """Apply weapon damage with per-shot pellets, range checks, and cover."""
         hits = []
         w_type = weapon_info['type']
         w_range = weapon_info['range']
         w_damage = weapon_info['damage']
-        w_spread = weapon_info.get('spread', 0)
-        pellets = weapon_info.get('pellets', 1)
-        revolver_candidates = []
+        if w_range <= 0:
+            return hits
 
+        if w_type == 'shotgun':
+            # A shell has one fixed set of pellet directions. Each pellet can hit
+            # only the nearest visible enemy, so the same pellet is never counted
+            # again for every enemy behind the first target.
+            pellet_count = max(1, int(weapon_info.get('pellets', 1)))
+            w_spread = weapon_info.get('spread', 0)
+            pellet_spreads = [
+                random.uniform(-w_spread, w_spread)
+                for _ in range(pellet_count)
+            ]
+            pellet_hits = {}
+            for pellet_spread in pellet_spreads:
+                nearest_enemy = None
+                nearest_dist = float('inf')
+                for enemy in self.enemies:
+                    if not enemy.alive:
+                        continue
+                    dist = enemy.distance_to(player_x, player_y)
+                    if dist > w_range:
+                        continue
+                    angle_to_enemy = math.atan2(
+                        enemy.y - player_y, enemy.x - player_x)
+                    angle_diff = (
+                        angle_to_enemy - player_angle + math.pi
+                    ) % (2 * math.pi) - math.pi
+                    if abs(angle_diff + pellet_spread) >= 0.25:
+                        continue
+                    if not _has_clear_line_of_sight(
+                            game_map, player_x, player_y, enemy.x, enemy.y):
+                        continue
+                    if dist < nearest_dist:
+                        nearest_enemy = enemy
+                        nearest_dist = dist
+                if nearest_enemy is not None:
+                    pellet_hits[nearest_enemy] = pellet_hits.get(nearest_enemy, 0) + 1
+
+            for enemy, hit_pellets in pellet_hits.items():
+                dist = enemy.distance_to(player_x, player_y)
+                falloff = max(0.3, 1.0 - dist / w_range)
+                total_damage = w_damage * hit_pellets / pellet_count * falloff
+                enemy.take_damage(total_damage, 'physical')
+                hits.append(enemy)
+            return hits
+
+        if w_type not in ('bolo', 'revolver'):
+            return hits
+
+        revolver_candidates = []
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
@@ -563,35 +640,20 @@ class EnemyManager:
                 continue
 
             angle_to_enemy = math.atan2(enemy.y - player_y, enemy.x - player_x)
-            angle_diff = angle_to_enemy - player_angle
-            while angle_diff > math.pi:
-                angle_diff -= 2 * math.pi
-            while angle_diff < -math.pi:
-                angle_diff += 2 * math.pi
+            angle_diff = (
+                angle_to_enemy - player_angle + math.pi
+            ) % (2 * math.pi) - math.pi
+            if not _has_clear_line_of_sight(
+                    game_map, player_x, player_y, enemy.x, enemy.y):
+                continue
 
             if w_type == 'bolo':
-                if abs(angle_diff) < 0.5 and dist <= w_range:
+                if abs(angle_diff) < 0.5:
                     enemy.take_damage(w_damage, 'physical')
                     hits.append(enemy)
-            elif w_type == 'shotgun':
-                if abs(angle_diff) < 0.3:
-                    # Each pellet has a chance to hit based on spread and distance
-                    hit_pellets = 0
-                    for _ in range(pellets):
-                        pellet_spread = random.uniform(-w_spread, w_spread)
-                        if abs(angle_diff + pellet_spread) < 0.25:
-                            hit_pellets += 1
-                    if hit_pellets > 0:
-                        # Damage falloff with distance
-                        falloff = max(0.3, 1.0 - dist / w_range)
-                        total_dmg = w_damage * hit_pellets / pellets * falloff
-                        enemy.take_damage(total_dmg, 'physical')
-                        hits.append(enemy)
             elif w_type == 'revolver':
-                # Revolver is a single-target hitscan: use the enemy's apparent
-                # angular size instead of a fixed cone, then damage only the
-                # closest valid target. This keeps distant shots precise while
-                # making close-range hits register consistently.
+                # Keep the recent apparent-angular-size hitbox: close targets
+                # subtend a wider angle, while distant targets require precision.
                 target_angle = math.atan2(max(0.12, enemy.size), max(0.1, dist))
                 if abs(angle_diff) <= target_angle:
                     revolver_candidates.append((dist, enemy))
@@ -638,10 +700,11 @@ class EnemyManager:
         })
 
     def add_garlic_zone(self, x, y):
-        """Create a garlic zone."""
+        """Create a garlic zone that damages each affected enemy only once."""
         self.active_effects.append({
             'type': 'garlic', 'x': x, 'y': y,
             'radius': 2.5, 'timer': 6.0,
+            'affected_enemies': set(),
         })
 
     def get_alive_enemies(self):
