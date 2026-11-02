@@ -648,8 +648,11 @@ class Game:
             pass
         _settings_mod.ENABLE_FOG = bool(values.get("enable_fog", True))
         _settings_mod.ENABLE_PARTICLES = bool(values.get("enable_particles", True))
+        import renderer as renderer_module
+        renderer_module.ENABLE_PARTICLES = _settings_mod.ENABLE_PARTICLES
         _settings_mod.ENABLE_SANITY = bool(values.get("enable_sanity", True))
         _settings_mod.ENABLE_CAMERA_SHAKE = bool(values.get("enable_camera_shake", True)) and not bool(values.get("reduce_camera_shake", False))
+        renderer_module.ENABLE_CAMERA_SHAKE = _settings_mod.ENABLE_CAMERA_SHAKE
         _settings_mod.TERRAIN_BRIGHTNESS = float(values.get("brightness", 1.0))
         try:
             self.renderer.fov_rad = math.radians(float(values.get("fov", 75)))
@@ -1246,7 +1249,8 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
+                draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
                                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
@@ -1267,7 +1271,8 @@ class Game:
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
-            draw_top_hud(self.internal, self.player, self.game_map,
+            if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
+                draw_top_hud(self.internal, self.player, self.game_map,
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
                             self.font_micro, pygame.time.get_ticks())
