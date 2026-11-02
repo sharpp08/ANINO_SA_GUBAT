@@ -500,6 +500,7 @@ class Game:
         self.effects = []
         self.level_enemy_total = len(self.enemy_manager.enemies)
         self.renderer.level_enemy_total = self.level_enemy_total
+        self.renderer.weather.storm.reset()      # a fresh night: no leftover flash or thunder in flight
         # Spawn report: shows in the console if enemies/pickups spawn in bad places
         print(f"[CHAPTER {chapter_num}] enemies={self.level_enemy_total} "
               f"pickups={len(getattr(self.game_map, 'pickups', []))} "
@@ -989,6 +990,8 @@ class Game:
         if self.state == STATE_PLAYING:
             sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
+            # Rain, lightning and thunder only advance while actually playing (not while paused).
+            self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)

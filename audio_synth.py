@@ -348,6 +348,54 @@ class SoundManager:
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver reload sound: {exc}')
 
+        self._load_thunder()
+
+    # ── recorded thunder ─────────────────────────────────────────────────────
+    def _load_thunder(self):
+        """Load assets/audio/thunder_near_*.mp3 (sharp, close claps) and thunder_far_*.mp3
+        (muffled distant rumbles).  Missing files just mean no thunder."""
+        import glob
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        self._thunder = {'near': [], 'far': []}
+        self._thunder_last = {}
+        for kind in ('near', 'far'):
+            for path in sorted(glob.glob(os.path.join(base, f'thunder_{kind}_*.mp3'))):
+                try:
+                    self._thunder[kind].append(pygame.mixer.Sound(path))
+                except Exception as exc:
+                    print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
+        total = len(self._thunder['near']) + len(self._thunder['far'])
+        if total:
+            print(f'[Audio] Loaded {total} thunder clips.')
+
+    def play_thunder(self, kind='near', volume=1.0, pan=0.0):
+        """Play one recorded thunder clap.  kind: 'near' (sharp crack), 'mid', 'far' (dull rumble)."""
+        pools = getattr(self, '_thunder', None) or {}
+        near, far = pools.get('near') or [], pools.get('far') or []
+        gain = 1.0
+        if kind == 'far':
+            pool = far or near
+            if not far:
+                gain = 0.5                                  # no muffled clips: just quieter
+        elif kind == 'mid':
+            if far and (not near or random.random() < 0.4):
+                pool = far
+            else:
+                pool, gain = near, 0.8
+        else:
+            pool = near or far
+        if not pool:
+            return None
+        last = self._thunder_last.get(kind)
+        snd = random.choice([s for s in pool if s is not last] or pool)   # no clap twice in a row
+        self._thunder_last[kind] = snd
+        try:
+            import settings as _settings
+            gain *= float(getattr(_settings, 'THUNDER_VOLUME', 1.0))
+        except Exception:
+            pass
+        return self.play_object(snd, volume * gain, pan, headroom=1.0)
+
     # ── low level helpers (kept for backwards compatibility) ─────────────────
     def _generate_sound(self, samples):
         stereo = _stereo(samples)

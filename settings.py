@@ -211,6 +211,13 @@ TERRAIN_TEX_SIZE = 512     # seamless per-biome texture size; 256 saves memory o
 TERRAIN_BRIGHTNESS = 1.0   # global multiplier for the new ground
 TERRAIN_FAR_DIST = 12.0    # beyond this many tiles the softened texture is used (anti-shimmer)
 
+# Storm weather (weather_fx.py): layered rain, ground splashes, lightning and thunder.
+ENABLE_RAIN = True
+ENABLE_LIGHTNING = True          # lightning flashes + bolts + thunder
+RAIN_DENSITY = 1.0               # multiplier on the number of drops (0.5 = light rain); 'low' tier uses 60%
+LIGHTNING_FLASH_STRENGTH = 1.0   # screen-flash brightness; 0 turns the flash off (thunder still plays)
+THUNDER_VOLUME = 1.0             # multiplier on the thunder claps
+
 
 UNDERGROWTH_DENSITY = 1300
 EDGE_RING_TREES = 420      # dense natural tree-line around all four edges

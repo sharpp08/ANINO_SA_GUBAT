@@ -103,6 +103,7 @@ ANINO_SA_GUBAT/
 ├── page_arrow.py        # Compass arrow HUD pointing at the next Bible page or the exit
 ├── raycast_fast.py      # Vectorised DDA raycaster and sprite depth-test (pure NumPy)
 ├── floor_fast.py        # Vectorised perspective floor fill with biome terrain (pure NumPy)
+├── weather_fx.py        # Storm weather: layered rain, ground splashes, lightning bolt/flash and thunder timing
 ├── cinematic.py         # Intro cinematic
 ├── settings.py          # All game constants, colors, controls, settings load/save
 ├── requirements.txt     # Python dependencies
@@ -354,6 +355,17 @@ The game features a comprehensive wind system that brings the forest to life:
 
 Sprite distance shading only changes colour, never transparency, so sprites no longer appear see-through or surrounded by dark boxes.
 
+### Storm Weather (`weather_fx.py`)
+
+The night is a thunderstorm that eases off as sunrise approaches:
+
+- **Rain:** about 220 streaks in three depth layers (fine and slow in the distance, long and fast up close). Each streak is a fading comet drawn along its direction of travel, the wind gusts lean the whole shower, and the rain slides across the screen as you turn or look up and down. Cold mist hangs along the horizon, and small ripples with a few droplets splash on the ground (hidden when a wall is in front of them). Rain is drawn before the weapon and hands so they stay crisp; during a flash it brightens.
+- **Lightning:** a strike is *near* (bright flash, forked bolt, screen shake), *mid* (dimmer, smaller bolt) or *far* (only a glow in the clouds). The bolt sits in the sky behind the terrain and trees, and the flash washes over the whole frame including the hands. Each strike has at most three flashes, never closer than 0.14 s apart, so nothing strobes.
+- **Thunder:** light arrives first. The thunder follows after a delay that matches the strike's distance (about 0.2 s for near strikes up to 7 s for far ones), pans toward where the bolt was, and near strikes shake the screen. `assets/audio/thunder_near_*.mp3` are sharp claps; `thunder_far_*.mp3` are muffled rumbles. They were cut from one thunder recording.
+- **Dawn:** thunder stops at about 80% sunrise and the rain keeps thinning until the sun is up.
+- **Tuning (`settings.py`):** `ENABLE_RAIN`, `ENABLE_LIGHTNING`, `RAIN_DENSITY`, `LIGHTNING_FLASH_STRENGTH` (0 turns the screen flash off but keeps the thunder) and `THUNDER_VOLUME`. The `low` quality tier uses 60% of the drops.
+- Rain and lightning advance only while playing, so a paused frame stays frozen. The logic is unit-tested without a display: `python tests/test_weather_fx.py`.
+
 ---
 
 ## Save System
@@ -466,6 +478,7 @@ Custom enemy sprites go in `assets/sprites/enemies/` as 64×64 or larger PNGs wi
 
 All other assets (wall/floor textures, weapons, pickups, trees, undergrowth) remain procedurally generated:
 
+- `assets/audio/thunder_near_*.mp3`, `thunder_far_*.mp3` — recorded thunder claps used by the storm (see Storm Weather)
 - `assets/textures/` — wall and floor textures (generated per session)
 - `assets/sprites/` — weapons and pickups (generated per session)
 - `assets/cache/` — cached world ground texture (`world_ground.npy`)

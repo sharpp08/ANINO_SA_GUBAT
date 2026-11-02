@@ -31,6 +31,7 @@ from settings import *
 import settings as _settings_mod   # live module: ACTIVE_QUALITY is reassigned when the tier changes
 from floor_fast import fill_floor, fill_floor_terrain
 from raycast_fast import cast_rays, visible_runs
+from weather_fx import WeatherFX
 from enemies import DEATH_ANIM_TIME
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
@@ -251,18 +252,15 @@ class Renderer:
         self.wind_strength = 0.3
         self.wind_gust_timer = 0.0
 
-        # Lightweight screen-space rain: fixed particle pool, no per-frame allocation.
-        self.rain_drops = []
-        rain_rng = random.Random(20261102)
-        for _ in range(150):
-            self.rain_drops.append([
-                rain_rng.uniform(0, self.w),
-                rain_rng.uniform(-self.h, self.h),
-                rain_rng.uniform(260.0, 430.0),
-                rain_rng.uniform(8.0, 15.0),
-                rain_rng.uniform(0.22, 0.55),
-            ])
-        self.rain_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        # Storm weather (weather_fx.py): three-layer rain with wind slant, ground splashes, mist,
+        # lightning (flash + bolt + cloud glow) and the thunder that follows it.
+        _low = getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low'
+        self.weather = WeatherFX(
+            self.w, self.h, math.radians(FOV),
+            rain=getattr(_settings_mod, 'ENABLE_RAIN', True),
+            lightning=getattr(_settings_mod, 'ENABLE_LIGHTNING', True),
+            rain_density=getattr(_settings_mod, 'RAIN_DENSITY', 1.0) * (0.6 if _low else 1.0),
+            flash_strength=getattr(_settings_mod, 'LIGHTNING_FLASH_STRENGTH', 1.0))
         self.sunrise_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
 
         # Precompute ray angles
@@ -738,6 +736,9 @@ class Renderer:
                     self.surface.blit(self._sky_fx_cache[('aurora', a_idx)],
                                       (aurora_x, max(5, horizon_y - 50 + a_idx * 10)))
 
+        # Lightning glow + bolt sit in the sky, so terrain and trees drawn next cut across them.
+        self.weather.draw_sky(self.surface, player.angle, horizon_y)
+
         # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
         floor_h = self.h - horizon_y
         if floor_h > 0 and hasattr(self, '_ground_arr'):
@@ -846,10 +847,13 @@ class Renderer:
             self.muzzle_flash -= dt * 8
 
         # Rain and sunrise are composited before the viewmodel so weapon/hands stay crisp.
-        self._draw_rain_and_sunrise(dt, sunrise_progress)
+        self._draw_rain_and_sunrise(dt, sunrise_progress, horizon_y)
 
         # Draw player viewmodel (hands, sleeves, weapon)
         self._draw_player_viewmodel(player, dt)
+
+        # Lightning lights up everything, hands and weapon included, so it goes on last.
+        self.weather.draw_flash(self.surface)
 
         # Draw crosshair
         if self.crosshair:
@@ -867,26 +871,28 @@ class Renderer:
                 self.surface.scroll(random.randint(-s, s), random.randint(-s, s))
             self.screen_shake = max(0.0, self.screen_shake - dt * 20)
 
-    def _draw_rain_and_sunrise(self, dt, sunrise_progress):
-        """Draw cinematic rain and a gradual warm dawn, using a bounded particle pool."""
+    def update_weather(self, player, dt, sunrise_progress):
+        """Advance rain and lightning one played frame (the game loop skips this while paused)
+        and play any thunder that has just arrived."""
+        events = self.weather.update(dt, sunrise_progress, player.angle, player.pitch,
+                                     self.wind_strength)
+        for ev in events:
+            try:
+                from audio_synth import audio_mgr
+                audio_mgr.play_thunder(ev['kind'], ev['volume'], ev['pan'])
+            except Exception:
+                pass
+            if ev['shake'] > 0:
+                self.trigger_screen_shake(ev['shake'])
+
+    def _draw_rain_and_sunrise(self, dt, sunrise_progress, horizon_y=None):
+        """Draw the storm's rain and a gradual warm dawn."""
         progress = max(0.0, min(1.0, sunrise_progress))
-        rain = self.rain_surf
-        rain.fill((0, 0, 0, 0))
-        # Rain eases out as daylight arrives; drops are drawn as short diagonal streaks.
-        rain_strength = 1.0 - max(0.0, min(1.0, (progress - 0.45) / 0.55))
-        if rain_strength > 0.01:
-            for drop in self.rain_drops:
-                drop[0] -= drop[4] * 95.0 * dt
-                drop[1] += drop[2] * dt
-                if drop[1] > self.h + 18 or drop[0] < -18:
-                    drop[0] = random.uniform(0, self.w + 40)
-                    drop[1] = random.uniform(-self.h * 0.35, -8)
-                alpha = int(105 * drop[4] * rain_strength)
-                x, y = int(drop[0]), int(drop[1])
-                pygame.draw.line(rain, (166, 194, 218, alpha),
-                                 (x, y), (x - int(drop[3] * 0.42), y + int(drop[3])),
-                                 1)
-            self.surface.blit(rain, (0, 0))
+        if horizon_y is None:
+            horizon_y = self.h // 2
+        # Rain (with mist and ground splashes) eases out as daylight arrives.  A splash is
+        # hidden when a wall is closer than the ground point it lands on.
+        self.weather.draw_rain(self.surface, horizon_y, self._col_visible)
         # Slow, cinematic exposure shift: cold blue night -> warm golden dawn.
         if progress > 0.0:
             dawn_alpha = int(185 * (progress ** 1.35))
