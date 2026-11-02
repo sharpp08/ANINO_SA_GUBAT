@@ -1249,12 +1249,13 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
+            panel_bottom = 20
             if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
                 draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
-            panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
-                                        self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_micro, pygame.time.get_ticks())
+                panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
+                                            self.font_micro, self.page_arrow, pygame.time.get_ticks())
+                self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                                self.font_micro, pygame.time.get_ticks())
 
             # Notification: centred just under the top panel (the top-left corner is the debug text)
             if self.notif_t > 0:
@@ -1270,12 +1271,12 @@ class Game:
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             if _settings_mod.RUNTIME_SETTINGS.get('hud_visible', True):
+                draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
                 draw_top_hud(self.internal, self.player, self.game_map,
-                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_micro, pygame.time.get_ticks())
+                             self.font_micro, self.page_arrow, pygame.time.get_ticks())
+                self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+                                self.font_micro, pygame.time.get_ticks())
             draw_paused(self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:
