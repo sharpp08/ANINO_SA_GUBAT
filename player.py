@@ -246,8 +246,10 @@ class Player:
         # Noise decay
         self.noise_level = max(0.0, self.noise_level - dt * 3.0)
 
-        # Sanity mechanics: drain in dark or low battery, restore in light
-        if not self.flashlight_on or self.flashlight_battery < 15:
+        # Sanity can be disabled from Gameplay settings.
+        if not getattr(_cfg, 'RUNTIME_SETTINGS', {}).get('enable_sanity', True):
+            self.sanity = SANITY_MAX
+        elif not self.flashlight_on or self.flashlight_battery < 15:
             self.sanity = max(0.0, self.sanity - SANITY_DRAIN_DARK * dt)
         else:
             self.sanity = min(SANITY_MAX, self.sanity + SANITY_REGEN_LIGHT * dt * 0.5)
