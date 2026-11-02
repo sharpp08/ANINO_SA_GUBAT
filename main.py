@@ -6,7 +6,6 @@ import os
 import sys
 import math
 import random
-import json
 import pygame
 
 import settings as _settings_mod
@@ -278,10 +277,8 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
     pygame.draw.rect(panel, (82, 66, 45, 190), (0, 0, panel_w, panel_h), 1)
     surf.blit(panel, (panel_x, panel_y))
 
-    has_save = os.path.exists(os.path.join(SAVE_DIR, "save_0.json"))
     menu_rows = [
         ("ENTER", "BEGIN YOUR NIGHT", True),
-        ("L", "CONTINUE JOURNEY" if has_save else "NO SAVE FOUND", has_save),
         ("F11", "TOGGLE FULLSCREEN", True),
         ("ESC", "LEAVE THE FOREST", True),
     ]
@@ -311,7 +308,7 @@ def draw_paused(surf, font_lg, font_sm):
     sw, sh = surf.get_size()
     t = font_lg.render("PAUSED", True, WHITE)
     surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 80))
-    for i, line in enumerate(["ESC  -  Resume", "S  -  Save", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
+    for i, line in enumerate(["ESC  -  Resume", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
         lt = font_sm.render(line, True, (200, 200, 200))
         surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 - 20 + i * 32))
 
@@ -390,31 +387,7 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     return y0 + panel_h
 
 
-# ─── Save / Load ─────────────────────────────────────────────────────────────
-def save_game(player, chapter, slot=0):
-    os.makedirs(SAVE_DIR, exist_ok=True)
-    path = os.path.join(SAVE_DIR, f"save_{slot}.json")
-    data = {'chapter': chapter, 'player': player.get_state()}
-    try:
-        with open(path, 'w') as f:
-            json.dump(data, f, indent=2)
-        return True
-    except Exception:
-        return False
-
-
-def load_game(slot=0):
-    path = os.path.join(SAVE_DIR, f"save_{slot}.json")
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-# ─── Startup Loading Animation ───────────────────────────────────────────────
+save/load functions# ─── Startup Loading Animation ───────────────────────────────────────────────
 def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
     """Render a brief animated ritual-style loading scene."""
     sw, sh = screen.get_size()
@@ -755,19 +728,7 @@ class Game:
         self.cinematic.reset()
         safe_set_relative_mouse(False)
 
-    def load_saved_game(self):
-        data = load_game()
-        if data is None:
-            self.notify("No save file found!")
-            return
-        chapter = data.get('chapter', 1)
-        self.load_chapter(chapter)
-        self.player.load_state(data.get('player', {}))
-        self.state = STATE_PLAYING
-        safe_set_relative_mouse(True)
-        self.notify("Game loaded.")
-
-    def notify(self, text, duration=2.5):
+load_saved_game method    def notify(self, text, duration=2.5):
         self.notif   = text
         self.notif_t = duration
 
@@ -966,7 +927,7 @@ class Game:
             dy = cp['y'] - p.y
             if math.sqrt(dx*dx + dy*dy) < 1.5:
                 p.set_checkpoint(cp['x'], cp['y'])
-                self.notify("Checkpoint saved!")
+                self.notify("Checkpoint reached!")
                 break
 
     def _spawn_survival_enemy(self):
@@ -1319,8 +1280,6 @@ class Game:
                             self.intro_to_menu = True
                             self.cinematic.reset()
                             safe_set_relative_mouse(False)
-                        elif event.key == pygame.K_l:
-                            self.load_saved_game()
                         elif event.key == pygame.K_ESCAPE:
                             running = False
                         elif event.key == pygame.K_F11:
@@ -1339,11 +1298,6 @@ class Game:
                             safe_set_relative_mouse(True)
                         elif event.key == pygame.K_F11:
                             self.toggle_fullscreen()
-                        elif event.key == pygame.K_s:
-                            ok = save_game(self.player, self.chapter)
-                            self.notify("Saved!" if ok else "Save failed.")
-                            self.state = STATE_PLAYING
-                            safe_set_relative_mouse(True)
                         elif event.key == pygame.K_m:
                             self.state = STATE_MENU
                             safe_set_relative_mouse(False)
