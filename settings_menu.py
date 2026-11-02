@@ -45,7 +45,11 @@ class SettingsMenu:
                 ("Crouch", "crouch", "bind", None), ("Flashlight", "flashlight", "bind", None),
                 ("Reload", "reload", "bind", None), ("Use Salt", "salt", "bind", None),
                 ("Use Garlic", "garlic", "bind", None), ("Use Rosary", "rosary", "bind", None),
-                ("Use Cross", "cross", "bind", None), ("Mouse Sensitivity", "mouse_sensitivity", "slider", (10, 100)),
+                ("Use Cross", "cross", "bind", None), ("Ward Menu", "ward_menu", "bind", None),
+                ("Ward Slot 1", "ward_1", "bind", None), ("Ward Slot 2", "ward_2", "bind", None),
+                ("Ward Slot 3", "ward_3", "bind", None), ("Ward Slot 4", "ward_4", "bind", None),
+                ("Ward Slot 5", "ward_5", "bind", None), ("Pause", "pause", "bind", None),
+                ("Mouse Sensitivity", "mouse_sensitivity", "slider", (10, 100)),
                 ("Invert Mouse Y", "invert_mouse_y", "toggle", None), ("Reset Controls", "reset_controls", "action", None),
             ],
             "GAMEPLAY": [
@@ -68,7 +72,7 @@ class SettingsMenu:
     def _value(self, key, kind):
         if key in ("forward", "backward", "strafe_left", "strafe_right", "interact",
                    "sprint", "crouch", "flashlight", "reload", "salt", "garlic",
-                   "rosary", "cross", "ward_menu", "ward_1", "ward_2", "ward_3", "ward_4", "ward_5"):
+                   "rosary", "cross", "ward_menu", "ward_1", "ward_2", "ward_3", "ward_4", "ward_5", "pause"):
             return self.values.get("controls", cfg.CONTROLS).get(key, cfg.CONTROLS.get(key, ""))
         value = self.values.get(key)
         if value is None:
