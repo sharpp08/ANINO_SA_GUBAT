@@ -747,9 +747,6 @@ class Game:
             elif k == pygame.K_F3:
                 # F3 cycles the debug text: compact -> full -> off
                 self.renderer.debug_mode = (self.renderer.debug_mode + 1) % 3
-            elif k == pygame.K_F4:
-                self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
-                self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
             elif k == pygame.K_m:
                 self.notify("Radar: ON" if self.radar.toggle() else "Radar: OFF")
             elif k == pygame.K_F6:
@@ -766,11 +763,6 @@ class Game:
                             p.angle = math.atan2(e.y - ny, e.x - nx)
                             self.notify(f"DEBUG: teleported near {e.type}")
                             break
-            elif k == pygame.K_F7:
-                # DEBUG: defeat every enemy to test chapter progression
-                for e in self.enemy_manager.enemies:
-                    e.take_damage(99999)
-                self.notify("DEBUG: all enemies defeated")
             elif k == pygame.K_r:
                 # Play reload recordings only when the corresponding reload can start.
                 can_reload_shotgun = (
