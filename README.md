@@ -202,6 +202,8 @@ If performance is poor, try the low preset first and compare stable frame rate a
 
 The game combines procedural ambience and creature sounds with optional recorded sound assets in `assets/audio/`. When supported custom recordings are missing or cannot be loaded, procedural sounds provide a fallback. The audio engine uses the Pygame mixer and NumPy-generated sound.
 
+For the Frenzy Mode background layer, place the supplied track at `assets/audio/frenzy_mode_ambience.mp3`. It loops on a dedicated mixer channel at 10% volume with fade-in/fade-out, and only plays while Frenzy is active during gameplay. If the file is absent or cannot be loaded, the game continues silently without interrupting other audio.
+
 ## Save data and configuration
 
 - Save data is stored as JSON under `saves/`.
