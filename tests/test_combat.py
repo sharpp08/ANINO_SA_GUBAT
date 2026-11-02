@@ -6,9 +6,13 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import unittest
 from unittest.mock import patch
 
-from settings import EMPTY, REVOLVER_COOLDOWN, SHOTGUN_RELOAD_TIME
+from settings import (
+    EMPTY, REVOLVER_COOLDOWN, REVOLVER_RELOAD_TIME,
+    SHOTGUN_COOLDOWN, SHOTGUN_RELOAD_TIME,
+)
 from player import Player
 from enemies import Enemy, EnemyManager, EnemyState
+from renderer import Renderer
 
 
 class FakeMap:
@@ -47,6 +51,8 @@ class CombatRegressionTests(unittest.TestCase):
         shot = {"type": "revolver", "damage": 30, "range": 15, "spread": 0}
 
         self.assertEqual(manager.apply_weapon_hit(0, 0, 0.05, shot), [])
+        self.assertEqual(distant.health, distant.max_health)
+        self.assertEqual(manager.apply_weapon_hit(0, 0, 0.0, shot), [distant])
         self.assertLess(distant.health, distant.max_health)
 
         close_manager = EnemyManager()
@@ -176,7 +182,7 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertFalse(player.reloading)
         self.assertEqual(player.ammo_shotgun, 4)
 
-    def test_reload_completion_transfers_only_available_reserve(self):
+    def test_shotgun_reload_completion_transfers_only_available_reserve(self):
         player = Player()
         player.current_weapon = 1
         player.shotgun_mag = 0
@@ -191,6 +197,42 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(player.ammo_shotgun, 0)
         self.assertFalse(player.reloading)
 
+    def test_revolver_reload_completion_transfers_reserve(self):
+        player = Player()
+        player.current_weapon = 2
+        player.revolver_mag = 2
+        player.ammo_revolver = 5
+        self.assertTrue(player.start_reload())
+
+        player.update(
+            REVOLVER_RELOAD_TIME + 0.1, NoKeys(), 0, 0, FakeMap()
+        )
+
+        self.assertEqual(player.revolver_mag, 6)
+        self.assertEqual(player.ammo_revolver, 1)
+        self.assertFalse(player.reloading)
+
+    def test_reload_does_not_start_with_full_magazine_or_empty_reserve(self):
+        player = Player()
+        player.current_weapon = 1
+        self.assertFalse(player.start_reload())
+        player.shotgun_mag = 0
+        player.ammo_shotgun = 0
+        self.assertFalse(player.start_reload())
+        self.assertFalse(player.reloading)
+
+    def test_shotgun_firing_consumes_one_shell_and_obeys_cooldown(self):
+        player = Player()
+        player.current_weapon = 1
+        player.shotgun_mag = 2
+
+        shot = player.fire_weapon()
+        self.assertEqual(shot["type"], "shotgun")
+        self.assertEqual(player.shotgun_mag, 1)
+        self.assertEqual(player.weapon_cooldown, SHOTGUN_COOLDOWN)
+        self.assertIsNone(player.fire_weapon())
+        self.assertEqual(player.shotgun_mag, 1)
+
     def test_revolver_firing_consumes_one_round_and_obeys_cooldown(self):
         player = Player()
         player.current_weapon = 2
@@ -202,6 +244,17 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(player.weapon_cooldown, REVOLVER_COOLDOWN)
         self.assertIsNone(player.fire_weapon())
         self.assertEqual(player.revolver_mag, 5)
+
+    def test_shotgun_muzzle_flash_does_not_start_revolver_kick(self):
+        renderer = Renderer.__new__(Renderer)
+        renderer.muzzle_flash = 0.0
+        renderer.weapon_recoil = 0.0
+        renderer.revolver_fire_timer = 0.0
+
+        renderer.trigger_muzzle_flash()
+        self.assertEqual(renderer.revolver_fire_timer, 0.0)
+        renderer.trigger_revolver_fire()
+        self.assertEqual(renderer.revolver_fire_timer, 0.16)
 
     def test_enemy_health_stops_at_zero_and_death_is_one_way(self):
         enemy = Enemy("aswang", 3.0, 3.0)
