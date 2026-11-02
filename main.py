@@ -183,20 +183,126 @@ def draw_hud(surf, player, font_sm, font_tiny):
 
 # ─── Menu screens ─────────────────────────────────────────────────────────────
 def draw_menu(surf, font_lg, font_sm, font_tiny):
-    surf.fill((5, 5, 15))
+    """Draw an atmospheric, animated title screen inspired by a haunted Philippine forest."""
     sw, sh = surf.get_size()
-    title = font_lg.render("ANINO SA GUBAT", True, SACRED_GOLD)
-    sub   = font_sm.render("Mga Bulong ng Dilim", True, (200, 180, 130))
-    surf.blit(title, (sw // 2 - title.get_width() // 2, sh // 4))
-    surf.blit(sub,   (sw // 2 - sub.get_width() // 2,   sh // 4 + 48))
+    t = pygame.time.get_ticks() / 1000.0
+    surf.fill((4, 7, 11))
 
-    options = ["ENTER  -  New Game", "L  -  Load Game", "F11  -  Toggle Fullscreen", "ESC  -  Quit"]
-    for i, opt in enumerate(options):
-        t = font_sm.render(opt, True, WHITE)
-        surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 + i * 36))
+    # Distant moon and layered forest silhouettes.
+    moon_x, moon_y = int(sw * .79), int(sh * .25)
+    moon_r = max(15, int(min(sw, sh) * .105))
+    pygame.draw.circle(surf, (38, 43, 43), (moon_x, moon_y), moon_r + 9)
+    pygame.draw.circle(surf, (125, 119, 91), (moon_x, moon_y), moon_r)
+    pygame.draw.circle(surf, (92, 91, 76), (moon_x - moon_r // 3, moon_y - moon_r // 4), max(2, moon_r // 7))
+    pygame.draw.circle(surf, (102, 98, 80), (moon_x + moon_r // 3, moon_y + moon_r // 3), max(2, moon_r // 9))
 
-    tip = font_tiny.render("A survival horror game set in Philippine mythology", True, GRAY)
-    surf.blit(tip, (sw // 2 - tip.get_width() // 2, sh - 30))
+    pygame.draw.polygon(surf, (11, 19, 20), [
+        (0, int(sh * .48)), (int(sw * .16), int(sh * .34)),
+        (int(sw * .31), int(sh * .49)), (int(sw * .48), int(sh * .37)),
+        (int(sw * .66), int(sh * .50)), (int(sw * .83), int(sh * .36)),
+        (sw, int(sh * .48)), (sw, sh), (0, sh)])
+    pygame.draw.polygon(surf, (7, 13, 15), [
+        (0, int(sh * .62)), (int(sw * .18), int(sh * .46)),
+        (int(sw * .35), int(sh * .63)), (int(sw * .55), int(sh * .47)),
+        (int(sw * .73), int(sh * .64)), (int(sw * .9), int(sh * .48)),
+        (sw, int(sh * .61)), (sw, sh), (0, sh)])
+
+    # A ruined wooden shrine gate sits in the moonlit clearing.
+    gx, gy = int(sw * .77), int(sh * .60)
+    gate_w, gate_h = int(sw * .22), int(sh * .34)
+    post_w = max(4, gate_w // 18)
+    pygame.draw.rect(surf, (28, 27, 24), (gx - gate_w // 2, gy - gate_h, post_w, gate_h))
+    pygame.draw.rect(surf, (28, 27, 24), (gx + gate_w // 2 - post_w, gy - gate_h, post_w, gate_h))
+    pygame.draw.rect(surf, (43, 35, 28), (gx - gate_w // 2 - 9, gy - gate_h, gate_w + 18, max(5, sh // 45)))
+    pygame.draw.rect(surf, (35, 29, 25), (gx - gate_w // 2 - 15, gy - gate_h + 7, gate_w + 30, max(4, sh // 65)))
+    pygame.draw.line(surf, (53, 39, 29), (gx - gate_w // 2, gy - gate_h // 2),
+                     (gx + gate_w // 2, gy - gate_h // 2), 2)
+
+    # Twisted balete-like trees frame both sides of the screen.
+    for side, base_x in ((-1, int(sw * .035)), (1, int(sw * .965))):
+        trunk_w = max(12, int(sw * .045))
+        lean = int(sw * .055) * side
+        pygame.draw.polygon(surf, (5, 9, 10), [
+            (base_x - trunk_w, sh), (base_x + trunk_w, sh),
+            (base_x + lean + trunk_w // 2, int(sh * .28)),
+            (base_x + lean - trunk_w // 2, int(sh * .24))])
+        for branch in range(4):
+            y = int(sh * (.34 + branch * .12))
+            end_x = base_x - side * int(sw * (.10 + branch * .015))
+            pygame.draw.line(surf, (6, 10, 11),
+                             (base_x + lean // 2, y + int(sh * .08)),
+                             (end_x, y - int(sh * .08)), max(2, sw // 180))
+            pygame.draw.line(surf, (6, 10, 11), (end_x, y - int(sh * .08)),
+                             (end_x - side * int(sw * .035), y - int(sh * .15)),
+                             max(2, sw // 220))
+
+    # Slow drifting mist.
+    fog = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    for i in range(4):
+        y = int(sh * (.56 + i * .085) + math.sin(t * .32 + i * 1.7) * sh * .018)
+        alpha = 18 + int(9 * (0.5 + 0.5 * math.sin(t * .45 + i)))
+        pygame.draw.ellipse(fog, (115, 126, 119, alpha),
+                            (int(sw * (-.12 + i * .08)), y, int(sw * 1.15), max(8, int(sh * .10))))
+    surf.blit(fog, (0, 0))
+
+    pygame.draw.polygon(surf, (3, 6, 7), [
+        (0, int(sh * .88)), (int(sw * .18), int(sh * .82)),
+        (int(sw * .36), int(sh * .91)), (int(sw * .58), int(sh * .84)),
+        (int(sw * .79), int(sh * .92)), (sw, int(sh * .84)), (sw, sh), (0, sh)])
+
+    # Left-side shadow veil keeps the title and controls readable.
+    veil = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    pygame.draw.rect(veil, (2, 5, 8, 185), (0, 0, int(sw * .57), sh))
+    surf.blit(veil, (0, 0))
+
+    margin = max(22, int(sw * .075))
+    eyebrow = font_tiny.render("A PHILIPPINE FOLK HORROR EXPERIENCE", True, (151, 126, 82))
+    surf.blit(eyebrow, (margin, int(sh * .16)))
+    title = font_lg.render("ANINO SA GUBAT", True, (218, 190, 125))
+    shadow = font_lg.render("ANINO SA GUBAT", True, (25, 18, 14))
+    title_y = int(sh * .23)
+    surf.blit(shadow, (margin + 2, title_y + 3))
+    surf.blit(title, (margin, title_y))
+    pygame.draw.line(surf, (126, 87, 48), (margin, title_y + title.get_height() + 8),
+                     (margin + int(sw * .37), title_y + title.get_height() + 8), 2)
+    subtitle = font_sm.render("Mga Bulong ng Dilim", True, (184, 166, 130))
+    surf.blit(subtitle, (margin, title_y + title.get_height() + 18))
+    whisper = font_tiny.render('"Huwag kang lilingon."', True, (126, 119, 104))
+    surf.blit(whisper, (margin, title_y + title.get_height() + 43))
+
+    # Keyboard menu panel, preserving the existing game controls.
+    panel_x, panel_y = margin, int(sh * .57)
+    panel_w, panel_h = min(int(sw * .43), 330), min(int(sh * .34), 124)
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    panel.fill((5, 8, 10, 205))
+    pygame.draw.rect(panel, (82, 66, 45, 190), (0, 0, panel_w, panel_h), 1)
+    surf.blit(panel, (panel_x, panel_y))
+
+    has_save = os.path.exists(os.path.join(SAVE_DIR, "save_0.json"))
+    menu_rows = [
+        ("ENTER", "BEGIN YOUR NIGHT", True),
+        ("L", "CONTINUE JOURNEY" if has_save else "NO SAVE FOUND", has_save),
+        ("I", "REPLAY THE PROLOGUE", True),
+        ("F11", "TOGGLE FULLSCREEN", True),
+        ("ESC", "LEAVE THE FOREST", True),
+    ]
+    row_h = max(19, min(25, (panel_h - 10) // len(menu_rows)))
+    for i, (key, label, enabled) in enumerate(menu_rows):
+        y = panel_y + 6 + i * row_h
+        key_img = font_tiny.render(key, True, (224, 190, 120) if enabled else (85, 83, 76))
+        label_img = font_tiny.render(label, True, (218, 214, 198) if enabled else (93, 91, 85))
+        key_w = max(38, key_img.get_width() + 12)
+        pygame.draw.rect(surf, (28, 24, 19) if enabled else (15, 16, 16),
+                         (panel_x + 8, y, key_w, row_h - 3), 1)
+        surf.blit(key_img, (panel_x + 8 + (key_w - key_img.get_width()) // 2, y + 2))
+        surf.blit(label_img, (panel_x + key_w + 18, y + 2))
+        if i == 0:
+            pulse = 0.5 + 0.5 * math.sin(t * 2.2)
+            marker_col = (int(130 + pulse * 75), int(83 + pulse * 35), 45)
+            pygame.draw.rect(surf, marker_col, (panel_x + 2, y + 2, 2, row_h - 7))
+
+    footer = font_tiny.render("THE TREES ARE LISTENING", True, (105, 105, 92))
+    surf.blit(footer, (margin, sh - footer.get_height() - 9))
 
 
 def draw_paused(surf, font_lg, font_sm):
