@@ -387,7 +387,7 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     return y0 + panel_h
 
 
-save/load functions# ─── Startup Loading Animation ───────────────────────────────────────────────
+# ─── Startup Loading Animation ───────────────────────────────────────────────
 def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
     """Render a brief animated ritual-style loading scene."""
     sw, sh = screen.get_size()
