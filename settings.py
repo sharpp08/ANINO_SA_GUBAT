@@ -346,7 +346,7 @@ SANITY_PURPLE = (140, 80, 200)
 
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
-AMBIENT_LIGHT_OFF = 0.255  # readable low-light visibility when the flashlight is off / dead
+AMBIENT_LIGHT_OFF = 0.20  # readable low-light visibility when the flashlight is off / dead
 # Tactical Flashlight Tuning Constants (Narrow, Focused, High-Intensity)
 FLASHLIGHT_BEAM_ANGLE = 12.0
 FLASHLIGHT_PENUMBRA_ANGLE = 3.0
@@ -368,7 +368,7 @@ FOG_NEAR = 8.0       # tiles: fog begins here (closer surfaces stay clear)
 FOG_FAR = 28.0       # tiles: fog reaches maximum opacity
 FOG_MAX_ALPHA = 90   # 0-255; 90 ≈ 35% (subtle, never blinds the player)
 AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
-AMBIENT_LIGHT_OFF = 0.255
+AMBIENT_LIGHT_OFF = 0.20
 ENEMY_EYE_GLOW = True
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
