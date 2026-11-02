@@ -147,50 +147,52 @@ def test_bolt_geometry():
 
 def test_rain_particles():
     fx = wf.WeatherFX(640, 360, FOV, seed=2)
-    assert len(fx._x) == 110 + 80 + 28
+    assert len(fx._wx) == wf.RAIN_DROPS
     light = wf.WeatherFX(640, 360, FOV, seed=2, rain_density=0.5)
-    assert len(light._x) < len(fx._x)
-    for _ in range(600):                                        # 10 s of rain
-        fx.update(DT, 0.0, yaw=0.0, pitch=0.0, wind=0.4)
-    assert np.isfinite(fx._x).all() and np.isfinite(fx._y).all()
-    # the sky is still evenly filled (nothing piled up or drained away)
-    inside = (fx._y > 0) & (fx._y < 360)
-    assert inside.mean() > 0.6
-    for lo in (0, 120, 240):
-        assert ((fx._y >= lo) & (fx._y < lo + 120)).sum() > 20
-    left = (fx._x < 320).sum()
-    assert 0.25 < left / len(fx._x) < 0.75
-    # three depth layers fall at clearly different speeds
-    by_layer = [fx._speed[fx._layer == i].mean() for i in range(3)]
-    assert by_layer[0] < by_layer[1] < by_layer[2]
-    # splashes appear, stay bounded and live briefly
-    fx.horizon_y = 180
+    assert len(light._wx) < len(fx._wx)
+    for _ in range(600):                                        # 10 s of rain, player walking
+        fx.update(DT, 0.0, yaw=0.0, pitch=0.0, wind=0.4, px=10.0 + _ * 0.02, py=5.0)
+    px, py = fx.pos
+    assert np.isfinite(fx._wx).all() and np.isfinite(fx._wz).all()
+    # the volume stays centred on the player and evenly filled (nothing piled up or drained away)
+    assert (np.abs(fx._wx - px) <= wf.RAIN_BOX + 1e-6).all()
+    assert (np.abs(fx._wy - py) <= wf.RAIN_BOX + 1e-6).all()
+    assert (fx._wz > -1e-6).all() and (fx._wz <= wf.RAIN_TOP + 1e-6).all()
+    for lo in (0.0, 1.7, 3.4):
+        assert ((fx._wz >= lo) & (fx._wz < lo + 1.7)).sum() > len(fx._wz) * 0.2
+    # drops fall at differing speeds, and splashes appear at world positions, bounded and brief
+    assert fx._vz.max() > fx._vz.min()
     for _ in range(300):
-        fx.update(DT, 0.0)
-        fx.horizon_y = 180
+        fx.update(DT, 0.0, yaw=0.0, px=px, py=py)
     assert 0 < len(fx.splashes) <= wf.MAX_SPLASHES
-    assert all(0.0 <= s[1] <= 1.0 and s[2] < s[3] for s in fx.splashes)
+    assert all(s[2] < s[3] for s in fx.splashes)
 
 
-def test_rain_slides_with_camera_turn():
+def test_rain_is_in_the_world():
+    """Turning slides the rain across the screen; walking makes it stream past the player."""
     fx = wf.WeatherFX(640, 360, FOV, seed=2)
-    fx.update(0.0, 0.0, yaw=0.0, pitch=0.0)
-    x0, y0 = fx._x.copy(), fx._y.copy()
-    fx.update(0.0, 0.0, yaw=0.05, pitch=0.02)
-    expected_x = -0.05 * 640 / FOV
-    assert abs(np.median(fx._x - x0) - expected_x) < 1.0
-    assert abs(np.median(fx._y - y0) - 0.02 * 360) < 1.0
-    # a teleport (new chapter) must not smear the rain across the screen
-    before = fx._x.copy()
-    fx.update(0.0, 0.0, yaw=2.5, pitch=0.0)
-    assert np.allclose(fx._x, before)
+    fx.update(0.0, 0.0, yaw=0.0, px=10.0, py=10.0)
+    sx0, _, _ = fx._project(fx._wx, fx._wy, fx._wz, 180)
+    fx.update(0.0, 0.0, yaw=0.05, px=10.0, py=10.0)
+    sx1, _, d = fx._project(fx._wx, fx._wy, fx._wz, 180)
+    ahead = (d > 1.0) & (np.abs(sx0 - 320) < 200)
+    assert abs(np.median((sx1 - sx0)[ahead]) - (-0.05 * 640 / FOV)) < 1.0
+    # a drop straight ahead of a walking player moves towards them (depth shrinks) while it
+    # falls; nearer drops cross the screen faster than distant ones (parallax)
+    fx.update(0.0, 0.0, yaw=0.0, px=10.0, py=10.0)
+    near = fx._project(np.array([11.0]), np.array([10.3]), np.array([1.0]), 180)
+    far = fx._project(np.array([18.0]), np.array([10.3]), np.array([1.0]), 180)
+    fx.pos = (10.5, 10.0)
+    near2 = fx._project(np.array([11.0]), np.array([10.3]), np.array([1.0]), 180)
+    far2 = fx._project(np.array([18.0]), np.array([10.3]), np.array([1.0]), 180)
+    assert abs(near2[0][0] - near[0][0]) > 4 * abs(far2[0][0] - far[0][0])
 
 
 def test_rain_fades_with_dawn():
     fx = wf.WeatherFX(640, 360, FOV, seed=2)
     fx.horizon_y = 180
     for _ in range(120):
-        fx.update(DT, 0.0)
+        fx.update(DT, 0.0, px=10.0, py=10.0)
     assert fx.splashes
     fx.update(DT, 1.0)
     assert fx.strength == 0.0 and fx.splashes == []

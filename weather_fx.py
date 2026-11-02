@@ -244,12 +244,18 @@ RAIN_LAYERS = (
     ('mid', 80, (8.0, 13.0), 1, (330.0, 430.0), 120),
     ('near', 28, (17.0, 27.0), 2, (540.0, 680.0), 140),
 )
+RAIN_DROPS = 4500                # drops in the 3D volume around the player (before density)
+RAIN_BOX = 9.0                   # half-size of that volume in tiles
+RAIN_TOP = 5.0                   # height of the volume in tiles
+RAIN_EYE = 0.5                   # camera height in tiles (a wall is 1 tile tall)
+RAIN_SPEED = (6.5, 8.5)          # fall speed in tiles per second
+RAIN_STREAK = 0.035              # seconds of motion drawn as the streak
 LEN_BINS = 3
 SLANT_BINS = 5
 SLANT0, SLANT_STEP = 0.08, 0.10      # streak slant (dx per dy) of bin i = SLANT0 + i * SLANT_STEP
 TIER_ALPHA = (1.0, 0.70, 0.45)       # sprite opacity as the rain eases off at dawn
 SPLASH_FRAMES = 4
-MAX_SPLASHES = 40
+MAX_SPLASHES = 60
 
 
 def _stroke(surf, pts, color, width):
@@ -283,7 +289,7 @@ class WeatherFX:
         self.horizon_y = self.h // 2
         self._last_yaw = None
         self._last_pitch = None
-        self.splashes = []                            # [x_px, floor_frac, age, life, size_bin]
+        self.splashes = []                            # [world x, world y, age, life]
         self._splash_acc = 0.0
         self._sprites = {}
         self._splash_sprites = {}
@@ -291,81 +297,97 @@ class WeatherFX:
         self._haze = None
         self._bolt = None
         self._bolt_serial = -1
+        self._splash_acc = 0.0
+        self._dt = 0.0
+        self._last_yaw_val = 0.0
+        self._overlay = None if pygame is None else pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         self._init_rain()
 
-    # ── rain particles ────────────────────────────────────────────────────────
+    # ── rain particles (real 3D drops in a volume that follows the player) ───
     def _init_rain(self):
         rng = self._np_rng
-        layers, lbins, speeds = [], [], []
-        for idx, (_name, count, _ln, _wd, (s0, s1), _a) in enumerate(RAIN_LAYERS):
-            n = max(1, int(round(count * self.density)))
-            layers.append(np.full(n, idx, dtype=np.int64))
-            lbins.append(rng.integers(0, LEN_BINS, n))
-            speeds.append(rng.uniform(s0, s1, n) * self.k)
-        layer = np.concatenate(layers)
-        lbin = np.concatenate(lbins)
-        speed = np.concatenate(speeds)
-        order = rng.permutation(len(layer))           # thinning the rain then thins every layer evenly
-        self._layer = layer[order]
-        self._lbin = lbin[order]
-        self._speed = speed[order]
-        n = len(self._layer)
-        self._x = rng.uniform(-30.0, self.w + 30.0, n)
-        self._y = rng.uniform(-30.0 * self.k, self.h + 30.0 * self.k, n)
+        n = max(1, int(round(RAIN_DROPS * self.density)))
+        self._wx = rng.uniform(-RAIN_BOX, RAIN_BOX, n)            # world x, y (tiles)
+        self._wy = rng.uniform(-RAIN_BOX, RAIN_BOX, n)
+        self._wz = rng.uniform(0.0, RAIN_TOP, n)                  # height above the ground (tiles)
+        self._vz = rng.uniform(*RAIN_SPEED, n)                    # fall speed (tiles / second)
+        self._pos_init = False
+        self.pos = (0.0, 0.0)                                     # last known player position
+        self.wind_dir = 0.9                                       # direction the wind blows (radians)
 
-    def _step_rain(self, dt, wind, shift_x, shift_y):
-        k = self.k
+    def _project(self, x, y, z, horizon_y):
+        """World points -> (screen x, screen y, depth) for the current camera."""
+        px, py = self.pos
+        dx, dy = x - px, y - py
+        ang = np.arctan2(dy, dx) - self._last_yaw_val
+        ang = (ang + math.pi) % (2.0 * math.pi) - math.pi
+        depth = np.maximum(np.hypot(dx, dy) * np.cos(ang), 0.05)
+        sx = (ang / self.fov_rad + 0.5) * self.w
+        sy = horizon_y + (RAIN_EYE - z) * (self.h / depth)
+        return sx, sy, depth
+
+    def _step_rain(self, dt, wind, px, py):
         target = 0.04 + 0.6 * max(0.0, min(1.0, wind))
         self.slant += (target - self.slant) * min(1.0, dt * 1.2)
-        x, y = self._x, self._y
-        x += -self.slant * self._speed * dt - shift_x
-        y += self._speed * dt + shift_y
-        margin = 40.0 * k
-        # drops that hit the bottom restart above the screen at a fresh x
-        over = y > self.h + margin
-        n_over = int(over.sum())
-        if n_over:
-            span = self.w + 60.0 + self.slant * (self.h + 2.0 * margin)
-            x[over] = self._np_rng.uniform(-30.0, -30.0 + span, n_over)
-            y[over] = self._np_rng.uniform(-2.0 * margin, -0.5 * margin, n_over)
-        # looking down moves drops off the top: wrap them to the bottom
-        y[y < -2.5 * margin] += self.h + 4.0 * margin
-        # sideways wrap (turning the camera or wind drift)
-        span = self.w + 60.0 + self.slant * (self.h + 2.0 * margin)
-        x[:] = (x + 30.0) % span - 30.0
+        self.wind_dir += math.sin(self._rng.random() * 6.283) * 0.02 * dt     # slow drift
+        if not self._pos_init:                       # first frame: fill the volume around the player
+            self._wx += px
+            self._wy += py
+            self._pos_init = True
+        elif abs(px - self.pos[0]) > 6.0 or abs(py - self.pos[1]) > 6.0:
+            self._wx += px - self.pos[0]             # teleport / new chapter: carry the rain along
+            self._wy += py - self.pos[1]
+        self.pos = (px, py)
 
-    def _spawn_splashes(self, dt):
-        if self.h - self.horizon_y < 12:
+        drift = self.slant * 0.5 * self._vz
+        self._wx += math.cos(self.wind_dir) * drift * dt
+        self._wy += math.sin(self.wind_dir) * drift * dt
+        self._wz -= self._vz * dt
+
+        landed = np.nonzero(self._wz <= 0.0)[0]
+        if len(landed):
+            self._land(landed)
+            self._wz[landed] += RAIN_TOP             # respawn at the top of the volume
+        # keep the volume centred on the player: drops leaving one side re-enter the other, so
+        # walking forward runs the player through rain that is fixed in the world
+        self._wx[:] = (self._wx - px + RAIN_BOX) % (2.0 * RAIN_BOX) - RAIN_BOX + px
+        self._wy[:] = (self._wy - py + RAIN_BOX) % (2.0 * RAIN_BOX) - RAIN_BOX + py
+
+    def _land(self, idx):
+        """Some drops that hit the ground inside the view become splashes at that world spot."""
+        self._splash_acc = min(3.0, self._splash_acc + 55.0 * self.strength * self.density * self._dt)
+        room = MAX_SPLASHES - len(self.splashes)
+        k = int(min(self._splash_acc, room, len(idx)))
+        if k <= 0:
             return
-        self._splash_acc = min(2.0, self._splash_acc + 42.0 * self.strength * self.density * dt)
-        while self._splash_acc >= 1.0 and len(self.splashes) < MAX_SPLASHES:
+        gx, gy = self._wx[idx], self._wy[idx]
+        px, py = self.pos
+        dx, dy = gx - px, gy - py
+        ang = (np.arctan2(dy, dx) - self._last_yaw_val + math.pi) % (2.0 * math.pi) - math.pi
+        dist = np.hypot(dx, dy)
+        ok = np.nonzero((np.abs(ang) < self.fov_rad * 0.55) & (dist > 0.6) & (dist < 8.0))[0]
+        for j in ok[:k].tolist():
             self._splash_acc -= 1.0
-            f = 0.06 + 0.94 * (self._rng.random() ** 1.6)        # more small splashes far away
-            size = 0 if f < 0.25 else 1 if f < 0.5 else 2 if f < 0.75 else 3
-            self.splashes.append([self._rng.uniform(0.0, self.w), f, 0.0,
-                                  self._rng.uniform(0.30, 0.45), size])
+            self.splashes.append([float(gx[j]), float(gy[j]), 0.0, self._rng.uniform(0.30, 0.45)])
 
     # ── per-frame update ──────────────────────────────────────────────────────
-    def update(self, dt, sunrise_progress, yaw=0.0, pitch=0.0, wind=0.3):
+    def update(self, dt, sunrise_progress, yaw=0.0, pitch=0.0, wind=0.3, px=None, py=None):
         """Advance rain and lightning.  Returns thunder events for the caller to play."""
         dt = max(0.0, min(float(dt), 0.1))
         self.strength = rain_strength(sunrise_progress)
 
-        dyaw = dpitch = 0.0
-        if self._last_yaw is not None:
-            dyaw = _wrap(yaw - self._last_yaw)
-            dpitch = pitch - self._last_pitch
-            if abs(dyaw) > 0.6 or abs(dpitch) > 0.6:      # teleport / new chapter: no rain smear
-                dyaw = dpitch = 0.0
+        self._last_yaw_val = yaw
         self._last_yaw, self._last_pitch = yaw, pitch
+        self._dt = dt
+        if px is None:
+            px, py = self.pos
 
         if self.rain_on and self.strength > 0.01:
-            # rain is attached to the world, so it slides across the screen as the camera turns
-            self._step_rain(dt, wind, dyaw * self.w / self.fov_rad, dpitch * self.h)
-            for s in self.splashes:
-                s[2] += dt
-            self.splashes = [s for s in self.splashes if s[2] < s[3]]
-            self._spawn_splashes(dt)
+            # the drops live in the world: the camera moving or turning changes how they project
+            self._step_rain(dt, wind, float(px), float(py))
+            for sp in self.splashes:
+                sp[2] += dt
+            self.splashes = [sp for sp in self.splashes if sp[2] < sp[3]]
         elif self.splashes:
             self.splashes = []
 
@@ -383,34 +405,6 @@ class WeatherFX:
             except pygame.error:
                 pass
         return surf
-
-    def _rain_sprite(self, layer, lbin, sbin, tier, lit):
-        key = (layer, lbin, sbin, tier, lit)
-        got = self._sprites.get(key)
-        if got is not None:
-            return got
-        _name, _count, (l0, l1), width, _spd, base_alpha = RAIN_LAYERS[layer]
-        length = max(3, int(round((l0 + (l1 - l0) * lbin / (LEN_BINS - 1)) * self.k)))
-        width = max(1, int(round(width * (self.k if width > 1 else 1.0))))
-        dx = -(SLANT0 + SLANT_STEP * sbin) * length               # streak leans left, like the wind
-        sw = int(abs(dx)) + width + 3
-        sh = length + width + 3
-        surf = self._new_surface((sw, sh))
-        tx, ty = sw - 2.0, 1.0                                    # tail (upper right)
-        hx, hy = tx + dx, ty + length                             # head (lower left)
-        color = (206, 222, 244) if lit else (150, 176, 204)
-        gain = TIER_ALPHA[tier] * (1.35 if lit else 1.0)
-        segs = 4
-        for i in range(segs):                                     # dim tail -> bright head
-            t0, t1 = i / segs, (i + 1) / segs
-            a = int(min(255, base_alpha * gain * (0.12 + 0.88 * t1 ** 1.5)))
-            pygame.draw.line(surf, color + (a,),
-                             (int(round(tx + (hx - tx) * t0)), int(round(ty + (hy - ty) * t0))),
-                             (int(round(tx + (hx - tx) * t1)), int(round(ty + (hy - ty) * t1))),
-                             width)
-        got = (surf, int(tx), int(ty))
-        self._sprites[key] = got
-        return got
 
     def _splash_sprite(self, size, frame, lit):
         key = (size, frame, lit)
@@ -509,41 +503,64 @@ class WeatherFX:
             surf.set_alpha(int(min(255, 330 * inten)))
             surface.blit(surf, (sx - anchor_x, horizon_y - bh + 2))
 
-    def draw_rain(self, surface, horizon_y, occlude=None):
-        """Mist, falling streaks and ground splashes.  ``occlude(col, dist)`` -> True when a
-        ground point at that distance is visible (not hidden behind a wall)."""
+    def draw_rain(self, surface, horizon_y, occlude=None, zcols=None):
+        """Mist, falling streaks and ground splashes, projected from their world positions.
+        ``zcols`` is the wall depth of every screen column (hides rain behind walls);
+        ``occlude(col, dist)`` is the older per-point test."""
         self.horizon_y = horizon_y
         if not self.rain_on or self.strength <= 0.01:
             return
         st = self.strength
         lit = self.lightning_on and self.storm.flash > 0.12
-        tier = 0 if st > 0.66 else 1 if st > 0.33 else 2
 
         haze = self._get_haze()
         haze.set_alpha(int(255 * st))
         surface.blit(haze, (0, horizon_y - haze.get_height() // 2))
 
-        n = max(1, int(len(self._x) * st ** 0.7))
-        sbin = max(0, min(SLANT_BINS - 1, int(round((self.slant - SLANT0) / SLANT_STEP))))
-        seq = []
-        sprite = self._rain_sprite
-        for x, y, ly, lb in zip(self._x[:n].tolist(), self._y[:n].tolist(),
-                                self._layer[:n].tolist(), self._lbin[:n].tolist()):
-            spr, ax, ay = sprite(ly, lb, sbin, tier, lit)
-            seq.append((spr, (int(x) - ax, int(y) - ay)))
-        surface.blits(seq, False)
+        n = max(1, int(len(self._wx) * st ** 0.7))
+        wx, wy, wz, vz = self._wx[:n], self._wy[:n], self._wz[:n], self._vz[:n]
+        hx, hy, depth = self._project(wx, wy, wz, horizon_y)
+        keep = (depth > 0.35) & (hx > -4) & (hx < self.w + 4) & (depth < RAIN_BOX * 1.3)
+        if zcols is not None:
+            col = np.clip(hx.astype(np.int64), 0, self.w - 1)
+            keep &= zcols[col] > depth
+        idx = np.nonzero(keep)[0]
+        if len(idx):
+            # tail = where the drop was a moment ago (streak length follows speed and distance)
+            tau = RAIN_STREAK
+            drift = self.slant * 0.5 * vz[idx]
+            tx, ty, _ = self._project(wx[idx] - math.cos(self.wind_dir) * drift * tau,
+                                      wy[idx] - math.sin(self.wind_dir) * drift * tau,
+                                      wz[idx] + vz[idx] * tau, horizon_y)
+            d = depth[idx]
+            fade = np.clip(1.15 - d / (RAIN_BOX * 1.25), 0.12, 1.0)
+            alpha = (fade * (200.0 if lit else 150.0) * (0.55 + 0.45 * st)).astype(np.int64)
+            ov = self._overlay
+            ov.fill((0, 0, 0, 0))
+            color = (206, 222, 244) if lit else (160, 184, 212)
+            line = pygame.draw.line
+            for x0, y0, x1, y1, dd, a in zip(hx[idx].tolist(), hy[idx].tolist(), tx.tolist(),
+                                             ty.tolist(), d.tolist(), alpha.tolist()):
+                line(ov, color + (a,), (x0, y0), (x1, y1), 2 if dd < 2.2 else 1)
+            surface.blit(ov, (0, 0))
 
         floor_h = self.h - horizon_y
         if floor_h > 12 and self.splashes:
+            sp = np.array([[s_[0], s_[1]] for s_ in self.splashes])
+            sx, sy, dep = self._project(sp[:, 0], sp[:, 1], np.zeros(len(sp)), horizon_y)
             seq = []
-            for u, f, age, life, size in self.splashes:
-                row = int(horizon_y + f * floor_h)
-                col = int(u)
-                if occlude is not None and not occlude(col, self.h / (2.0 * max(1, row - horizon_y))):
+            for (x, y, d), s_ in zip(zip(sx.tolist(), sy.tolist(), dep.tolist()), self.splashes):
+                col = int(x)
+                if d < 0.4 or col < 0 or col >= self.w or y >= self.h:
                     continue
-                frame = min(SPLASH_FRAMES - 1, int(age / life * SPLASH_FRAMES))
+                if zcols is not None and zcols[col] <= d:
+                    continue
+                if zcols is None and occlude is not None and not occlude(col, d):
+                    continue
+                size = 3 if d < 1.8 else 2 if d < 3.6 else 1 if d < 6.0 else 0
+                frame = min(SPLASH_FRAMES - 1, int(s_[2] / s_[3] * SPLASH_FRAMES))
                 spr, cx, cy = self._splash_sprite(size, frame, lit)
-                seq.append((spr, (col - cx, row - cy)))
+                seq.append((spr, (col - cx, int(y) - cy)))
             if seq:
                 surface.blits(seq, False)
 

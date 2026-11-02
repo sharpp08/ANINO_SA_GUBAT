@@ -875,7 +875,7 @@ class Renderer:
         """Advance rain and lightning one played frame (the game loop skips this while paused)
         and play any thunder that has just arrived."""
         events = self.weather.update(dt, sunrise_progress, player.angle, player.pitch,
-                                     self.wind_strength)
+                                     self.wind_strength, player.x, player.y)
         for ev in events:
             try:
                 from audio_synth import audio_mgr
@@ -892,7 +892,8 @@ class Renderer:
             horizon_y = self.h // 2
         # Rain (with mist and ground splashes) eases out as daylight arrives.  A splash is
         # hidden when a wall is closer than the ground point it lands on.
-        self.weather.draw_rain(self.surface, horizon_y, self._col_visible)
+        self.weather.draw_rain(self.surface, horizon_y, self._col_visible,
+                               self.z_buffer[self._col_to_ray])
         # Slow, cinematic exposure shift: cold blue night -> warm golden dawn.
         if progress > 0.0:
             dawn_alpha = int(185 * (progress ** 1.35))
