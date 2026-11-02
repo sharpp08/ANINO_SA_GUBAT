@@ -326,6 +326,16 @@ class SoundManager:
         self._amb_active = False
         self._amb_timers = {}
         self._generate_sounds()
+        # Prefer the supplied shotgun recording; keep the procedural fallback if absent.
+        custom_shotgun = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      'assets', 'audio', 'shotgun_fire.mp3')
+        if os.path.isfile(custom_shotgun):
+            try:
+                self.sounds['shotgun'] = pygame.mixer.Sound(custom_shotgun)
+                self.sounds['shotgun'].set_volume(0.80)
+                print('[Audio] Loaded custom shotgun firing sound.')
+            except Exception as exc:
+                print(f'[Audio] Could not load custom shotgun firing sound: {exc}')
         # Prefer the supplied real pistol recording; keep procedural fallback if absent.
         custom_revolver = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                        'assets', 'audio', 'revolver_gunshot.mp3')
