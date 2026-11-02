@@ -39,6 +39,14 @@ STATE_WIN      = 'win'
 
 
 # ─── HUD helpers ─────────────────────────────────────────────────────────────
+def control_key(action, fallback):
+    name = CONTROLS.get(action, fallback)
+    try:
+        return pygame.key.key_code(name) if name else fallback
+    except (ValueError, TypeError):
+        return fallback
+
+
 def safe_set_relative_mouse(enabled):
     try:
         pygame.mouse.set_relative_mode(enabled)
@@ -605,11 +613,16 @@ class Game:
         self.settings_menu = SettingsMenu()
         self.settings_return_state = STATE_MENU
         self.target_fps = FPS
+        self.vsync_enabled = True
+        self._apply_settings(_settings_mod.RUNTIME_SETTINGS)
 
     def _apply_settings(self, values):
         """Apply settings that affect live game systems."""
         global FULLSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_ROT_SPEED
-        resolution = values.get("resolution", "1280 x 720")
+        _settings_mod.RUNTIME_SETTINGS = dict(values)
+        _settings_mod.CONTROLS.update(values.get("controls", {}))
+        CONTROLS.update(values.get("controls", {}))
+        resolution = values.get("resolution", f"{SCREEN_WIDTH} x {SCREEN_HEIGHT}")
         try:
             SCREEN_WIDTH, SCREEN_HEIGHT = [int(part.strip()) for part in resolution.split("x")]
         except (ValueError, AttributeError):
@@ -633,10 +646,33 @@ class Game:
             player_module.PLAYER_ROT_SPEED = float(values.get("mouse_sensitivity", 0.002))
         except Exception:
             pass
+        _settings_mod.ENABLE_FOG = bool(values.get("enable_fog", True))
+        _settings_mod.ENABLE_PARTICLES = bool(values.get("enable_particles", True))
+        _settings_mod.ENABLE_SANITY = bool(values.get("enable_sanity", True))
+        _settings_mod.ENABLE_CAMERA_SHAKE = bool(values.get("enable_camera_shake", True)) and not bool(values.get("reduce_camera_shake", False))
+        _settings_mod.TERRAIN_BRIGHTNESS = float(values.get("brightness", 1.0))
+        try:
+            self.renderer.fov_rad = math.radians(float(values.get("fov", 75)))
+            self.renderer.half_fov = self.renderer.fov_rad / 2
+            self.renderer.ray_angles = [(i / self.renderer.num_rays - 0.5) * self.renderer.fov_rad for i in range(self.renderer.num_rays)]
+            import numpy as np
+            self.renderer._ray_angle_array = np.asarray(self.renderer.ray_angles, dtype=np.float32)
+            self.renderer._ray_cos = np.cos(self.renderer._ray_angle_array)
+            self.renderer._ray_sin = np.sin(self.renderer._ray_angle_array)
+            self.renderer._ray_ang64 = np.asarray(self.renderer.ray_angles, dtype=np.float64)
+            self.renderer._ray_cos64 = np.cos(self.renderer._ray_ang64)
+            self.renderer._ray_sin64 = np.sin(self.renderer._ray_ang64)
+        except Exception:
+            pass
         try:
             master = max(0.0, min(1.0, float(values.get("master_volume", 0.7))))
             music = max(0.0, min(1.0, float(values.get("music_volume", 0.4))))
             sfx = max(0.0, min(1.0, float(values.get("sfx_volume", 0.8))))
+            audio_mgr.master_volume = master
+            audio_mgr.music_volume = music
+            audio_mgr.sfx_volume = sfx
+            audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
+            audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
             pygame.mixer.music.set_volume(master * music)
             for channel_index in range(pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
@@ -783,7 +819,7 @@ class Game:
         p = self.player
         if event.type == pygame.KEYDOWN:
             k = event.key
-            if k == pygame.K_ESCAPE:
+            if k == control_key('pause', 'escape'):
                 self.state = STATE_PAUSED
                 safe_set_relative_mouse(False)
             elif k == pygame.K_F11:
@@ -811,7 +847,7 @@ class Game:
                             p.angle = math.atan2(e.y - ny, e.x - nx)
                             self.notify(f"DEBUG: teleported near {e.type}")
                             break
-            elif k == pygame.K_r:
+            elif k == control_key('reload', 'r'):
                 # Play reload recordings only when the corresponding reload can start.
                 can_reload_shotgun = (
                     p.current_weapon == 1 and not p.reloading
@@ -826,19 +862,19 @@ class Game:
                     audio_mgr.play('shotgun_reload', volume=0.80, headroom=1.0)
                 elif can_reload_revolver and p.reloading:
                     audio_mgr.play('revolver_reload', volume=1.0, headroom=1.0)
-            elif k == pygame.K_f:
+            elif k == control_key('flashlight', 'f'):
                 p.flashlight_on = not p.flashlight_on
-            elif k == pygame.K_e:
+            elif k == control_key('interact', 'e'):
                 self._interact()
-            elif k == pygame.K_g:
+            elif k == control_key('salt', 'g'):
                 self._use_salt()
-            elif k == pygame.K_h:
+            elif k == control_key('garlic', 'h'):
                 self._use_garlic()
-            elif k == pygame.key.key_code(CONTROLS.get('rosary', 'v')) if CONTROLS.get('rosary') else pygame.K_v:
+            elif k == control_key('rosary', pygame.K_v):
                 self._use_rosary()
-            elif k == pygame.key.key_code(CONTROLS.get('cross', 'c')) if CONTROLS.get('cross') else pygame.K_c:
+            elif k == control_key('cross', pygame.K_c):
                 self._use_cross()
-            elif k == pygame.K_1:
+            elif k == control_key('ward_1', '1'):
                 if p.flashlight_battery > 0:
                     p.flashlight_on = not p.flashlight_on
                     try:
@@ -847,19 +883,19 @@ class Game:
                         pass
                 else:
                     self.notify("Flashlight battery is dead!")
-            elif k == pygame.K_2:
+            elif k == control_key('ward_2', '2'):
                 p.selected_ward = 1
                 self._cast_selected_ward()
-            elif k == pygame.K_3:
+            elif k == control_key('ward_3', '3'):
                 p.selected_ward = 2
                 self._cast_selected_ward()
-            elif k == pygame.K_4:
+            elif k == control_key('ward_4', '4'):
                 p.selected_ward = 3
                 self._cast_selected_ward()
-            elif k == pygame.K_5:
+            elif k == control_key('ward_5', '5'):
                 p.selected_ward = 4
                 self._cast_selected_ward()
-            elif k == pygame.K_q:
+            elif k == control_key('ward_menu', 'q'):
                 self._cast_selected_ward()
             elif k == pygame.K_TAB:
                 p.selected_ward = (p.selected_ward + 1) % 5
