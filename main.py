@@ -790,9 +790,18 @@ class Game:
             self.game_map.world_engine.update_world_chunks(p.x, p.y, self.game_map)
 
 
-        # Footstep audio on movement
-        if abs(p.bob_amount) > 1.8 and random.random() < 0.12:
-            audio_mgr.play('footstep', volume=0.4 if not p.is_sprinting else 0.8)
+        # Footsteps: one per foot landing in the walk cycle (player.step_event), so the sound
+        # is locked to the movement.  Sprinting is loud and wide, crouching is soft and close;
+        # the pan alternates a little left/right so the two feet are heard from their own side.
+        if p.step_event:
+            p.step_event = False
+            if p.is_sprinting:
+                step_vol, step_pan = 0.75, 0.22
+            elif p.is_crouching:
+                step_vol, step_pan = 0.16, 0.06
+            else:
+                step_vol, step_pan = 0.42, 0.14
+            audio_mgr.play_footstep(volume=step_vol, pan=p.step_side * step_pan)
 
         # Enemy AI with stealth sensing and sanity proximity
         self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)

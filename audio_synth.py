@@ -349,6 +349,48 @@ class SoundManager:
                 print(f'[Audio] Could not load custom revolver reload sound: {exc}')
 
         self._load_thunder()
+        self._load_footsteps()
+
+    # ── recorded footsteps ───────────────────────────────────────────────────
+    FOOTSTEP_PEAK = 0.85          # every recorded step is levelled to this peak so none stands out
+
+    def _load_footsteps(self):
+        """Load assets/audio/footstep_*.mp3 and use them instead of the procedural steps.
+
+        The clips are peak-normalised to one level, so how loud a step is depends only on
+        how the player moves (see play_footstep), never on which recording was picked.  If
+        no file loads, the procedural footsteps built in _generate_sounds stay in place."""
+        import glob
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        loaded = []
+        for path in sorted(glob.glob(os.path.join(base, 'footstep_*.mp3'))):
+            try:
+                snd = pygame.mixer.Sound(path)
+                raw = np.frombuffer(snd.get_raw(), dtype=np.int16).astype(np.float64) / 32768.0
+                ch = max(1, self.channels)
+                raw = raw[:len(raw) - len(raw) % ch].reshape(-1, ch)
+                peak = float(np.max(np.abs(raw))) if raw.size else 0.0
+                if peak > 1e-4:
+                    leveled = self._generate_sound(raw * (self.FOOTSTEP_PEAK / peak))
+                    snd = leveled or snd
+                loaded.append(snd)
+            except Exception as exc:
+                print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
+        self._footstep_last = None
+        if loaded:
+            self.variants['footstep'] = loaded
+            self.sounds['footstep'] = loaded[0]
+            print(f'[Audio] Loaded {len(loaded)} recorded footstep clips.')
+
+    def play_footstep(self, volume=0.4, pan=0.0):
+        """One footfall: a random recorded step that never repeats the previous one, with a
+        little volume variation so a run of steps does not sound like a loop."""
+        pool = self.variants.get('footstep') or []
+        if not pool:
+            return None
+        snd = random.choice([s for s in pool if s is not self._footstep_last] or pool)
+        self._footstep_last = snd
+        return self.play_object(snd, volume * random.uniform(0.88, 1.0), pan)
 
     # ── recorded thunder ─────────────────────────────────────────────────────
     def _load_thunder(self):

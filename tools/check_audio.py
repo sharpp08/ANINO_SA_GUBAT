@@ -21,7 +21,7 @@ for name, snd in mgr.sounds.items():
 variants = mgr.variants.get('footstep', [])
 print(f'INFO  footstep variants: {len(variants)}')
 if len(variants) < 2:
-    print('WARN  expected 4 footstep variants, got fewer')
+    print('WARN  expected at least 2 footstep variants, got fewer')
 
 # 3) _mix with mixed mono / stereo
 mono  = np.random.default_rng(0).standard_normal(int(r * 0.1))

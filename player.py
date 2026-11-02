@@ -59,6 +59,10 @@ class Player:
         self.is_crouching = False
         self.bob_timer = 0
         self.bob_amount = 0
+        # Footfalls follow the walk cycle: one per half bob (a foot lands), alternating feet.
+        self.step_event = False     # True for the frame a foot lands; the game loop consumes it
+        self.step_side = 1          # +1 right foot, -1 left foot (the foot of the latest step)
+        self._step_phase = 0
 
         # Inventory
         self.journal_entries = []
@@ -190,12 +194,21 @@ class Player:
             self._current_bob_speed = current_bob
             self.bob_timer += dt * current_bob
             self.bob_amount = math.sin(self.bob_timer) * (4 if self.is_sprinting else 2)
+            # A foot lands at each bob peak (pi/2, 3pi/2, ...): the first step comes a quarter
+            # cycle after starting to move, then one per half cycle, so sprinting (faster bob)
+            # steps faster than walking and the sound stays locked to the animation.
+            phase = int((self.bob_timer + math.pi / 2.0) // math.pi)
+            if phase != self._step_phase:
+                self._step_phase = phase
+                self.step_side = -self.step_side
+                self.step_event = True
             if self.is_sprinting:
                 self.noise_level = max(self.noise_level, 3.5)
             elif not self.is_crouching:
                 self.noise_level = max(self.noise_level, 1.2)
         else:
             self.bob_timer = 0
+            self._step_phase = 0
             self.bob_amount *= 0.8
 
         # Noise decay
