@@ -636,10 +636,10 @@ class Game:
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
                            or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", True))
         FULLSCREEN = requested_fullscreen
+        self.vsync_enabled = bool(values.get("vsync", True))
         if display_changed:
             self.screen = self._set_display_mode()
         self.target_fps = 0 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
-        self.vsync_enabled = bool(values.get("vsync", True))
         tier = str(values.get("quality_tier", "medium")).lower()
         if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
             try:
