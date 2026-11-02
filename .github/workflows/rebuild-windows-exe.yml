@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: rebuild-windows-exe-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -30,16 +34,21 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
 
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
       - name: Build standalone Windows executable
         shell: pwsh
         run: |
           python -m PyInstaller --noconfirm --clean --onefile --windowed --name ANINO_SA_GUBAT --collect-all pygame --collect-all numpy --collect-all moderngl --collect-all glcontext --add-data "assets;assets" main.py
           if (!(Test-Path "dist/ANINO_SA_GUBAT.exe")) { throw "PyInstaller did not produce the executable." }
-          Copy-Item "dist/ANINO_SA_GUBAT.exe" "ANINO_SA_GUBAT.exe" -Force
 
       - name: Commit refreshed executable
         shell: pwsh
         run: |
+          git fetch origin main
+          git rebase origin/main
+          Copy-Item "dist/ANINO_SA_GUBAT.exe" "ANINO_SA_GUBAT.exe" -Force
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ANINO_SA_GUBAT.exe
