@@ -240,6 +240,12 @@ SANITY_MAX = 100.0
 SANITY_DRAIN_DARK = 4.0
 SANITY_DRAIN_ENEMY = 8.0
 SANITY_REGEN_LIGHT = 6.0
+SANITY_FRENZY_THRESHOLD = 30.0       # enemies enter frenzy below this sanity level
+SANITY_FRENZY_RECOVERY = 36.0       # hysteresis prevents rapid frenzy toggling
+SANITY_FRENZY_SPEED_MULTIPLIER = 1.45
+SANITY_FRENZY_DAMAGE_MULTIPLIER = 1.25
+SANITY_FRENZY_COOLDOWN_MULTIPLIER = 0.75
+SANITY_SPAWN_MIN_INTERVAL_MULTIPLIER = 0.55  # spawn interval at zero sanity
 
 # Weapons (Rebalanced Phase 5)
 BOLO_DAMAGE = 25
