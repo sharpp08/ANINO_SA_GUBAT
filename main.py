@@ -615,7 +615,8 @@ class Game:
         except (ValueError, AttributeError):
             SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
         requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
-        display_changed = requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
+        display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
+                           or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", True))
         FULLSCREEN = requested_fullscreen
         if display_changed:
             self.screen = self._set_display_mode()
