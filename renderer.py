@@ -141,7 +141,7 @@ class Flashlight:
         self.glow_mask = self.glow_mask.convert()
         self.dark_off = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_off.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2],
-                            int((1.0 - 0.05) * 255)))
+                            int((1.0 - AMBIENT_LIGHT_OFF) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 90))
         try:
@@ -172,7 +172,7 @@ class Flashlight:
 
     def brightness_at(self, screen_x, dist, player):
         if not player.flashlight_on or player.flashlight_battery <= 0:
-            return 0.15
+            return AMBIENT_LIGHT_OFF
         beam_center_x = self.w // 2 + int(self.sway_x)
         dx = abs(screen_x - beam_center_x)
         max_dx = self.w * 0.35 * max(0.3, (1.0 - dist / 12.0))
