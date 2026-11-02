@@ -1,0 +1,502 @@
+{
+  "version": "BUILD 2026.11.02-SURVIVAL-AUDIO",
+  "generated": "2026-11-02T15:54:14Z",
+  "files": {
+    "ANINO_SA_GUBAT.spec": {
+      "sha256": "2b44d2e490ab6caa9b295f4b6c002e901b9af43545c86877dbd9f363da301162",
+      "size": 1429
+    },
+    "_hud_verify.py": {
+      "sha256": "e4394623f113632c1586747444e092dd68a7c69b513d52e26b2b8b74413189ac",
+      "size": 2673
+    },
+    "_sr.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "anim_integration.py": {
+      "sha256": "9907a361d3281ceaf4e87d794dbedc2f890acfa860dd4b8cb0fee5895ca5e74f",
+      "size": 6091
+    },
+    "animation_core.py": {
+      "sha256": "08a837b826a16723f33b5ac084dcc6135dbb9162fe820b88836da4a4332fd9ae",
+      "size": 22102
+    },
+    "asset_generator.py": {
+      "sha256": "14b2381518d350229dca9ea8e3e8b17b188cb5f1e47c0b3c0a83802d21f828b4",
+      "size": 55490
+    },
+    "assets/audio/footstep_1.mp3": {
+      "sha256": "7323ad0d5ab199632685d72460781f9bcd24cf8375ebffb215fa6dd811e27479",
+      "size": 13374
+    },
+    "assets/audio/footstep_2.mp3": {
+      "sha256": "d7e33f98db100d4fbf81bcc3fcaa8e4c49231d759c7522e693db8e1ec18a278f",
+      "size": 12538
+    },
+    "assets/audio/footstep_3.mp3": {
+      "sha256": "6b7c94897b6de72e8c10b4fb80e71d59ca9dee6acf00e3f40181d73e1987d0c2",
+      "size": 14210
+    },
+    "assets/audio/frenzy_mode_ambience.mp3": {
+      "sha256": "57377db3c92498482aae934a097bff1c6933ce71dcf2d72342884b0a2d5d8295",
+      "size": 1545238
+    },
+    "assets/audio/intro_score.wav": {
+      "sha256": "28198cf4ba3e32e0bb01bfcc0908d0d55144f7e53402d1edb167a15bc3959aa4",
+      "size": 13230044
+    },
+    "assets/audio/revolver_gunshot.mp3": {
+      "sha256": "2c71b02664c25be8d32aea9bee5871eba2b7f9e5119ac63ee696d9021112cc8b",
+      "size": 6536
+    },
+    "assets/audio/revolver_reload.mp3": {
+      "sha256": "b26fc260809dfda19c52f727a570b10509ecc66c5f51a1493f0e3551862aeb70",
+      "size": 13920
+    },
+    "assets/audio/shotgun_fire.mp3": {
+      "sha256": "ab3cf6bf695d5ae31d46987c33ccce04cadbcae80f760ca6b396dcb6aec81d9f",
+      "size": 61858
+    },
+    "assets/audio/shotgun_reload.mp3": {
+      "sha256": "4fefe45fe5c6a0ecdc64e99cdd4d627c1b9d6341c3ba84bbc987a9a0b0426dfa",
+      "size": 4284
+    },
+    "assets/audio/thunder_far_1.mp3": {
+      "sha256": "e5a29bd69e0883c92ef7240c33c55a6fa5ab7c12b86e167ce1d966317ec50f78",
+      "size": 44550
+    },
+    "assets/audio/thunder_far_2.mp3": {
+      "sha256": "2472b8ebf4e19bdceaac341bf7550d55842dc345f1b7b51a3ce1e50928ca4714",
+      "size": 39117
+    },
+    "assets/audio/thunder_far_3.mp3": {
+      "sha256": "0279de479800dfe603fd1246ddcf74e910884b68aafb129b53decba0302aa875",
+      "size": 67073
+    },
+    "assets/audio/thunder_far_4.mp3": {
+      "sha256": "46a76374b113d155f005abb453ac4d2f4b51ca956d4cd2ea5d63df13ed37fefc",
+      "size": 66068
+    },
+    "assets/audio/thunder_far_5.mp3": {
+      "sha256": "21067b64edd7b9d3e72a8471def83208538930caf5f3aa59679015ab816dae64",
+      "size": 44900
+    },
+    "assets/audio/thunder_far_6.mp3": {
+      "sha256": "53cb1488d928cbcdf9b8278c90475cac819ff91fdf614f3fcd4f7a553fa5e210",
+      "size": 49342
+    },
+    "assets/audio/thunder_near_1.mp3": {
+      "sha256": "dc6a14acc1f33d6824e26fc6b330793a28d07638423fd004bc8a57947e78cbb7",
+      "size": 100771
+    },
+    "assets/audio/thunder_near_2.mp3": {
+      "sha256": "473d438a6033cd27627eb9172c50b142d92a4a4d00b06aafac80226f1e4b4be5",
+      "size": 118832
+    },
+    "assets/audio/thunder_near_3.mp3": {
+      "sha256": "ecf95a8c51b318aa07309f9f8b47f05bf148bb251a7d04a633e9be9c37600892",
+      "size": 157350
+    },
+    "assets/audio/thunder_near_4.mp3": {
+      "sha256": "89e7fffaff6eac4deb8f737c4bb4370a9443a114f2838005bf9864a571e2e14a",
+      "size": 166739
+    },
+    "assets/audio/thunder_near_5.mp3": {
+      "sha256": "b8ae03c3e22f678466c40a1d3720c42c1d4dab0b60fb575f3359673042e97bac",
+      "size": 163398
+    },
+    "assets/audio/thunder_near_6.mp3": {
+      "sha256": "954914d5624fd7fa389759ba4237c7158dd9bd60d94210bb6b22037bc0d57331",
+      "size": 118518
+    },
+    "assets/audio/thunder_near_7.mp3": {
+      "sha256": "8a1c3b3163aeb3e6f84978291ccfe2be61e304c46ebd9e0f6edb4840d26c757e",
+      "size": 98004
+    },
+    "assets/audio/thunder_near_8.mp3": {
+      "sha256": "6824f3463f71eaf00464c08f784e8d4be5eb1d905fa2e3dc7535fe4a1650b79c",
+      "size": 118623
+    },
+    "assets/audio/thunder_near_9.mp3": {
+      "sha256": "51b7b8fe3d2550bd8c1459213c720870e0fa90faf0850f41465d13037b7bfde5",
+      "size": 229041
+    },
+    "assets/sprites/bible_page_arrow.png": {
+      "sha256": "c691dfac0a665d99cff48787ab1f3da7d973b44611014e5c9d05d231574f1298",
+      "size": 6040
+    },
+    "assets/sprites/bible_page_arrow_base.png": {
+      "sha256": "f885e6a85e6784caf038a841fa6be65c3898f899519423493ed9121ed2974df5",
+      "size": 3097
+    },
+    "assets/sprites/bible_page_arrow_f0.png": {
+      "sha256": "c691dfac0a665d99cff48787ab1f3da7d973b44611014e5c9d05d231574f1298",
+      "size": 6040
+    },
+    "assets/sprites/bible_page_arrow_f1.png": {
+      "sha256": "a13252988bfaa868c090999dbefecca1130f197a56ddb402ebedbb8a27220519",
+      "size": 6166
+    },
+    "assets/sprites/bible_page_arrow_f2.png": {
+      "sha256": "eb42aaab21a5f29e197c696902d09b8874b5ba0751a59b383006731c097fec8c",
+      "size": 5667
+    },
+    "assets/sprites/bible_page_arrow_f3.png": {
+      "sha256": "a13252988bfaa868c090999dbefecca1130f197a56ddb402ebedbb8a27220519",
+      "size": 6166
+    },
+    "assets/sprites/enemies/aswang_attack.png": {
+      "sha256": "ca232ce4cbd209a62c586ee313a135ca5afe840b841b001bf8224e56627753a7",
+      "size": 19550
+    },
+    "assets/sprites/enemies/aswang_idle.png": {
+      "sha256": "e8fd2cb0adab224eab6f1cb278b27ad4e449437324115651dc00e01f133c166a",
+      "size": 18319
+    },
+    "assets/sprites/enemies/enemy_sheet_source.webp": {
+      "sha256": "8fa16c28d07e88d9448c2922c18b8dc6ef5e1083b0d073c56d3d45d08bd36c3e",
+      "size": 70800
+    },
+    "assets/sprites/enemies/kapre_attack.png": {
+      "sha256": "54f5377c0515fcb11f13f580d931e09281165add73d58ecf8bffef14fa811982",
+      "size": 26405
+    },
+    "assets/sprites/enemies/kapre_idle.png": {
+      "sha256": "0321d896e9e762af58b8388ecedcb7ae25e80f75f84eddccc6b080524ccac2d9",
+      "size": 25521
+    },
+    "assets/sprites/enemies/manananggal_attack.png": {
+      "sha256": "bbcf2a44cee3115effa4c23f7ca63f6ebee5b17995b893066efecf7b5bb3ec8e",
+      "size": 19614
+    },
+    "assets/sprites/enemies/manananggal_idle.png": {
+      "sha256": "8bad7d1b092f75b7fa8f79c62dcb2302ef7b8aa97fc70d74f418dd5897ae968e",
+      "size": 20092
+    },
+    "assets/sprites/enemies/multo_attack.png": {
+      "sha256": "86b57666b1e8ca6ab0df35c3415ec3476eeafb23360502e0cc31cfa704015e3c",
+      "size": 19613
+    },
+    "assets/sprites/enemies/multo_idle.png": {
+      "sha256": "8f05ffca9f3d8a7f0904516ecb9eb877d037bc26c494527f2e58730c87f43a68",
+      "size": 17266
+    },
+    "assets/sprites/enemies/sigbin_attack.png": {
+      "sha256": "86eb47e1b58a45b2338dbb680958e79703444ce5bd8f5ff35295e6efd25b8992",
+      "size": 20646
+    },
+    "assets/sprites/enemies/sigbin_idle.png": {
+      "sha256": "a1d2c812ca7544d2e31420e9b4bbab5bb8c4a8b654badbdd2c02feacd95311d2",
+      "size": 20562
+    },
+    "assets/sprites/enemies/tikbalang_attack.png": {
+      "sha256": "286c27470fd4b986ed5b59f1e97bfa106d025761136a908e018a9e5b45bb032b",
+      "size": 19301
+    },
+    "assets/sprites/enemies/tikbalang_idle.png": {
+      "sha256": "3a84c982c28b50cd4d8b4d81bcc8b27a7d7f9dc8ddb5c5f5c620e3ea404e46d1",
+      "size": 19259
+    },
+    "assets/sprites/enemies/white_lady_attack.png": {
+      "sha256": "8fc46703bbf5bd660a86a9db44f32231080af9cea9fafa495fe7089ae3ee6666",
+      "size": 18403
+    },
+    "assets/sprites/enemies/white_lady_idle.png": {
+      "sha256": "96d8e206509764ff4be1f2648906c00be741ed26695b759f000dffa6c9e668ed",
+      "size": 17561
+    },
+    "assets/sprites/weapons/bolo/bolo_fpv.png": {
+      "sha256": "e7869494a48402d10a37cf53e0837664d0ed35794a6768d6777b07df2abe7c21",
+      "size": 4549
+    },
+    "assets/sprites/weapons/bolo/bolo_hero.png": {
+      "sha256": "b08c8f6027cdbd84b7d3c30003227c942d172b23f6b197656c598be838de24ea",
+      "size": 4523
+    },
+    "assets/sprites/weapons/bolo/bolo_spin_preview.gif": {
+      "sha256": "05c708a045ced52e0b33e528e6a18b37c507f8a43996d0c2d7a86e38b38eebf1",
+      "size": 7955
+    },
+    "assets/sprites/weapons/bolo/bolo_spin_sheet.png": {
+      "sha256": "4e08151d32cfdc4f29d595eb34bfb79413b13afd32a5dc0fd94acdaa9a0f2458",
+      "size": 9414
+    },
+    "assets/sprites/weapons/bolo/bolo_swing_preview.gif": {
+      "sha256": "6317480d2ee22839e2943be69054eb79174f442cf04a7b16a3b8ba718830c96a",
+      "size": 4723
+    },
+    "assets/sprites/weapons/bolo/bolo_swing_sheet.png": {
+      "sha256": "a859014bec8e8a93a491fd8ac9eec6e00b6fa78d885b53a39b8014380864b61c",
+      "size": 4828
+    },
+    "assets/sprites/weapons/revolver/revolver_fire.gif": {
+      "sha256": "b638c9c4a9ff5abb2eccc293f6512eb492ecbbcc1bca1525b6728c6d82322fae",
+      "size": 15797
+    },
+    "assets/sprites/weapons/revolver/revolver_fire_sheet.png": {
+      "sha256": "ecaf36a2689de5ee6e61f356c80e8041caa89c50cb9c910b7510df801b4f1ac0",
+      "size": 17004
+    },
+    "assets/sprites/weapons/revolver/revolver_hero.png": {
+      "sha256": "cda02e2eda16b0d2fc2066a4a53847724a8de98c9bd6acf931d1fe357e0dcfbc",
+      "size": 6361
+    },
+    "assets/sprites/weapons/revolver/revolver_spin.gif": {
+      "sha256": "2c9885258d4f3b2cc522ad1e6fe29aeadf835fe2cebabc78a26f016c23df5acb",
+      "size": 16975
+    },
+    "assets/sprites/weapons/revolver/revolver_spin_sheet.png": {
+      "sha256": "c889ddc0aceb70516c235a90131b9a80b4783acba2cfd238828d1bcd04ba04b7",
+      "size": 19603
+    },
+    "assets/sprites/weapons/shotgun/shotgun_hero.png": {
+      "sha256": "8669f19969b1afd5ba2b5fd1c252fb70f543c3ec01d4fe81c4a93601b9061afb",
+      "size": 4106
+    },
+    "assets/sprites/weapons/shotgun/shotgun_pump.gif": {
+      "sha256": "2db523d05c21637d2a1bb4cbcb8f3ec932e291da896d260c4306bc2de99f11d8",
+      "size": 11137
+    },
+    "assets/sprites/weapons/shotgun/shotgun_pump_sheet.png": {
+      "sha256": "5edec41c9d7f06f65836138962f12c5df555d2639bb8f85c5c78a1d272c823b3",
+      "size": 30897
+    },
+    "assets/sprites/weapons/shotgun/shotgun_spin.gif": {
+      "sha256": "baa8b95d635402aa9ca4225c94b9840c43e5a53fa620ccca17ba826291e8d3c8",
+      "size": 11064
+    },
+    "assets/sprites/weapons/shotgun/shotgun_spin_sheet.png": {
+      "sha256": "0c4b1dce45a2ece261f3a21e4c175c5d2f4d707a6cfc51d3ac5ca636f281b7ec",
+      "size": 11061
+    },
+    "audio_synth.py": {
+      "sha256": "ecff04ec524727337727e089ae5db1f9c136d7fc4fee6e02ab72ed9299998014",
+      "size": 52073
+    },
+    "cinematic.py": {
+      "sha256": "bbcda4dc7358cd9965a90c3647e7aea1f6a411128880f890a5f80358c4612c74",
+      "size": 42742
+    },
+    "enemies.py": {
+      "sha256": "883e47267c7b847961d0ebb6b80b120cad2abcd3f53982bde41226240b2bf111",
+      "size": 38458
+    },
+    "enemy_audio.py": {
+      "sha256": "9e9809046f509a7cb3ec4eee9df74e780ba56d0f86df13a7db1583aeada4033b",
+      "size": 18149
+    },
+    "enhancement_integration.py": {
+      "sha256": "bd59586c7ea18edbfce6995c204d6f0e557cae069ea4156539097d9bfccfa737",
+      "size": 3943
+    },
+    "floor_fast.py": {
+      "sha256": "83b265399a44dcf31bf4f03597249edd75867c7ff8373c4c3a7613e032c41356",
+      "size": 6480
+    },
+    "graphics_manager.py": {
+      "sha256": "2142ca5a14b5376469611f7900cc17a90013d80dc1f2061ee8296af33fe67d59",
+      "size": 5484
+    },
+    "jumpscare.py": {
+      "sha256": "f5c890217acda8d3f415856cc6e6d3567b002e637f426bb3f1a064a135fd7afc",
+      "size": 25910
+    },
+    "lighting_system.py": {
+      "sha256": "98277174f71c1112b423676a5e595f3dc0addc3862a54e1804e4a10aa47cbf5e",
+      "size": 12139
+    },
+    "lore.py": {
+      "sha256": "24ead24a658bfce1c4c4e0ba9e3d16b108447a77683e67157ed4d3b28a74cf59",
+      "size": 2163
+    },
+    "main.py": {
+      "sha256": "362b1ab93fb8e64d7a52fa18ff8e19b929f048bdff2a38a23de4b75f3226e34a",
+      "size": 69877
+    },
+    "map_system.py": {
+      "sha256": "4c6d8465d94650017a73bde50dbee9e596d2541cae396b00cf489f1444b78a4c",
+      "size": 39423
+    },
+    "objective.py": {
+      "sha256": "4a31b9a7ef5f32ec47e0ae94805ead7a00e1bb7e127a5fb01ee8a61f94d35722",
+      "size": 2290
+    },
+    "page_arrow.py": {
+      "sha256": "4cd7a7b069d91117f6c14b0a3301176250bdb339b223c685d6696d113d1659d8",
+      "size": 4395
+    },
+    "pathfinder.py": {
+      "sha256": "42d4163c34a0739e327281a01dcc9fd55cf55d2d7bc64d93bca601418690b592",
+      "size": 3072
+    },
+    "player.py": {
+      "sha256": "2c25381fba36a28b37d48875c67278ee99c883b69f4ff3ddafa5baa8823fa48a",
+      "size": 21751
+    },
+    "post_processing.py": {
+      "sha256": "cd04868ace44da791af8d0411d176ea47ff6b218159a96c9bdc4efb7c69825a1",
+      "size": 8338
+    },
+    "radar.py": {
+      "sha256": "3dc9e7b1caa4ed8a53373a11929f48ac15b1a9a7c3bd20bb463ab629efbfa068",
+      "size": 7204
+    },
+    "raycast_fast.py": {
+      "sha256": "66fad8ce8246aa1b1059fb7c11a888594fafdaa660cdc0e90f90a6d59bb13e19",
+      "size": 4710
+    },
+    "renderer.py": {
+      "sha256": "f021a4f0a7b70bc9df29ddcee2765a51ccd740e038a70ef43253af60a865b404",
+      "size": 106683
+    },
+    "requirements.txt": {
+      "sha256": "eedda1d17a93a3d48ba0d395d9f2c4f229429e3dbc206a2aef24a05148623110",
+      "size": 69
+    },
+    "settings.py": {
+      "sha256": "1dfed09e951a1d3632ad066a46bf056d709511a29b8483dde2ae74e67b697f39",
+      "size": 18267
+    },
+    "shader_renderer.py": {
+      "sha256": "7de828f7d88fcd78e6ec310bbac1290981c074a3bac6f703f5be2f00bdd66df9",
+      "size": 7336
+    },
+    "terrain_gen.py": {
+      "sha256": "3e09e21f7cdb64658b5e26483d07023bce3e18a90bfe1df753f979bdf871743e",
+      "size": 22070
+    },
+    "tests\\benchmark_profile.py": {
+      "sha256": "548763b83fb0870329d8c38b450d280c036226f448d0e2ff5234b5b11d93c64d",
+      "size": 3897
+    },
+    "tests\\run_step0_test.py": {
+      "sha256": "5b61dac635f62afd014e99a9e55348d4ac546cfa41efc6821deff2b62e87f140",
+      "size": 2122
+    },
+    "tests\\run_step1_test.py": {
+      "sha256": "a81d079e2c690c4089812770820e5a2d38ceb34e4608931b0a5510f678c97639",
+      "size": 2695
+    },
+    "tests\\run_stepa1_test.py": {
+      "sha256": "ebe5bf8bf7c5c9d1826222ed8af490902a6b4adfd1b56c0cfa69ac35baa6c540",
+      "size": 1752
+    },
+    "tests\\smoke_test.py": {
+      "sha256": "16b4a599e3258a8b34776da7c2dea74e3a1f426e823420c0d4f522fb019a2e65",
+      "size": 10870
+    },
+    "tests\\test_collision.py": {
+      "sha256": "1f7707c27ad652e0cb80e5fc86f1674a7285ca9f8ec473d0aea11b37a71d464a",
+      "size": 10685
+    },
+    "tests\\test_custom_enemies.py": {
+      "sha256": "0d3ec57086ff37c4a9fecdc1b7a6fe69831be7460e375ec89d36fb1935b0f6be",
+      "size": 4523
+    },
+    "tests\\test_edge_ring.py": {
+      "sha256": "2326f909f318582b1614b88bf03013b526c61d91c2a3f08a30b5f44ded21bb81",
+      "size": 2972
+    },
+    "tests\\test_enemy_drops.py": {
+      "sha256": "4301aff22cb96cc54cfadab3413dacea83d6d8b27124e0ac060a084312d4ff4d",
+      "size": 3042
+    },
+    "tests\\test_enemy_hit_reactions.py": {
+      "sha256": "d4abe24f95db802360e0eaae66bda6953294c8b9c3757f363d33c785dfc3f048",
+      "size": 3618
+    },
+    "tests\\test_forest_advanced.py": {
+      "sha256": "1dfc47c8ee354b3c4a647c7a0b055be457ad2ef1c05621f71c9be5fc88faba10",
+      "size": 4053
+    },
+    "tests\\test_gameplay_fixes.py": {
+      "sha256": "6ed44f375c33de532608464b29c5516d91cd1a367f7979be9aa3bf81acd515f4",
+      "size": 2474
+    },
+    "tests\\test_hybrid_map.py": {
+      "sha256": "38b9645f72d3581c98035f618ae804a38c443620f60d90ed8f2b4992b09ee853",
+      "size": 4356
+    },
+    "tests\\test_objective.py": {
+      "sha256": "122827f19fee2dbd9b4a5ba89cb494216837621b83b23808a612c677cb61d23a",
+      "size": 3898
+    },
+    "tests\\test_page_access.py": {
+      "sha256": "e4706bf24a858621600133582fe2912be97f6bc9e0a5bf98ff101db7f0166918",
+      "size": 2040
+    },
+    "tests\\test_page_arrow.py": {
+      "sha256": "d7591724c33c74646e38a0da9b1ace6d7f3af1e0fc5a110b4e99704f1671dcb7",
+      "size": 1534
+    },
+    "tests\\test_raycast_fast.py": {
+      "sha256": "8399be19855a09270eeb4b72a4b3d57686b2eb7ed847334d4cd7091769fd78d0",
+      "size": 4871
+    },
+    "tests\\test_render.py": {
+      "sha256": "5ed379f22cddbf0fbb383446bd700d8b9a54f4035e4aa506942431e08c43cb53",
+      "size": 4730
+    },
+    "tests\\test_terrain_gen.py": {
+      "sha256": "f9f85301888bc3fc0b0797fb544970c95a2822dbf3389149ece55901b080f2ff",
+      "size": 6868
+    },
+    "tests\\test_update_system.py": {
+      "sha256": "7f77f995731fbe4a8f1b957ba09d3f9d9c5a49ef883776f084c2bd25b5669548",
+      "size": 2621
+    },
+    "tests\\test_weather_fx.py": {
+      "sha256": "3768fbd5c3a8fb167a4e371a97676fc7cfadfb6df39fccf2d2cef858a238f299",
+      "size": 10529
+    },
+    "tools\\check_audio.py": {
+      "sha256": "5ff518dbf61abd5c16051fcdfe91915e5213836968a8c51e2c7ae48fed980cc9",
+      "size": 3054
+    },
+    "tools\\gen_jumpscare_sounds.py": {
+      "sha256": "ceb94cc5dfd5ed5e2cfa6c2dc1018a4d5022ad8204b27ced2d6dacc19c034fc0",
+      "size": 10923
+    },
+    "tools\\make_bible_arrow.py": {
+      "sha256": "947b1c7fe2d2057224b568e131a128d0f27ce2b14b6b36b706efdd927a2d1d51",
+      "size": 6124
+    },
+    "tools\\manifest.py": {
+      "sha256": "f2911801c8b3ca9265fe17058fcd8cf67059851fbbfec1f262de56333e9884df",
+      "size": 4329
+    },
+    "tools\\map_part2.py": {
+      "sha256": "1457b9a93fa3d1217e70ff18e8fcc743741f5546deef6a2281fc2fd602cae969",
+      "size": 772
+    },
+    "tools\\map_part3.py": {
+      "sha256": "7c881ca1fa4a79d801195c4878706f21164787475735fea02d98981da60ff7cf",
+      "size": 703
+    },
+    "tools\\patcher.py": {
+      "sha256": "1ddfb2abbc2f82171600d6ba5fc1f123716738b8cfc7aa917c3f28113d181d40",
+      "size": 6464
+    },
+    "tools\\slice_enemy_sheet.py": {
+      "sha256": "e339c55c5181793928553b3319dacec41efe54a167af574a67bc8ad43cabd7d2",
+      "size": 4071
+    },
+    "tools\\terrain_preview.py": {
+      "sha256": "f6d7bf6f62d4af9f35c680b093e23c6edabe5eff410dfe7acb4899eb30b00a99",
+      "size": 4595
+    },
+    "tools\\update_game.py": {
+      "sha256": "8f9053948b0477ec6b679c374bf4e43087bc49cdafe6325e6425a5a3facf94d9",
+      "size": 9120
+    },
+    "visual_enhancements.py": {
+      "sha256": "c3847be047e4f039d426ce7d88a7b7034d354197eb0cd0a0dd0bc2816691f3fc",
+      "size": 4417
+    },
+    "weather_fx.py": {
+      "sha256": "71f78cf38f5baeb6f03e32880539308abdfbfde912ec487c78bd1246db01fab2",
+      "size": 27959
+    }
+  }
+}
