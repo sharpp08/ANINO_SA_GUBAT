@@ -26,66 +26,36 @@ class SettingsMenu:
     def _build_rows(self):
         return {
             "VIDEO": [
-                ("Fullscreen", "fullscreen", "toggle", None),
-                ("VSync", "vsync", "toggle", None),
-                ("Resolution", "resolution", "choice", ["640 x 480", "1280 x 720", "1600 x 900", "1920 x 1080"]),
+                ("Fullscreen", "fullscreen", "toggle", None), ("VSync", "vsync", "toggle", None),
+                ("Resolution", "resolution", "choice", ["1280 x 720", "1600 x 900", "1920 x 1080"]),
                 ("Preset Quality", "quality_tier", "choice", ["low", "medium", "high"]),
-                ("Texture Quality", "texture_quality", "choice", ["low", "medium", "high"]),
-                ("Anti-Aliasing", "anti_aliasing", "choice", ["off", "FXAA", "2x MSAA", "4x MSAA"]),
-                ("Anisotropic", "anisotropic", "choice", ["off", "2x", "4x", "8x", "16x"]),
-                ("Shadow Quality", "shadow_quality", "choice", ["off", "low", "medium", "high"]),
-                ("Shadow Resolution", "shadow_resolution", "choice", ["low", "medium", "high"]),
-                ("Brightness", "brightness", "slider", (0, 100)),
-                ("Field of View", "fov", "slider", (60, 110)),
                 ("FPS Limit", "fps_limit", "choice", ["30", "45", "60", "90", "120", "unlimited"]),
-                ("Film Grain", "enable_film_grain", "toggle", None),
-                ("Fog Effects", "enable_fog", "toggle", None),
+                ("Brightness", "brightness", "slider", (50, 150)), ("Field of View", "fov", "slider", (60, 100)),
+                ("Fog Effects", "enable_fog", "toggle", None), ("Particles", "enable_particles", "toggle", None),
             ],
             "AUDIO": [
-                ("Master Volume", "master_volume", "volume", (0, 100)),
-                ("Music Volume", "music_volume", "volume", (0, 100)),
-                ("Sound Effects", "sfx_volume", "volume", (0, 100)),
-                ("Ambient Volume", "ambient_volume", "volume", (0, 100)),
+                ("Master Volume", "master_volume", "volume", (0, 100)), ("Music Volume", "music_volume", "volume", (0, 100)),
+                ("Sound Effects", "sfx_volume", "volume", (0, 100)), ("Ambient Volume", "ambient_volume", "volume", (0, 100)),
                 ("Enemy Sounds", "enemy_volume", "volume", (0, 100)),
-                ("UI Sounds", "ui_volume", "volume", (0, 100)),
-                ("Mute When Unfocused", "mute_unfocused", "toggle", None),
             ],
             "CONTROLS": [
-                ("Move Forward", "forward", "bind", None),
-                ("Move Backward", "backward", "bind", None),
-                ("Move Left", "strafe_left", "bind", None),
-                ("Move Right", "strafe_right", "bind", None),
-                ("Interact", "interact", "bind", None),
-                ("Sprint", "sprint", "bind", None),
-                ("Crouch", "crouch", "bind", None),
-                ("Flashlight", "flashlight", "bind", None),
-                ("Reload", "reload", "bind", None),
-                ("Mouse Sensitivity", "mouse_sensitivity", "slider", (1, 100)),
-                ("Invert Mouse Y", "invert_mouse_y", "toggle", None),
-                ("Reset Controls", "reset_controls", "action", None),
+                ("Move Forward", "forward", "bind", None), ("Move Backward", "backward", "bind", None),
+                ("Move Left", "strafe_left", "bind", None), ("Move Right", "strafe_right", "bind", None),
+                ("Interact", "interact", "bind", None), ("Sprint", "sprint", "bind", None),
+                ("Crouch", "crouch", "bind", None), ("Flashlight", "flashlight", "bind", None),
+                ("Reload", "reload", "bind", None), ("Use Salt", "salt", "bind", None),
+                ("Use Garlic", "garlic", "bind", None), ("Use Rosary", "rosary", "bind", None),
+                ("Use Cross", "cross", "bind", None), ("Mouse Sensitivity", "mouse_sensitivity", "slider", (10, 100)),
+                ("Invert Mouse Y", "invert_mouse_y", "toggle", None), ("Reset Controls", "reset_controls", "action", None),
             ],
             "GAMEPLAY": [
-                ("Difficulty", "difficulty", "choice", ["easy", "normal", "hard", "nightmare"]),
-                ("Enemy Aggression", "enemy_aggression", "choice", ["low", "normal", "high"]),
-                ("Enemy Spawn Rate", "enemy_spawn_rate", "choice", ["low", "normal", "high"]),
-                ("Camera Shake", "enable_camera_shake", "toggle", None),
-                ("Head Bobbing", "head_bobbing", "toggle", None),
+                ("Sanity System", "enable_sanity", "toggle", None), ("Camera Shake", "enable_camera_shake", "toggle", None),
                 ("Sprint Behavior", "sprint_toggle", "choice", ["hold", "toggle"]),
-                ("Crouch Behavior", "crouch_toggle", "choice", ["hold", "toggle"]),
-                ("Interaction Prompts", "interaction_prompts", "toggle", None),
-                ("HUD Visibility", "hud_visible", "toggle", None),
-                ("Tutorial Hints", "tutorial_hints", "toggle", None),
+                ("Crouch Behavior", "crouch_toggle", "choice", ["hold", "toggle"]), ("HUD Visibility", "hud_visible", "toggle", None),
             ],
             "ACCESSIBILITY": [
-                ("Subtitles", "subtitles", "toggle", None),
-                ("Subtitle Size", "subtitle_size", "choice", ["small", "medium", "large"]),
-                ("Subtitle Background", "subtitle_background", "toggle", None),
-                ("Colorblind Mode", "colorblind_mode", "choice", ["off", "protanopia", "deuteranopia", "tritanopia"]),
-                ("High Contrast UI", "high_contrast_ui", "toggle", None),
-                ("UI Scale", "ui_scale", "choice", ["75%", "90%", "100%", "110%", "125%", "150%"]),
-                ("Reduce Flashing", "reduce_flashing", "toggle", None),
-                ("Reduce Camera Shake", "reduce_camera_shake", "toggle", None),
-                ("Visual Sound Cues", "visual_sound_cues", "toggle", None),
+                ("High Contrast UI", "high_contrast_ui", "toggle", None), ("Reduce Camera Shake", "reduce_camera_shake", "toggle", None),
+                ("Reduce Flashing", "reduce_flashing", "toggle", None), ("UI Scale", "ui_scale", "choice", ["90%", "100%", "110%", "125%", "150%"]),
             ],
         }
 
@@ -108,14 +78,16 @@ class SettingsMenu:
                 "fps_limit": "60", "quality_tier": "medium", "resolution": "1280 x 720",
                 "texture_quality": "medium", "anti_aliasing": "FXAA", "anisotropic": "8x",
                 "shadow_quality": "medium", "shadow_resolution": "medium",
-                "difficulty": "normal", "enemy_aggression": "normal", "enemy_spawn_rate": "normal",
-                "subtitle_size": "medium", "colorblind_mode": "off", "ui_scale": "100%",
+                "brightness": 100, "fov": 75, "fps_limit": "60",
+                "ambient_volume": 70, "enemy_volume": 80, "ui_scale": "100%",
             }
             return defaults.get(key, False if kind == "toggle" else "")
         if kind in ("volume",):
             return round(float(value) * 100) if isinstance(value, (int, float)) and value <= 1 else int(value)
         if key == "mouse_sensitivity" and isinstance(value, (int, float)) and value < 1:
-            return max(1, min(100, round(value / 0.002 * 50)))
+            return max(10, min(100, round(value / 0.002 * 50)))
+        if key == "brightness" and isinstance(value, (int, float)) and value <= 2:
+            return round(value * 100)
         return value
 
     def _set_value(self, key, value):
@@ -128,6 +100,8 @@ class SettingsMenu:
             self.values[key] = value / 100.0
         elif key == "mouse_sensitivity":
             self.values[key] = value / 50.0 * 0.002
+        elif key == "brightness":
+            self.values[key] = value / 100.0
         else:
             self.values[key] = value
         self.dirty = True
@@ -167,7 +141,13 @@ class SettingsMenu:
                 self.waiting_for_key = None
                 if event.key != pygame.K_ESCAPE:
                     name = pygame.key.name(event.key)
-                    self._set_value(action, name)
+                    controls = self.values.get("controls", cfg.CONTROLS)
+                    conflict = next((other for other, bound in controls.items()
+                                     if other != action and bound == name), None)
+                    if conflict:
+                        self._message(f"Already assigned to {conflict.upper()}")
+                    else:
+                        self._set_value(action, name)
                 return "stay"
             if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
                 return "back"
@@ -208,10 +188,10 @@ class SettingsMenu:
                 if 0 <= index < len(self._items()):
                     self.row = index
                     self._change(1)
-            elif my > 320 and mx > 300:
+            elif my > 320 and mx >= 520:
                 return "apply"
-            elif my > 320 and 300 <= mx < 470:
-                self.values = cfg.load_settings(path="__anino_default_settings__.json")
+            elif my > 320 and 300 <= mx < 520:
+                self.values = self._default_values()
                 self.dirty = True
                 self.waiting_for_key = None
                 self._message("Defaults restored • press APPLY to keep")
@@ -219,7 +199,23 @@ class SettingsMenu:
                 return "back"
         return "stay"
 
+    def _default_values(self):
+        defaults = cfg.load_settings(path="__anino_defaults_missing__.json")
+        defaults.update({
+            "fullscreen": cfg.FULLSCREEN, "vsync": True, "resolution": "1280 x 720",
+            "quality_tier": "medium", "fps_limit": "60", "brightness": 1.0, "fov": 75,
+            "master_volume": cfg.MASTER_VOLUME, "music_volume": cfg.MUSIC_VOLUME,
+            "sfx_volume": cfg.SFX_VOLUME, "ambient_volume": 0.7, "enemy_volume": 0.8,
+            "enable_fog": True, "enable_particles": True, "enable_sanity": True,
+            "enable_camera_shake": True, "mouse_sensitivity": cfg.PLAYER_ROT_SPEED,
+            "invert_mouse_y": False, "sprint_toggle": "hold", "crouch_toggle": "hold",
+            "hud_visible": True, "high_contrast_ui": False, "reduce_camera_shake": False,
+            "reduce_flashing": False, "ui_scale": "100%", "controls": dict(cfg.CONTROLS),
+        })
+        return defaults
+
     def apply(self, on_apply=None):
+        cfg.CONTROLS.update(self.values.get("controls", {}))
         cfg.save_settings(self.values)
         self.previous_values = dict(self.values)
         self.dirty = False
