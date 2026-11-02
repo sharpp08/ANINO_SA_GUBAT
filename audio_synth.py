@@ -859,11 +859,42 @@ class SoundManager:
             self.sounds['footstep'] = steps[0]
 
     # ── playback ──────────────────────────────────────────────────────────────
+    def _load_intro_score(self):
+        """Lazily load assets/audio/intro_score.wav (None if missing/unreadable)."""
+        if getattr(self, '_intro_score_tried', False):
+            return getattr(self, '_intro_score', None)
+        self._intro_score_tried = True
+        self._intro_score = None
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'assets', 'audio', 'intro_score.wav')
+        if os.path.isfile(path):
+            try:
+                self._intro_score = pygame.mixer.Sound(path)
+                print('[Audio] Loaded intro score.')
+            except Exception as exc:
+                print(f'[Audio] Could not load intro score: {exc}')
+        return self._intro_score
+
     def start_intro_ambience(self):
+        """Start the intro cinematic audio.  The recorded score replaces all of the
+        procedural intro sounds; if it cannot be loaded, fall back to the old wind."""
+        self.intro_score_active = False
+        score = self._load_intro_score()
+        if score is not None:
+            try:
+                self.stop_intro_ambience()
+                ch = score.play()
+                if ch is not None:
+                    ch.set_volume(1.0, 1.0)
+                    self.intro_score_active = True
+                    return
+            except Exception:
+                pass
         self.play('intro_wind', 0.5)
 
     def stop_intro_ambience(self):
-        """Silence one-shots (intro wind, drone, calls) but keep the forest beds."""
+        """Silence one-shots (intro score, wind, drone, calls) but keep the forest beds."""
+        self.intro_score_active = False
         try:
             for i in range(AMBIENCE_RESERVED, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(i).stop()

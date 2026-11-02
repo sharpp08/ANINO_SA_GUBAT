@@ -553,6 +553,8 @@ class Cinematic:
                 pass
             return True
         t = self.time
+        if getattr(audio_mgr, 'intro_score_active', False):
+            return False        # the recorded score carries all intro audio
         if 0.5 <= t < 1.0 and 1 not in self.cues:
             self.cues.add(1); self._play('intro_wind', 0.6)
         elif 12.0 <= t < 12.5 and 2 not in self.cues:
