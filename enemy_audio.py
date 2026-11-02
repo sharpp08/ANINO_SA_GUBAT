@@ -310,7 +310,7 @@ class EnemyAudioManager:
         sound = self.sounds.get((enemy_type, event_name))
         if sound is None:
             return None
-        return audio_mgr.play_object(sound, volume, pan)
+        return audio_mgr.play_object(sound, volume * getattr(audio_mgr, 'enemy_volume', 1.0), pan)
 
     def play_spatial(self, enemy_type, event_name, player_x, player_y, player_angle,
                      target_x, target_y, base_volume=1.0, max_dist=15.0):
@@ -322,7 +322,7 @@ class EnemyAudioManager:
         if params is None:
             return None
         volume, pan, level = params
-        return audio_mgr.play_object(audio_mgr.muffled(sound, level), volume, pan)
+        return audio_mgr.play_object(audio_mgr.muffled(sound, level), volume * getattr(audio_mgr, 'enemy_volume', 1.0), pan)
 
 
 enemy_audio_mgr = EnemyAudioManager()
