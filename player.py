@@ -10,7 +10,10 @@ from settings import *
 def _bound_key(action, fallback):
     name = _cfg.CONTROLS.get(action, fallback)
     try:
-        return pygame.key.key_code(name) if name else fallback
+        aliases = {'lshift': pygame.K_LSHIFT, 'rshift': pygame.K_RSHIFT,
+                   'lctrl': pygame.K_LCTRL, 'rctrl': pygame.K_RCTRL,
+                   'lalt': pygame.K_LALT, 'ralt': pygame.K_RALT}
+        return aliases.get(str(name).lower(), pygame.key.key_code(name) if name else fallback)
     except (ValueError, TypeError):
         return fallback
 
