@@ -177,14 +177,14 @@ class SettingsMenu:
             mx, my = event.pos
             # Coordinates are supplied in internal-surface space by the game.
             if mx < 150 and 115 <= my <= 285:
-                index = int((my - 115) // 29)
+                index = int((my - 112) // 29)
                 if 0 <= index < len(self.CATEGORIES):
                     if self.CATEGORIES[index] == "BACK":
                         return "back"
                     self.category = index
                     self.row = 0
-            elif mx >= 300 and 65 <= my <= 310:
-                index = int((my - 65) // 18)
+            elif mx >= 300 and 82 <= my <= 298:
+                index = int((my - 82) // 18)
                 if 0 <= index < len(self._items()):
                     self.row = index
                     self._change(1)
@@ -225,6 +225,14 @@ class SettingsMenu:
 
     def draw(self, surf, font_lg, font_sm, font_tiny):
         sw, sh = surf.get_size()
+        scale = max(0.75, min(1.5, int(str(self.values.get("ui_scale", "100%")).replace("%", "")) / 100.0))
+        if scale != 1.0:
+            font_lg = pygame.font.SysFont("consolas", max(12, int(32 * scale)), bold=True)
+            font_sm = pygame.font.SysFont("consolas", max(10, int(18 * scale)))
+            font_tiny = pygame.font.SysFont("consolas", max(8, int(13 * scale)))
+        high_contrast = bool(self.values.get("high_contrast_ui", False))
+        text_color = (255, 255, 255) if high_contrast else self.PALE
+        muted_color = (205, 205, 205) if high_contrast else (160, 161, 153)
         t = pygame.time.get_ticks() / 1000.0
         # Foggy forest treatment with a charcoal veil.
         surf.fill((9, 14, 17))
@@ -246,7 +254,7 @@ class SettingsMenu:
             active = i == self.category
             if active:
                 pygame.draw.polygon(surf, self.RED, [(12, y), (122, y), (135, y + 10), (119, y + 20), (12, y + 20)])
-            img = font_sm.render(name, True, self.PALE if active else (168, 169, 160))
+            img = font_sm.render(name, True, text_color if active else muted_color)
             surf.blit(img, (20, y + 2))
         # Settings panel.
         panel = pygame.Surface((298, 250), pygame.SRCALPHA)
@@ -263,7 +271,7 @@ class SettingsMenu:
             selected = idx == self.row
             if selected:
                 pygame.draw.rect(surf, (58, 25, 26), (330, y - 1, 282, 17))
-            txt = font_tiny.render(label.upper(), True, self.PALE if selected else (160, 161, 153))
+            txt = font_tiny.render(label.upper(), True, text_color if selected else muted_color)
             surf.blit(txt, (336, y + 2))
             value = self._value(key, kind)
             if kind in ("slider", "volume"):
