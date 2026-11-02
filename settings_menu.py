@@ -244,11 +244,6 @@ class SettingsMenu:
 
     def draw(self, surf, font_lg, font_sm, font_tiny):
         sw, sh = surf.get_size()
-        scale = max(0.75, min(1.5, int(str(self.values.get("ui_scale", "100%")).replace("%", "")) / 100.0))
-        if scale != 1.0:
-            font_lg = pygame.font.SysFont("consolas", max(12, int(32 * scale)), bold=True)
-            font_sm = pygame.font.SysFont("consolas", max(10, int(18 * scale)))
-            font_tiny = pygame.font.SysFont("consolas", max(8, int(13 * scale)))
         high_contrast = bool(self.values.get("high_contrast_ui", False))
         text_color = (255, 255, 255) if high_contrast else self.PALE
         muted_color = (205, 205, 205) if high_contrast else (160, 161, 153)
