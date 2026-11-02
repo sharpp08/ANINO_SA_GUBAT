@@ -253,7 +253,7 @@ Steps to produce the latest binary:
    copy dist\ANINO_SA_GUBAT\ANINO_SA_GUBAT.exe release\
    ```
 
-3. Keep the `assets/` folder next to the executable: the game resolves `assets/`, `saves/` and `settings.json` relative to the folder the exe lives in. The bundled recorded SFX (including `assets/audio/frenzy_mode_ambience.mp3`) must live under `assets/audio/` for custom sound to play; without them the procedural audio fallbacks are used and the Frenzy layer stays silent.
+3. Keep the `assets/` folder next to the executable: the game resolves `assets/` and `settings.json` relative to the folder the exe lives in. The bundled recorded SFX (including `assets/audio/frenzy_mode_ambience.mp3`) must live under `assets/audio/` for custom sound to play; without them the procedural audio fallbacks are used and the Frenzy layer stays silent.
 4. Commit the updated root `ANINO_SA_GUBAT.exe` alongside the source changes so the shipped binary always matches the code.
 
 ## Current technical caveats
