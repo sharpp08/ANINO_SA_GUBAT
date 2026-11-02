@@ -321,6 +321,11 @@ class SoundManager:
             pygame.mixer.set_reserved(AMBIENCE_RESERVED)
         except Exception:
             pass
+        self.master_volume = 1.0
+        self.music_volume = 1.0
+        self.sfx_volume = 1.0
+        self.ambient_volume = 1.0
+        self.enemy_volume = 1.0
         self.sounds = {}
         self.variants = {}
         self._muffle_cache = {}
@@ -990,7 +995,7 @@ class SoundManager:
         if snd is None:
             return None
         try:
-            vol = max(0.0, min(1.0, volume)) * max(0.0, min(1.0, headroom))
+            vol = max(0.0, min(1.0, volume)) * max(0.0, min(1.0, headroom)) * self.master_volume * self.sfx_volume
             pan = max(-1.0, min(1.0, pan))
             theta = (pan + 1.0) * math.pi / 4.0
             left = min(1.0, vol * math.cos(theta) * math.sqrt(2.0))
@@ -1088,7 +1093,7 @@ class SoundManager:
                     snd = self.sounds.get(name)
                     if snd is not None:
                         channel.play(snd, loops=-1, fade_ms=2500)
-                        channel.set_volume(vol)        # after play(): playing resets the channel volume
+                        channel.set_volume(vol * self.master_volume * self.ambient_volume)        # after play(): playing resets the channel volume
                 else:
                     channel.fadeout(900)
         except Exception:
