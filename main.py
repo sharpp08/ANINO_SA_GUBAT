@@ -17,7 +17,7 @@ from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
 from radar import Radar
-from audio_synth import audio_mgr
+from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
 from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from objective import next_objective, nearest_page, relative_bearing, direction_word
