@@ -45,7 +45,9 @@ def control_key(action, fallback):
         aliases = {'lshift': pygame.K_LSHIFT, 'rshift': pygame.K_RSHIFT,
                    'lctrl': pygame.K_LCTRL, 'rctrl': pygame.K_RCTRL,
                    'lalt': pygame.K_LALT, 'ralt': pygame.K_RALT}
-        return aliases.get(str(name).lower(), pygame.key.key_code(name) if name else fallback)
+        if str(name).lower() in aliases:
+            return aliases[str(name).lower()]
+        return pygame.key.key_code(name) if name else fallback
     except (ValueError, TypeError):
         return fallback
 
