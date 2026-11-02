@@ -358,6 +358,19 @@ class SoundManager:
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver reload sound: {exc}')
 
+        # Load the supplied shotgun reload recording; retain the synthesized fallback.
+        custom_shotgun_reload = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'assets', 'audio', 'shotgun_reload.mp3'
+        )
+        if os.path.isfile(custom_shotgun_reload):
+            try:
+                self.sounds['shotgun_reload'] = pygame.mixer.Sound(custom_shotgun_reload)
+                self.sounds['shotgun_reload'].set_volume(0.80)
+                print('[Audio] Loaded custom shotgun reload sound.')
+            except Exception as exc:
+                print(f'[Audio] Could not load custom shotgun reload sound: {exc}')
+
         self._load_thunder()
         self._load_footsteps()
 
