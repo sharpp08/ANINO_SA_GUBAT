@@ -1080,7 +1080,9 @@ class SoundManager:
         return self.play_object(self.muffled(snd, level), volume, pan)
 
     # ── ambience ──────────────────────────────────────────────────────────────
-    _BEDS = (('wind_bed', 0, 0.075), ('crickets_bed', 1, 0.045))
+    # These are already synthesised at moderate peak levels; use a healthy
+    # playback gain so they remain audible on laptop speakers at normal volume.
+    _BEDS = (('wind_bed', 0, 0.32), ('crickets_bed', 1, 0.22))
 
     def set_frenzy_ambience(self, active):
         """Loop the quiet Frenzy bed only while Frenzy is active during gameplay."""
@@ -1128,7 +1130,9 @@ class SoundManager:
         """Sparse forest one-shots (owl, leaves, distant twig snap)."""
         if not self._amb_active:
             return
-        schedule = {'owl': (55, 110, 0.015, 0.035), 'rustle': (18, 38, 0.012, 0.035), 'snap': (45, 95, 0.02, 0.045)}
+        # One-shots were previously mixed at near-inaudible gains (about -30 dB
+        # before the master/ambient sliders). Raise them to a clearly audible level.
+        schedule = {'owl': (35, 65, 0.20, 0.34), 'rustle': (12, 24, 0.16, 0.30), 'snap': (28, 55, 0.18, 0.32)}
         for key, (lo, hi, v0, v1) in schedule.items():
             self._amb_timers[key] = self._amb_timers.get(key, random.uniform(lo, hi)) - dt
             if self._amb_timers[key] <= 0.0:
