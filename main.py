@@ -703,11 +703,10 @@ class Game:
         if next_ch <= self.max_chapter():
             print(f"[CHAPTER LOAD] Loading Chapter {next_ch}...")
             try:
-                carried = self.player.get_state()      # keep health, ammo, items, wards
+                carried = self.player.capture_run_state()  # keep health, ammo, items, wards
                 self.load_chapter(next_ch)
                 carried.pop('x', None); carried.pop('y', None); carried.pop('angle', None)
-                carried.pop('checkpoint_x', None); carried.pop('checkpoint_y', None)
-                self.player.load_state({**self.player.get_state(), **carried})
+                self.player.restore_run_state({**self.player.capture_run_state(), **carried})
                 self.player.current_chapter = next_ch
                 self.player.alive = True
                 self.state = STATE_PLAYING
