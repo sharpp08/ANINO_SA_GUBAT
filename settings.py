@@ -470,6 +470,8 @@ CONTROLS = {
     'debug_toggle': 'f3',
 }
 
+DEFAULT_CONTROLS = CONTROLS.copy()
+
 import sys
 
 if getattr(sys, 'frozen', False):
