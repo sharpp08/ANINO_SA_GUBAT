@@ -286,7 +286,7 @@ def synth_voice(rate, f0, vowel_a='a', vowel_b=None, morph=None, tilt=1.6,
 MUFFLE_CUTOFFS = (None, 5000.0, 2400.0, 1100.0)
 AMBIENCE_RESERVED = 3          # channels 0/1 are forest beds; channel 2 is reserved for Frenzy music
 FRENZY_AMBIENCE_CHANNEL = 2
-FRENZY_AMBIENCE_VOLUME = 0.05  # very quiet background ambience
+FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
 class SoundManager:
