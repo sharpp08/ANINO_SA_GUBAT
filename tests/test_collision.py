@@ -48,7 +48,6 @@ def _make_player(x, y, angle=0.0):
     p.is_sprinting = False; p.is_crouching = False
     p.bob_timer = 0; p.bob_amount = 0
     p.journal_entries = []; p.relics = []; p.current_chapter = 1
-    p.checkpoint_x = x; p.checkpoint_y = y; p.checkpoint_angle = angle
     p.spring_bob = None; p.spring_sway = None
     return p
 
