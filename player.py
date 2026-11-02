@@ -35,7 +35,8 @@ class Player:
         self.revolver_mag = REVOLVER_MAG_SIZE
         self.weapon_cooldown = 0
         self.reloading = False
-        self.reload_timer = 0
+        self.reload_timer = 0.0
+        self.reload_weapon = None
 
         # Flashlight
         self.flashlight_on = True
@@ -211,21 +212,27 @@ class Player:
         if self.weapon_cooldown > 0:
             self.weapon_cooldown -= dt
 
-        # Reload
+        # Reload only into the weapon that actually started the reload.
         if self.reloading:
-            self.reload_timer -= dt
-            if self.reload_timer <= 0:
-                self.reloading = False
-                if self.current_weapon == 1:
-                    needed = SHOTGUN_MAG_SIZE - self.shotgun_mag
-                    transfer = min(needed, self.ammo_shotgun)
-                    self.shotgun_mag += transfer
-                    self.ammo_shotgun -= transfer
-                elif self.current_weapon == 2:
-                    needed = REVOLVER_MAG_SIZE - self.revolver_mag
-                    transfer = min(needed, self.ammo_revolver)
-                    self.revolver_mag += transfer
-                    self.ammo_revolver -= transfer
+            if self.reload_weapon != self.current_weapon:
+                self.cancel_reload()
+            else:
+                self.reload_timer -= dt
+                if self.reload_timer <= 0:
+                    reload_weapon = self.reload_weapon
+                    self.reloading = False
+                    self.reload_timer = 0.0
+                    self.reload_weapon = None
+                    if reload_weapon == 1:
+                        needed = SHOTGUN_MAG_SIZE - self.shotgun_mag
+                        transfer = min(needed, self.ammo_shotgun)
+                        self.shotgun_mag += transfer
+                        self.ammo_shotgun -= transfer
+                    elif reload_weapon == 2:
+                        needed = REVOLVER_MAG_SIZE - self.revolver_mag
+                        transfer = min(needed, self.ammo_revolver)
+                        self.revolver_mag += transfer
+                        self.ammo_revolver -= transfer
 
         # Flashlight
         if self.flashlight_on:
@@ -263,13 +270,12 @@ class Player:
 
     def fire_weapon(self):
         """Attempt to fire the current weapon. Cancel reload if active. Returns hit info."""
+        # The fire input interrupts a reload even if the previous shot's cooldown
+        # has not quite expired yet.
+        if self.reloading:
+            self.cancel_reload()
         if self.weapon_cooldown > 0:
             return None
-
-        # Cancel reload if player attacks
-        if self.reloading:
-            self.reloading = False
-            self.reload_timer = 0
 
         if self.current_weapon == 0:  # Bolo
             self.weapon_cooldown = BOLO_COOLDOWN
@@ -309,27 +315,42 @@ class Player:
             }
         return None
 
+    def cancel_reload(self):
+        """Cancel the active reload without transferring reserve ammunition."""
+        was_reloading = self.reloading
+        self.reloading = False
+        self.reload_timer = 0.0
+        self.reload_weapon = None
+        return was_reloading
+
     def start_reload(self):
-        """Start reloading the current weapon."""
+        """Start reloading the current firearm."""
         if self.reloading:
-            return
+            return False
         if self.current_weapon == 1:
             if self.ammo_shotgun > 0 and self.shotgun_mag < SHOTGUN_MAG_SIZE:
                 self.reloading = True
                 self.reload_timer = SHOTGUN_RELOAD_TIME
+                self.reload_weapon = 1
                 self.noise_level = max(self.noise_level, RELOAD_NOISE)
+                return True
         elif self.current_weapon == 2:
             if self.ammo_revolver > 0 and self.revolver_mag < REVOLVER_MAG_SIZE:
                 self.reloading = True
                 self.reload_timer = REVOLVER_RELOAD_TIME
+                self.reload_weapon = 2
                 self.noise_level = max(self.noise_level, RELOAD_NOISE)
+                return True
+        return False
 
     def switch_weapon(self, weapon_id):
-        """Switch to weapon by index."""
-        if weapon_id != self.current_weapon:
-            self.current_weapon = weapon_id
-            self.reloading = False
-            self.weapon_cooldown = 0.3
+        """Switch to a valid weapon, cancelling any reload on the old weapon."""
+        if weapon_id not in (0, 1, 2) or weapon_id == self.current_weapon:
+            return False
+        self.current_weapon = weapon_id
+        self.cancel_reload()
+        self.weapon_cooldown = 0.3
+        return True
 
     def take_damage(self, amount):
         """Apply damage to the player."""
@@ -501,6 +522,8 @@ class Player:
 
     def load_state(self, state):
         """Load player state from dict."""
+        self.cancel_reload()
+        self.weapon_cooldown = 0.0
         self.x = state.get('x', 1.5)
         self.y = state.get('y', 1.5)
         self.angle = state.get('angle', 0)
