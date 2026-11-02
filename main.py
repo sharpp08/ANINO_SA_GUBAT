@@ -1186,6 +1186,8 @@ class Game:
 
             # Forest ambience (wind, crickets, owl, rustling) only while actually playing
             try:
+                audio_mgr.set_frenzy_ambience(
+                    self.state == STATE_PLAYING and self.enemy_manager.frenzy_active)
                 audio_mgr.set_ambience_active(self.state == STATE_PLAYING)
                 if self.state == STATE_PLAYING:
                     audio_mgr.update_ambience(dt)
