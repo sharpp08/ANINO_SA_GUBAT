@@ -68,7 +68,7 @@ class Player:
         self.journal_entries = []
         self.relics = []
 
-        # Chapter/checkpoint
+        # Chapter progression
         self.current_chapter = 1
 
         # Animation & Physics Springs
@@ -467,8 +467,8 @@ class Player:
             return True
         return False
 
-    def get_state(self):
-        """Get serializable player state."""
+    def capture_run_state(self):
+        """Capture in-memory run progress when advancing chapters."""
         return {
             'x': self.x, 'y': self.y, 'angle': self.angle,
             'health': self.health, 'armor': self.armor,
@@ -490,8 +490,8 @@ class Player:
             'current_chapter': self.current_chapter,
         }
 
-    def load_state(self, state):
-        """Load player state from dict."""
+    def restore_run_state(self, state):
+        """Restore in-memory run progress after advancing chapters."""
         self.x = state.get('x', 1.5)
         self.y = state.get('y', 1.5)
         self.angle = state.get('angle', 0)
