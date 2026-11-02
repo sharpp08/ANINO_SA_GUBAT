@@ -99,6 +99,15 @@ def draw_hud(surf, player, font_sm, font_tiny):
     fe_lbl = font_tiny.render(f"FAITH {int(player.faith_energy)}", True, (150, 180, 255))
     surf.blit(fe_lbl, (pad, current_y - font_h))
     draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.faith_energy, FAITH_ENERGY_MAX, FAITH_BLUE)
+    current_y -= (font_h + 12)
+
+    # Sanity: shifts from calm purple to warning red as the player approaches frenzy.
+    sanity_ratio = max(0.0, min(1.0, player.sanity / SANITY_MAX))
+    sanity_color = (150, 80, 200) if sanity_ratio > 0.60 else ((220, 155, 55) if sanity_ratio > 0.30 else (230, 55, 55))
+    sanity_label = 'FRENZY' if player.sanity < SANITY_FRENZY_THRESHOLD else f'SANITY {int(player.sanity)}'
+    sanity_text = font_tiny.render(sanity_label, True, sanity_color)
+    surf.blit(sanity_text, (pad, current_y - font_h))
+    draw_bar(surf, pad + 70, current_y - font_h + 3, 110, 6, player.sanity, SANITY_MAX, sanity_color)
 
     # (Pages / sunrise clock / objective arrow: see draw_top_hud)
 
@@ -970,7 +979,11 @@ class Game:
             self._spawn_survival_enemy()
             # The forest grows more aggressive as sunrise approaches.
             interval = max(10.0, 30.0 - self.survival_spawn_count * 1.2)
-            self.survival_spawn_timer = interval + random.uniform(-4.0, 5.0)
+            sanity_ratio = max(0.0, min(1.0, p.sanity / SANITY_MAX))
+            spawn_multiplier = (SANITY_SPAWN_MIN_INTERVAL_MULTIPLIER
+                                + (1.0 - SANITY_SPAWN_MIN_INTERVAL_MULTIPLIER) * sanity_ratio)
+            interval *= spawn_multiplier
+            self.survival_spawn_timer = max(5.0, interval + random.uniform(-4.0, 5.0))
 
         if self.player.pages_this_chapter >= 5 and not getattr(self, 'pages_complete_notified', False):
             self.pages_complete_notified = True
