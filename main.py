@@ -1007,8 +1007,10 @@ class Game:
                 self.internal.blit(nt, (nx, panel_bottom + 5))
 
         elif self.state == STATE_PAUSED:
+            sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
+            sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
-                self.player, self.game_map, render_enemies, self.effects, dt)
+                self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
             draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
             draw_top_hud(self.internal, self.player, self.game_map,
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
