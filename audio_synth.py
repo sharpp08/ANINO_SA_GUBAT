@@ -1080,7 +1080,7 @@ class SoundManager:
         return self.play_object(self.muffled(snd, level), volume, pan)
 
     # ── ambience ──────────────────────────────────────────────────────────────
-    _BEDS = (('wind_bed', 0.0, 0.018), ('crickets_bed', 1.0, 0.008))
+    _BEDS = (('wind_bed', 0, 0.075), ('crickets_bed', 1, 0.045))
 
     def set_frenzy_ambience(self, active):
         """Loop the quiet Frenzy bed only while Frenzy is active during gameplay."""
@@ -1102,7 +1102,14 @@ class SoundManager:
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
         active = bool(active)
+        was_active = self._amb_active
         self._amb_active = active
+        if active and not was_active:
+            self._amb_timers = {
+                'owl': random.uniform(12, 30),
+                'rustle': random.uniform(4, 12),
+                'snap': random.uniform(25, 60),
+            }
         try:
             for name, ch_index, vol in self._BEDS:
                 channel = pygame.mixer.Channel(int(ch_index))
@@ -1116,12 +1123,6 @@ class SoundManager:
                     channel.fadeout(900)
         except Exception as exc:
             print(f'[Audio] Forest ambience update failed: {exc}')
-        if active:
-            self._amb_timers = {
-                'owl': random.uniform(12, 30),
-                'rustle': random.uniform(4, 12),
-                'snap': random.uniform(25, 60),
-            }
 
     def update_ambience(self, dt):
         """Sparse forest one-shots (owl, leaves, distant twig snap)."""
