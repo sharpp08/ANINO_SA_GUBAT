@@ -609,6 +609,8 @@ class EnemyManager:
                     angle_diff = (
                         angle_to_enemy - player_angle + math.pi
                     ) % (2 * math.pi) - math.pi
+                    if abs(angle_diff) >= 0.3:
+                        continue
                     if abs(angle_diff + pellet_spread) >= 0.25:
                         continue
                     if not _has_clear_line_of_sight(
