@@ -109,7 +109,7 @@ class Player:
         # Mouse look
         self.angle += mouse_dx * PLAYER_ROT_SPEED
         self.angle %= math.pi * 2
-        invert_y = bool(_cfg.load_settings().get('invert_mouse_y', False))
+        invert_y = bool(getattr(_cfg, 'RUNTIME_SETTINGS', {}).get('invert_mouse_y', False))
         self.pitch += mouse_dy * PLAYER_ROT_SPEED * (0.5 if invert_y else -0.5)
         self.pitch = max(-0.5, min(0.5, self.pitch))
 
@@ -122,7 +122,7 @@ class Player:
         crouch_key = _bound_key('crouch', pygame.K_LCTRL)
         moving_keys = keys[forward_key] or keys[backward_key] or keys[left_key] or keys[right_key]
         sprint_down, crouch_down = bool(keys[sprint_key]), bool(keys[crouch_key])
-        saved_settings = _cfg.load_settings()
+        saved_settings = getattr(_cfg, 'RUNTIME_SETTINGS', {})
         if saved_settings.get('sprint_toggle', 'hold') == 'toggle':
             if sprint_down and not self._prev_sprint_key:
                 self._sprint_toggle_active = not self._sprint_toggle_active
