@@ -23,7 +23,7 @@ A first-person, pseudo-3D horror-survival game inspired by Philippine folklore. 
 - A large, seeded forest with trails, village structures, a limestone cave, swamp, ruins and shrine.
 - Five Bible pages per chapter, a sealed exit, sunrise countdown and compass guidance.
 - Flashlight battery, stamina, health, armor, Faith and sanity management.
-- In-run checkpoints for respawning; each new run starts from the beginning with no save/load persistence.
+- Permanent death: dying ends the run; there are no checkpoints, respawns, or save/load persistence.
 - A rotating radar mini-map for nearby enemies, obstacles and pickups.
 
 ### Sanity and Frenzy
@@ -130,7 +130,7 @@ The game starts at 1280 × 720. On first launch, procedural assets and the cache
 | `Q` | Cast selected ward |
 | `G` | Place salt |
 | `H` | Throw garlic |
-| `E` | Interact with doors and checkpoints |
+| `E` | Interact with doors |
 | `M` | Toggle radar |
 | `Esc` | Pause |
 | `F11` | Toggle fullscreen |
@@ -138,7 +138,7 @@ The game starts at 1280 × 720. On first launch, procedural assets and the cache
 ### Menu controls
 - **Main menu:** `Enter` starts a fresh run, `I` replays the intro, `Esc` quits.
 - **Pause menu:** `Esc` resumes, `M` returns to the main menu. Saving and loading runs are disabled for competitive fairness.
-- **Game over:** `R` respawns at a checkpoint; `M` returns to the main menu.
+- **Game over:** death is permanent for that run; `M` returns to the main menu.
 - **Chapter complete:** `Enter` continues; `M` returns to the main menu.
 
 ### Debug keys
@@ -157,7 +157,7 @@ Quality tier switching is handled by `F5` (next tier) and `F6` (previous tier); 
 3. Conserve flashlight battery and stay in lit areas when possible to protect sanity.
 4. Keep distance from enemies when your sanity is low: Frenzy makes them faster and more dangerous.
 5. Use the bolo when you need a quieter option. Gunfire and reloads can attract attention.
-6. Reach in-run checkpoints to set your respawn location; progress is not saved between sessions.
+6. Avoid dying: there are no checkpoints or respawns, and progress is not saved between sessions.
 7. Use salt, garlic and Faith-powered wards to control dangerous encounters.
 
 ---
