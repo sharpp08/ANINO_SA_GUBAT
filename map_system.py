@@ -227,7 +227,6 @@ class GameMap:
         self.undergrowth = []
         self.pickups = []
         self.enemies = []
-        self.checkpoints = []
         self.exit_pos = (58.5, 58.5)
         self.player_start = (4.5, 4.5)
         self.player_start_angle = 0.785
@@ -241,7 +240,6 @@ class GameMap:
         """Build the large hybrid map: handcrafted landmarks on procedural forest terrain."""
         self.chapter_num = chapter_num
         self.validation_errors = []
-        self.checkpoints = []
         self.hybrid_layout = True
         self.width = MAP_WIDTH
         self.height = MAP_HEIGHT
@@ -458,7 +456,6 @@ class GameMap:
         for x, y in ((116, 124), (144, 124), (116, 138), (144, 138)):
             self.grid[y][x] = WALL_STONE
             self.grid[y + 1][x] = WALL_STONE
-        self.checkpoints.append({'x': 130.5, 'y': 129.5})
 
     def _place_chapter1_entities(self):
         self.pickups = [
@@ -587,7 +584,6 @@ class GameMap:
         cleared_trees = 0
         all_targets = [(e['x'], e['y'], 'enemy', e) for e in self.enemies] + \
                       [(p['x'], p['y'], 'pickup', p) for p in self.pickups] + \
-                      [(c['x'], c['y'], 'checkpoint', c) for c in self.checkpoints] + \
                       [(self.exit_pos[0], self.exit_pos[1], 'exit', None)]
 
         # Use PLAYER_SIZE as the clearance radius so validation matches the
@@ -620,7 +616,7 @@ class GameMap:
         # Flood-fill from the player start; relocate or flag anything that cannot be reached
         reachable = self._reachable_cells()
         for (x, y, kind, obj) in all_targets:
-            if kind == 'checkpoint' or (int(x), int(y)) in reachable:
+            if (int(x), int(y)) in reachable:
                 continue
             if obj is not None:
                 spot = self._nearest_reachable(x, y, reachable)
