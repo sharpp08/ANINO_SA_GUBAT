@@ -250,6 +250,7 @@ RAIN_TOP = 5.0                   # height of the volume in tiles
 RAIN_EYE = 0.5                   # camera height in tiles (a wall is 1 tile tall)
 RAIN_SPEED = (6.5, 8.5)          # fall speed in tiles per second
 RAIN_STREAK = 0.035              # seconds of motion drawn as the streak
+RAIN_EDGE_FADE = 0.30            # drops fade out over the outer 30% of the field's half-width
 LEN_BINS = 3
 SLANT_BINS = 5
 SLANT0, SLANT_STEP = 0.08, 0.10      # streak slant (dx per dy) of bin i = SLANT0 + i * SLANT_STEP
@@ -283,8 +284,9 @@ class WeatherFX:
         self.density = max(0.1, float(rain_density))
         self.storm = StormClock(seed)
         self._np_rng = np.random.default_rng(seed)
-        self._rng = random.Random(seed)
-        self.strength = 1.0                           # rain intensity (fades towards dawn)
+        self._rng = random.Random(seed)               # splashes (depend on what the camera sees)
+        self._wind_rng = random.Random(None if seed is None else seed + 1)   # wind: world-only
+        self.strength = 1.0                          # rain intensity (fades towards dawn)
         self.slant = 0.25                             # current wind slant of the streaks
         self.horizon_y = self.h // 2
         self._last_yaw = None
@@ -329,14 +331,12 @@ class WeatherFX:
     def _step_rain(self, dt, wind, px, py):
         target = 0.04 + 0.6 * max(0.0, min(1.0, wind))
         self.slant += (target - self.slant) * min(1.0, dt * 1.2)
-        self.wind_dir += math.sin(self._rng.random() * 6.283) * 0.02 * dt     # slow drift
-        if not self._pos_init:                       # first frame: fill the volume around the player
-            self._wx += px
-            self._wy += py
-            self._pos_init = True
-        elif abs(px - self.pos[0]) > 6.0 or abs(py - self.pos[1]) > 6.0:
-            self._wx += px - self.pos[0]             # teleport / new chapter: carry the rain along
-            self._wy += py - self.pos[1]
+        self.wind_dir += math.sin(self._wind_rng.random() * 6.283) * 0.02 * dt     # slow drift
+        # The rain is one global field: every drop has a fixed world (x, y) and the field repeats
+        # every 2 * RAIN_BOX tiles in both directions (see the wrap below).  The player is only an
+        # observer moving through it, so nothing is shifted when they walk, turn or teleport; the
+        # wrap alone decides which copy of the field is near them.
+        self._pos_init = True
         self.pos = (px, py)
 
         drift = self.slant * 0.5 * self._vz
@@ -348,10 +348,12 @@ class WeatherFX:
         if len(landed):
             self._land(landed)
             self._wz[landed] += RAIN_TOP             # respawn at the top of the volume
-        # keep the volume centred on the player: drops leaving one side re-enter the other, so
-        # walking forward runs the player through rain that is fixed in the world
-        self._wx[:] = (self._wx - px + RAIN_BOX) % (2.0 * RAIN_BOX) - RAIN_BOX + px
-        self._wy[:] = (self._wy - py + RAIN_BOX) % (2.0 * RAIN_BOX) - RAIN_BOX + py
+        # Pick the copy of each drop nearest the player.  This only adds or subtracts whole
+        # periods (2 * RAIN_BOX), so a drop's position modulo the period never depends on where
+        # the player is: walking forward runs the player through rain that is fixed in the world.
+        period = 2.0 * RAIN_BOX
+        self._wx[:] = (self._wx - px + RAIN_BOX) % period - RAIN_BOX + px
+        self._wy[:] = (self._wy - py + RAIN_BOX) % period - RAIN_BOX + py
 
     def _land(self, idx):
         """Some drops that hit the ground inside the view become splashes at that world spot."""
@@ -534,6 +536,11 @@ class WeatherFX:
                                       wz[idx] + vz[idx] * tau, horizon_y)
             d = depth[idx]
             fade = np.clip(1.15 - d / (RAIN_BOX * 1.25), 0.12, 1.0)
+            # Fade drops out near the edge of the nearby copy of the field, so the wrap (a drop
+            # leaving one side and re-entering the other) is never visible as pop-in.
+            ppx, ppy = self.pos
+            edge = np.maximum(np.abs(wx[idx] - ppx), np.abs(wy[idx] - ppy)) / RAIN_BOX
+            fade = fade * np.clip((1.0 - edge) / RAIN_EDGE_FADE, 0.0, 1.0)
             alpha = (fade * (200.0 if lit else 150.0) * (0.55 + 0.45 * st)).astype(np.int64)
             ov = self._overlay
             ov.fill((0, 0, 0, 0))

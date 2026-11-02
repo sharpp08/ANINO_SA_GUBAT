@@ -188,6 +188,33 @@ def test_rain_is_in_the_world():
     assert abs(near2[0][0] - near[0][0]) > 4 * abs(far2[0][0] - far[0][0])
 
 
+def test_rain_field_is_global():
+    """Where the player is (or teleports to) never changes where the rain is in the world."""
+    period = 2.0 * wf.RAIN_BOX
+    still = wf.WeatherFX(640, 360, FOV, seed=4)
+    mover = wf.WeatherFX(640, 360, FOV, seed=4)
+    for i in range(240):
+        still.update(DT, 0.0, yaw=0.0, px=10.0, py=10.0)
+        if i == 60:
+            px, py = 55.0, 31.0                                  # teleport far outside the old box
+        elif i < 60:
+            px, py = 10.0 + i * 0.05, 10.0
+        else:
+            px, py = px + 0.04, py - 0.03                        # then keep walking
+        mover.update(DT, 0.0, yaw=i * 0.01, px=px, py=py)
+
+    def circ(a, b):                                              # difference modulo the period
+        d = (a - b + period / 2.0) % period - period / 2.0
+        return np.abs(d)
+
+    assert circ(still._wx, mover._wx).max() < 1e-6
+    assert circ(still._wy, mover._wy).max() < 1e-6
+    assert np.allclose(still._wz, mover._wz)
+    # and the nearby copy of the field is centred on wherever the player now is
+    assert (np.abs(mover._wx - px) <= wf.RAIN_BOX + 1e-6).all()
+    assert (np.abs(mover._wy - py) <= wf.RAIN_BOX + 1e-6).all()
+
+
 def test_rain_fades_with_dawn():
     fx = wf.WeatherFX(640, 360, FOV, seed=2)
     fx.horizon_y = 180
