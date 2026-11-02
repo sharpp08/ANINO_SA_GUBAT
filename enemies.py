@@ -283,18 +283,22 @@ class Enemy:
                 self._try_move(game_map, new_x, new_y, angle, move_speed)
                 return
 
-        # Path recalculation: repath when player moves far or timer expires
+        # Path recalculation is timer-driven. Do not let player movement bypass
+        # this interval: in Frenzy that caused every pursuer to launch A* together
+        # whenever the player crossed the movement threshold.
         if self.state in (EnemyState.INVESTIGATE, EnemyState.STALK, EnemyState.ATTACK):
             self._repath_timer -= dt
-            dx = player_x - self._last_player_pos[0]
-            dy = player_y - self._last_player_pos[1]
-            player_moved = math.sqrt(dx*dx + dy*dy) > self._last_repath_dist
-            if self._repath_timer <= 0 or player_moved:
+            if self._repath_timer <= 0.0:
                 self._repath_timer = 3.0
                 self._last_player_pos = (player_x, player_y)
                 try:
                     from pathfinder import NavGrid
-                    nav = NavGrid(game_map)
+                    # One navigation grid per map, shared by all enemies. Its
+                    # walkability cache avoids repeating tree/spatial-hash tests.
+                    nav = getattr(game_map, '_enemy_nav_grid', None)
+                    if nav is None or nav.gm is not game_map:
+                        nav = NavGrid(game_map)
+                        game_map._enemy_nav_grid = nav
                     self._path = nav.find_path((self.x, self.y), (player_x, player_y))
                 except Exception:
                     self._path = None
