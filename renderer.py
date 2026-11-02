@@ -171,13 +171,14 @@ class Flashlight:
         self.target_sway_y *= 0.9
 
     def brightness_at(self, screen_x, dist, player):
+        brightness = max(0.5, min(1.5, getattr(_settings_mod, 'TERRAIN_BRIGHTNESS', 1.0)))
         if not player.flashlight_on or player.flashlight_battery <= 0:
-            return AMBIENT_LIGHT_OFF
+            return max(0.05, min(1.0, AMBIENT_LIGHT_OFF * brightness))
         beam_center_x = self.w // 2 + int(self.sway_x)
         dx = abs(screen_x - beam_center_x)
         max_dx = self.w * 0.35 * max(0.3, (1.0 - dist / 12.0))
         if dx > max_dx:
-            return 0.15
+            return max(0.05, min(1.0, 0.15 * brightness))
         angular_falloff = max(0.0, 1.0 - (dx / max(1.0, max_dx)))
         dist_falloff = 1.0 / (1.0 + dist * 0.25)
         batt_factor = player.flashlight_battery / 100.0
@@ -185,7 +186,7 @@ class Flashlight:
         if player.flashlight_battery < 20:
             flicker = random.uniform(0.5, 1.1) if random.random() < 0.3 else 1.0
         intensity = 0.15 + 0.85 * angular_falloff * dist_falloff * batt_factor * flicker
-        return max(0.15, min(1.0, intensity))
+        return max(0.05, min(1.0, intensity * brightness))
 
     def draw(self, surf, player):
         """Draw the darkness overlay (called ONCE per frame)."""
