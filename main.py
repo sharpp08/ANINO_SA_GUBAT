@@ -282,7 +282,6 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
     menu_rows = [
         ("ENTER", "BEGIN YOUR NIGHT", True),
         ("L", "CONTINUE JOURNEY" if has_save else "NO SAVE FOUND", has_save),
-        ("I", "REPLAY THE PROLOGUE", True),
         ("F11", "TOGGLE FULLSCREEN", True),
         ("ESC", "LEAVE THE FOREST", True),
     ]
@@ -417,43 +416,134 @@ def load_game(slot=0):
 
 # ─── Startup Loading Animation ───────────────────────────────────────────────
 def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
+    """Render a brief animated ritual-style loading scene."""
     sw, sh = screen.get_size()
-    clock.tick(60)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+    progress = max(0.0, min(1.0, float(progress)))
+    started = pygame.time.get_ticks()
+    duration_ms = 520
 
-    screen.fill((5, 5, 12))
-    
-    # Title
-    title = font_lg.render("ANINO SA GUBAT", True, (212, 175, 55))
-    screen.blit(title, (sw // 2 - title.get_width() // 2, sh // 3 - 40))
-    
-    sub = font_sm.render("Mga Bulong ng Dilim", True, (180, 160, 110))
-    screen.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 3 + 10))
-    
-    # Loading bar container
-    bar_w, bar_h = 500, 16
-    bx = sw // 2 - bar_w // 2
-    by = sh // 2 + 60
-    pygame.draw.rect(screen, (30, 30, 45), (bx, by, bar_w, bar_h), border_radius=4)
-    
-    # Progress fill
-    fill_w = int(bar_w * progress)
-    if fill_w > 0:
-        pygame.draw.rect(screen, (212, 175, 55), (bx, by, fill_w, bar_h), border_radius=4)
-    pygame.draw.rect(screen, (100, 90, 60), (bx, by, bar_w, bar_h), 1, border_radius=4)
-    
-    # Step description
-    txt = font_sm.render(step_text, True, (220, 220, 220))
-    screen.blit(txt, (sw // 2 - txt.get_width() // 2, by + 30))
-    
-    # Percentage
-    pct_txt = font_sm.render(f"{int(progress * 100)}%", True, (150, 140, 100))
-    screen.blit(pct_txt, (sw // 2 - pct_txt.get_width() // 2, by + 65))
-    
-    pygame.display.flip()
+    while pygame.time.get_ticks() - started < duration_ms:
+        now = pygame.time.get_ticks()
+        t = now / 1000.0
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        # Cold midnight gradient.
+        for y in range(0, sh, 4):
+            k = y / max(1, sh)
+            col = (int(5 + 5*k), int(8 + 5*k), int(13 + 4*k))
+            pygame.draw.rect(screen, col, (0, y, sw, 4))
+
+        # Distant moon, half-hidden by the canopy.
+        mx, my = int(sw * .78), int(sh * .25)
+        mr = max(18, int(min(sw, sh) * .085))
+        pygame.draw.circle(screen, (25, 34, 34), (mx, my), mr + 12)
+        pygame.draw.circle(screen, (91, 91, 76), (mx, my), mr)
+        pygame.draw.circle(screen, (69, 73, 64), (mx - mr//3, my - mr//4), max(3, mr//7))
+
+        # Dense, layered forest silhouettes.
+        pygame.draw.polygon(screen, (12, 22, 23), [
+            (0, int(sh*.53)), (int(sw*.15), int(sh*.34)), (int(sw*.29), int(sh*.55)),
+            (int(sw*.46), int(sh*.37)), (int(sw*.63), int(sh*.56)),
+            (int(sw*.82), int(sh*.35)), (sw, int(sh*.54)), (sw, sh), (0, sh)])
+        pygame.draw.polygon(screen, (5, 11, 13), [
+            (0, int(sh*.68)), (int(sw*.2), int(sh*.48)), (int(sw*.38), int(sh*.7)),
+            (int(sw*.59), int(sh*.49)), (int(sw*.78), int(sh*.7)),
+            (sw, int(sh*.5)), (sw, sh), (0, sh)])
+
+        # Jagged trunks and reaching branches frame the ritual.
+        for side, x in ((-1, int(sw*.035)), (1, int(sw*.965))):
+            lean = int(sw*.055) * side
+            tw = max(14, int(sw*.04))
+            pygame.draw.polygon(screen, (3, 7, 8), [
+                (x-tw, sh), (x+tw, sh), (x+lean+tw//2, int(sh*.19)),
+                (x+lean-tw//2, int(sh*.22))])
+            for j in range(4):
+                yy = int(sh*(.29+j*.13))
+                ex = x - side*int(sw*(.09+j*.025))
+                pygame.draw.line(screen, (4, 8, 9),
+                    (x+lean//2, yy+int(sh*.08)), (ex, yy-int(sh*.07)), max(2, sw//220))
+
+        # Floating mist ribbons with a slow sideways drift.
+        mist = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for i in range(5):
+            yy = int(sh*(.55+i*.075) + math.sin(t*.55+i*1.4)*sh*.018)
+            xx = int(sw*(-.2 + ((t*.025+i*.17) % 1.0)))
+            pygame.draw.ellipse(mist, (119, 132, 125, 16+i*3),
+                (xx, yy, int(sw*.82), max(12, int(sh*.055))))
+        screen.blit(mist, (0, 0))
+
+        # A pulsing blood-red summoning circle.
+        cx, cy = int(sw*.73), int(sh*.70)
+        radius = int(min(sw, sh)*(.115 + .004*math.sin(t*3.0)))
+        glow = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for ring in range(3):
+            rr = radius + ring*8
+            pygame.draw.circle(glow, (142, 28, 27, max(8, 42-ring*12)), (cx, cy), rr, 2)
+        pygame.draw.circle(glow, (165, 39, 34, 150), (cx, cy), radius, 2)
+        pygame.draw.polygon(glow, (155, 39, 34, 115), [
+            (cx, cy-radius+5), (cx+int(radius*.86), cy+radius//2),
+            (cx-int(radius*.86), cy+radius//2)], 2)
+        for i in range(12):
+            a = (math.tau*i/12) + t*.12
+            x1 = cx + int(math.cos(a)*(radius+5))
+            y1 = cy + int(math.sin(a)*(radius+5))
+            x2 = cx + int(math.cos(a)*(radius+15))
+            y2 = cy + int(math.sin(a)*(radius+15))
+            pygame.draw.line(glow, (180, 48, 38, 150), (x1,y1), (x2,y2), 2)
+        screen.blit(glow, (0, 0))
+
+        # A pair of faint eyes flicker between the trees.
+        flicker = int(70 + 45*(.5+.5*math.sin(t*7.3)))
+        eye_x, eye_y = int(sw*.88), int(sh*.57)
+        pygame.draw.circle(screen, (flicker, 20, 17), (eye_x, eye_y), 3)
+        pygame.draw.circle(screen, (flicker, 20, 17), (eye_x+13, eye_y), 3)
+
+        # Dark parchment panel for readable loading text.
+        panel_x, panel_y = int(sw*.075), int(sh*.20)
+        panel_w, panel_h = int(sw*.54), int(sh*.52)
+        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel.fill((2, 5, 8, 218))
+        pygame.draw.rect(panel, (91, 54, 43, 170), (0, 0, panel_w, panel_h), 1)
+        screen.blit(panel, (panel_x, panel_y))
+
+        eyebrow = font_sm.render("THE FOREST IS WAKING", True, (153, 77, 63))
+        screen.blit(eyebrow, (panel_x+24, panel_y+22))
+        title = font_lg.render("ANINO SA GUBAT", True, (205, 180, 132))
+        screen.blit(title, (panel_x+22, panel_y+58))
+        subtitle = font_sm.render("Mga Bulong ng Dilim", True, (145, 137, 117))
+        screen.blit(subtitle, (panel_x+25, panel_y+58+title.get_height()+5))
+
+        # Ritual progress track, segmented like sealed runes.
+        bar_x, bar_y = panel_x+25, panel_y+int(panel_h*.68)
+        bar_w, bar_h = panel_w-50, max(12, int(sh*.018))
+        pygame.draw.rect(screen, (25, 23, 23), (bar_x, bar_y, bar_w, bar_h))
+        pygame.draw.rect(screen, (105, 65, 54), (bar_x, bar_y, bar_w, bar_h), 1)
+        filled = int((bar_w-4)*progress)
+        if filled > 0:
+            pygame.draw.rect(screen, (125, 35, 31), (bar_x+2, bar_y+2, filled, bar_h-4))
+            pulse_x = bar_x + 2 + filled
+            pygame.draw.line(screen, (226, 105, 73), (pulse_x, bar_y-3),
+                             (pulse_x, bar_y+bar_h+3), 2)
+        for i in range(1, 10):
+            tick_x = bar_x + int(bar_w*i/10)
+            pygame.draw.line(screen, (67, 51, 46), (tick_x, bar_y), (tick_x, bar_y+bar_h), 1)
+
+        desc = font_sm.render(step_text, True, (203, 194, 174))
+        screen.blit(desc, (bar_x, bar_y+bar_h+17))
+        pct = font_sm.render(f"{int(progress*100):02d}%", True, (177, 86, 69))
+        screen.blit(pct, (bar_x+bar_w-pct.get_width(), bar_y+bar_h+17))
+
+        warning = font_sm.render("DO NOT ANSWER WHEN IT CALLS YOUR NAME", True, (105, 91, 79))
+        screen.blit(warning, (panel_x+25, panel_y+panel_h-30))
+
+        pygame.display.flip()
+        clock.tick(30)
+
+    # Leave the final frame visible after the short animation.
+    return
 
 
 # ─── Game class ───────────────────────────────────────────────────────────────
