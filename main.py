@@ -318,7 +318,7 @@ def draw_gameover(surf, font_lg, font_sm):
     sw, sh = surf.get_size()
     t = font_lg.render("YOU DIED", True, BLOOD_RED)
     surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 60))
-    for i, line in enumerate(["R  -  Respawn at Checkpoint", "M  -  Main Menu"]):
+    for i, line in enumerate(["M  -  Return to Main Menu"]):
         lt = font_sm.render(line, True, (200, 150, 150))
         surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + i * 40))
 
@@ -673,7 +673,6 @@ class Game:
         self.survival_spawn_count = 0
         self.pages_complete_notified = False
         self.sunrise_missed_notified = False
-        self.player.set_checkpoint(sx, sy)
         self.enemy_manager.spawn_enemies(self.game_map.enemies)
         self.effects = []
         self.level_enemy_total = len(self.enemy_manager.enemies)
@@ -922,13 +921,6 @@ class Game:
         if self.game_map.open_door(look_x, look_y):
             audio_mgr.play('door')
             self.notify("Door opened.")
-        for cp in self.game_map.checkpoints:
-            dx = cp['x'] - p.x
-            dy = cp['y'] - p.y
-            if math.sqrt(dx*dx + dy*dy) < 1.5:
-                p.set_checkpoint(cp['x'], cp['y'])
-                self.notify("Checkpoint reached!")
-                break
 
     def _spawn_survival_enemy(self):
         """Spawn a hunter at a valid point away from the player."""
@@ -1303,13 +1295,9 @@ class Game:
                             safe_set_relative_mouse(False)
 
                 elif self.state == STATE_GAMEOVER:
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_r:
-                            self.player.respawn()
-                            self.state = STATE_PLAYING
-                            safe_set_relative_mouse(True)
-                        elif event.key == pygame.K_m:
-                            self.state = STATE_MENU
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                        self.state = STATE_MENU
+                        safe_set_relative_mouse(False)
 
                 elif self.state == STATE_WIN:
                     if event.type == pygame.KEYDOWN:
