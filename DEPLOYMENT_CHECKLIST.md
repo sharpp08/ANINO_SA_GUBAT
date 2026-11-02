@@ -77,7 +77,7 @@
 - ✅ Falls back to custom PNGs if pack unavailable
 - ✅ Procedural sprite generation still functional
 - ✅ No changes to game mechanics or AI
-- ✅ Existing saves/checkpoints compatible
+- ✅ Fresh-run-only progression; no save files or checkpoint respawns
 
 ---
 
