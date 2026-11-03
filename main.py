@@ -8,6 +8,13 @@ import math
 import random
 import pygame
 
+# Configure SDL_mixer before pygame.init() starts its audio callback thread.
+# A 4096-sample callback buffer adds modest latency but improves underrun
+# tolerance when the uncapped/high-FPS render loop is competing for CPU time.
+try:
+    pygame.mixer.pre_init(frequency=48000, size=-16, channels=2, buffer=4096)
+except Exception:
+    pass
 pygame.init()  # Initialize SDL before the audio manager
 
 import settings as _settings_mod
