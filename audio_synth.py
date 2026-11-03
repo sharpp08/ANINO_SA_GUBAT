@@ -638,7 +638,7 @@ class SoundManager:
         boom = sine_sweep(t, r, 150, 38, 0.05) * np.exp(-t / 0.11) * (1 - np.exp(-t / 0.0008))
         body = fft_filter(rng.standard_normal(n), r, lo=90, hi=700) * np.exp(-t / 0.22)
         shot = 1.1 * _pk(crack) + 1.0 * _pk(blast) + 1.4 * _pk(boom) + 0.9 * _pk(body)
-        shot = np.tanh(1.6 * shot)
+        # Avoid hard saturation of the weapon transient; _finish() performs final peak control.
         wet = reverb(shot, r, rt60=1.5, wet=0.35, brightness=0.35,
                      echoes=[(0.16, 0.22, 2500), (0.34, 0.12, 1800), (0.58, 0.06, 1300)])
         # pump-action rack: scrape + two heavy clicks
@@ -664,7 +664,7 @@ class SoundManager:
                    for f, a, tau in ((2150, 0.10, 0.05), (3400, 0.07, 0.035), (5200, 0.04, 0.02))
                    if f < 0.45 * r)
         shot = 1.3 * _pk(crack) + 0.9 * _pk(blast) + 0.9 * _pk(boom) + ring
-        shot = np.tanh(1.5 * shot)
+        # Keep the revolver transient clean; _finish() performs final peak control.
         wet = reverb(shot, r, rt60=1.0, wet=0.3, brightness=0.5,
                      echoes=[(0.13, 0.18, 3000), (0.29, 0.09, 2000)])
         return self._finish(wet, peak=0.92)
