@@ -291,7 +291,7 @@ AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
-def _audio_buffer_size(default=2048):
+def _audio_buffer_size(default=4096):
     """Mixer buffer in samples (power of two, 512-8192).
 
     1024 samples is only ~23 ms at 44.1 kHz: any scheduling hiccup while the CPU is busy
@@ -317,11 +317,11 @@ def _audio_buffer_size(default=2048):
 
 class SoundManager:
     def __init__(self):
-        # If something already started the mixer with driver defaults (small buffer,
-        # format negotiation), restart it with our settings.
+        # Always restart an existing mixer at startup: get_init() exposes the
+        # format but not the buffer size, so an already-running 512/1024-sample
+        # mixer could otherwise survive this configuration unnoticed.
         try:
-            cur = pygame.mixer.get_init()
-            if cur and (cur[0] != 44100 or cur[1] != -16 or cur[2] != 2):
+            if pygame.mixer.get_init():
                 pygame.mixer.quit()
         except Exception:
             pass
@@ -330,8 +330,8 @@ class SoundManager:
         buf = _audio_buffer_size()
         for kwargs in (
             dict(frequency=44100, size=-16, channels=2, buffer=buf, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048), allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048)),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096), allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096)),
             dict(frequency=22050, size=-16, channels=2, buffer=buf),
         ):
             try:
@@ -1111,6 +1111,23 @@ class SoundManager:
             self._muffle_cache[key] = got
             self._muffle_keep.append(snd)       # keep id() stable
         return got
+
+    def prewarm_muffled(self, sounds, levels=(1, 2, 3)):
+        """Build spatial low-pass copies during loading, never on a gameplay frame.
+
+        Accepts an iterable of Sound objects. Repeated sounds are harmless because
+        muffled() uses an identity cache.
+        """
+        prepared = 0
+        for snd in sounds:
+            if snd is None:
+                continue
+            for level in levels:
+                self.muffled(snd, level)
+                prepared += 1
+        if prepared:
+            print(f"[AUDIO] Prepared {prepared} spatial sound variants.")
+        return prepared
 
     def spatial_params(self, player_x, player_y, player_angle, target_x, target_y,
                        base_volume=1.0, max_dist=15.0):
