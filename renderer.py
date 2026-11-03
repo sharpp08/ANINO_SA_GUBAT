@@ -349,11 +349,11 @@ class Renderer:
         self._generate_undergrowth_sprite = generate_undergrowth_sprite
         self._tree_sprite_cache = {}   # (type, variant) -> surface  (bounded LRU)
         self._undergrowth_cache = {}  # type -> surface            (bounded LRU)
-        self._TREE_SPRITE_VARIANTS = 5
+        self._TREE_SPRITE_VARIANTS = 12
         # 11 species x 5 variants = 55 max combinations; a cache of 24 thrashes
         # and regenerates ~12 billboards per frame (each costs ~1.3 ms).
         # 64 covers all combinations with headroom (~4 MB at 64x256x4 bytes).
-        self._TREE_CACHE_LIMIT = 64
+        self._TREE_CACHE_LIMIT = 144
         self._UNDERGROWTH_CACHE_LIMIT = 16
         self._TREE_HEIGHT_MULT = {
             'balete': 4.5, 'mahogany': 5.25, 'bamboo': 4.25, 'dead': 3.75,
@@ -1457,7 +1457,7 @@ class Renderer:
         key = (ttype, variant_idx)
         img = self._tree_sprite_cache.get(key)
         if img is None:
-            img = self._generate_tree_billboard(ttype, 64, 256, seed=42 + variant_idx * 333)
+            img = self._generate_tree_billboard(ttype, 96, 320, seed=42 + variant_idx * 997)
             img = img.convert_alpha()  # display-format for fast per-frame blits
             self._tree_sprite_cache[key] = img
             while len(self._tree_sprite_cache) > self._TREE_CACHE_LIMIT:
