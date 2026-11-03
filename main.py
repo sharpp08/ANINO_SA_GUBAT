@@ -750,6 +750,15 @@ class Game:
                   + ("  <-- INSIDE A WALL!" if solid else ""))
         if self.level_enemy_total == 0:
             print(f"[WARNING] Chapter {chapter_num} has NO enemies - it can only be completed by reaching the exit.")
+        # The map, textures and caches are long-lived: move them out of the garbage
+        # collector's tracking so gameplay GC passes stay short (fewer frame hitches).
+        try:
+            import gc
+            gc.collect()
+            gc.freeze()
+            gc.set_threshold(10000, 20, 20)
+        except Exception:
+            pass
 
     def max_chapter(self):
         return getattr(self.game_map, 'max_chapters', 2)

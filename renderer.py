@@ -235,6 +235,16 @@ class Renderer:
 
         from shader_renderer import ShaderRenderer
         self.shader_renderer = ShaderRenderer(self.w, self.h)
+        # Optional switch for the GPU post-process pass, whose per-frame CPU<->GPU readback
+        # can cost more than it gives on integrated graphics. Default is unchanged (on).
+        # Turn it off with "enable_gpu_post": false in settings.json, or ANINO_GPU_POST=0.
+        _want_gpu_post = (getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('enable_gpu_post', True)
+        _env_gpu_post = os.environ.get('ANINO_GPU_POST')
+        if _env_gpu_post in ('0', '1'):
+            _want_gpu_post = (_env_gpu_post == '1')
+        if not _want_gpu_post and self.shader_renderer.enabled:
+            self.shader_renderer.enabled = False
+            print("[SHADERS] GPU post-processing disabled by setting (software renderer only).")
 
         from animation_core import ParticleSystem, CameraShake
         self.physics_particles = ParticleSystem(400)
@@ -2113,10 +2123,17 @@ class Renderer:
         cx, cy = self.w // 2, self.h // 2 + 20
         radius = int(self.muzzle_flash * 30)
         if radius > 0:
-            flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-            pygame.draw.circle(flash, (255, 220, 100, max(0, min(255, int(self.muzzle_flash * 200)))),
-                               (cx, cy), radius)
-            self.surface.blit(flash, (0, 0))
+            # Reuse one scratch surface and only clear/blit the flash's bounding box,
+            # instead of allocating a full-screen alpha surface every frame of the flash.
+            flash = getattr(self, '_muzzle_fx', None)
+            if flash is None:
+                flash = self._muzzle_fx = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+            rect = pygame.Rect(cx - radius, cy - radius, radius * 2 + 1, radius * 2 + 1).clip(flash.get_rect())
+            if rect.width > 0 and rect.height > 0:
+                flash.fill((0, 0, 0, 0), rect)
+                pygame.draw.circle(flash, (255, 220, 100, max(0, min(255, int(self.muzzle_flash * 200)))),
+                                   (cx, cy), radius)
+                self.surface.blit(flash, rect.topleft, rect)
 
     def trigger_muzzle_flash(self):
         self.muzzle_flash = 1.0
@@ -2172,7 +2189,11 @@ class Renderer:
         self.ward_effect_timer -= dt
         t = self.ward_effect_timer
 
-        effect = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        # One reusable full-screen scratch surface, cleared each frame (no per-frame allocation).
+        effect = getattr(self, '_ward_fx', None)
+        if effect is None:
+            effect = self._ward_fx = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+        effect.fill((0, 0, 0, 0))
         cx, cy = self.w // 2, self.h // 2
 
         if self.ward_effect_type == 'repel':
