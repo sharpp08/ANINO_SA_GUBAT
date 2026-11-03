@@ -30,12 +30,10 @@ import os
 import numpy as np
 import pygame
 
-# Keep DSP transforms single-threaded. Spawning FFT workers across every CPU
-# core can oversubscribe the machine and starve SDL_mixer's real-time callback,
-# especially when the game renders above its normal frame rate.
+# scipy's FFT is ~2x faster and multi-threaded; numpy's is the dependency-free fallback.
 try:
     import scipy.fft as _fftmod
-    _FFT_KW = {'workers': 1}
+    _FFT_KW = {'workers': -1}
 except ImportError:
     _fftmod = np.fft
     _FFT_KW = {}
@@ -293,32 +291,56 @@ AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
+def _audio_buffer_size(default=2048):
+    """Mixer buffer in samples (power of two, 512-8192).
+
+    2048 samples (~46 ms at 44.1 kHz) is a balanced default for stability
+    and responsive effects. Override with "audio_buffer" in settings.json or
+    ANINO_AUDIO_BUFFER.
+    """
+    val = os.environ.get('ANINO_AUDIO_BUFFER')
+    if not val:
+        try:
+            import settings as _s
+            val = (getattr(_s, 'RUNTIME_SETTINGS', None) or {}).get('audio_buffer')
+        except Exception:
+            val = None
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return default
+    for size in (512, 1024, 2048, 4096, 8192):
+        if n <= size:
+            return size
+    return 8192
+
+
 class SoundManager:
     def __init__(self):
-        # main.py configures mixer with pygame.mixer.pre_init() before
-        # pygame.init(). Do not quit/reopen an already-running mixer: restarting
-        # SDL_mixer here tears down and recreates its real-time audio callback.
-        # If this module is used from another entry point, initialize only when
-        # no mixer exists, preferring a larger buffer for underrun tolerance.
+        # Do not tear down a mixer another startup component already opened.
+        # Keep a compatible device alive to avoid Windows audio-device glitches.
         try:
-            mixer_init = pygame.mixer.get_init()
+            current = pygame.mixer.get_init()
+            if current and (current[0] != 44100 or current[1] != -16 or current[2] != 2):
+                pygame.mixer.quit()
         except Exception:
-            mixer_init = None
-        if not mixer_init:
-            for kwargs in (
-                dict(frequency=48000, size=-16, channels=2, buffer=4096,
-                     allowedchanges=getattr(pygame.mixer, 'ALLOW_FREQUENCY_CHANGE', 0x1)),
-                dict(frequency=44100, size=-16, channels=2, buffer=4096, allowedchanges=0),
-                dict(frequency=44100, size=-16, channels=2, buffer=8192),
-                dict(frequency=22050, size=-16, channels=2, buffer=4096),
-            ):
-                try:
-                    pygame.mixer.init(**kwargs)
-                    mixer_init = pygame.mixer.get_init()
-                    if mixer_init:
-                        break
-                except Exception:
-                    continue
+            pass
+        # allowedchanges=0 stops SDL from silently switching the sample format /
+        # rate to whatever the Windows driver prefers (a source of resampling noise).
+        buf = _audio_buffer_size()
+        for kwargs in (
+            dict(frequency=44100, size=-16, channels=2, buffer=buf, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048), allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096)),
+            dict(frequency=22050, size=-16, channels=2, buffer=buf),
+        ):
+            try:
+                pygame.mixer.init(**kwargs)
+                print(f"[AUDIO] mixer started: {kwargs['frequency']} Hz, buffer={kwargs['buffer']} samples "
+                      f"(~{kwargs['buffer'] * 1000 // kwargs['frequency']} ms)")
+                break
+            except Exception:
+                continue
         mixer_init = pygame.mixer.get_init()
         self.sample_rate = mixer_init[0] if mixer_init else 44100
         self.rate = self.sample_rate
@@ -1089,6 +1111,23 @@ class SoundManager:
             self._muffle_cache[key] = got
             self._muffle_keep.append(snd)       # keep id() stable
         return got
+
+    def prewarm_muffled(self, sounds, levels=(1, 2, 3)):
+        """Build spatial low-pass copies during loading, never on a gameplay frame.
+
+        Accepts an iterable of Sound objects. Repeated sounds are harmless because
+        muffled() uses an identity cache.
+        """
+        prepared = 0
+        for snd in sounds:
+            if snd is None:
+                continue
+            for level in levels:
+                self.muffled(snd, level)
+                prepared += 1
+        if prepared:
+            print(f"[AUDIO] Prepared {prepared} spatial sound variants.")
+        return prepared
 
     def spatial_params(self, player_x, player_y, player_angle, target_x, target_y,
                        base_volume=1.0, max_dist=15.0):

@@ -352,7 +352,7 @@ SANITY_PURPLE = (140, 80, 200)
 
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
-AMBIENT_LIGHT_OFF = 0.20  # readable low-light visibility when the flashlight is off / dead
+AMBIENT_LIGHT_OFF = 0.38  # preserve readable terrain and silhouettes when the flashlight is off / dead
 # Tactical Flashlight Tuning Constants (Narrow, Focused, High-Intensity)
 FLASHLIGHT_BEAM_ANGLE = 12.0
 FLASHLIGHT_PENUMBRA_ANGLE = 3.0
@@ -361,9 +361,9 @@ FLASHLIGHT_SPILL_ANGLE = 22.0
 FLASHLIGHT_SPILL_INTENSITY = 0.10
 FLASHLIGHT_RANGE = 20.0
 FLASHLIGHT_HOTSPOT_INTENSITY = 1.0
-FLASHLIGHT_AMBIENT_LEVEL = 0.06
+FLASHLIGHT_AMBIENT_LEVEL = 0.10
 
-DARK_TINT = (4, 8, 18)   # near-black cool midnight tint for deep forest
+DARK_TINT = (8, 14, 28)   # cool midnight fill; retains shadow detail instead of crushing blacks
 BEAM_RADIUS = 0.28        # narrower beam width for tactical profile
 BEAM_GLOW = (240, 240, 235)  # neutral white 5000K LED main beam
 HOTSPOT_GLOW = (255, 255, 250) # intense neutral white hotspot
@@ -372,9 +372,9 @@ FOG_DISTANCE = 35.0
 # Atmospheric depth-fog overlay parameters (subtle haze; controlled by ENABLE_FOG)
 FOG_NEAR = 8.0       # tiles: fog begins here (closer surfaces stay clear)
 FOG_FAR = 28.0       # tiles: fog reaches maximum opacity
-FOG_MAX_ALPHA = 90   # 0-255; 90 ≈ 35% (subtle, never blinds the player)
+FOG_MAX_ALPHA = 72   # keep distant silhouettes readable through the night haze
 AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
-AMBIENT_LIGHT_OFF = 0.20
+AMBIENT_LIGHT_OFF = 0.38
 ENEMY_EYE_GLOW = True
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
@@ -505,7 +505,7 @@ def load_settings(path=SETTINGS_PATH):
         'brightness': 1.0,
         'fov': 75,
         'fps_limit': '60',
-        'ambient_volume': 0.7,
+        'ambient_volume': 0.25,
         'enemy_volume': 0.8,
         'enable_sanity': ENABLE_SANITY,
         'enable_camera_shake': ENABLE_CAMERA_SHAKE,

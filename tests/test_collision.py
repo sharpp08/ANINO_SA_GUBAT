@@ -46,7 +46,7 @@ def _make_player(x, y, angle=0.0):
     p.wards_unlocked = [True, False, False, False, False]; p.selected_ward = 0
     p.ward_cooldowns = [0.0]*5; p.ward_menu_open = False
     p.is_sprinting = False; p.is_crouching = False
-    p.bob_timer = 0; p.bob_amount = 0; p.step_event = False; p.step_side = 1; p._step_phase = 0
+    p.bob_timer = 0; p.bob_amount = 0
     p.journal_entries = []; p.relics = []; p.current_chapter = 1
     p.spring_bob = None; p.spring_sway = None
     return p

@@ -8,6 +8,12 @@ from settings import *
 
 
 
+# A* limits. NavGrid.find_path gives up after ~500 visited cells, so a search from far away
+# only wastes that whole budget and returns nothing; those enemies steer directly instead.
+PATHFIND_MAX_DIST = 20.0     # tiles; beyond this an enemy does not run A*
+PATHFINDS_PER_FRAME = 2      # at most this many A* searches across all enemies per frame
+_PATH_BUDGET = [PATHFINDS_PER_FRAME]   # remaining searches this frame (reset by EnemyManager.update)
+
 # How long a slain enemy keeps playing its collapse/fade animation before it is removed.
 DEATH_ANIM_TIME = 1.1
 
@@ -288,7 +294,17 @@ class Enemy:
         # whenever the player crossed the movement threshold.
         if self.state in (EnemyState.INVESTIGATE, EnemyState.STALK, EnemyState.ATTACK):
             self._repath_timer -= dt
-            if self._repath_timer <= 0.0:
+            if self._repath_timer <= 0.0 and self.distance_to(player_x, player_y) > PATHFIND_MAX_DIST:
+                # Too far for A* to finish within its step cap: it would burn the whole
+                # budget and return nothing. Steer directly (the existing fallback) and
+                # check again soon, since the player may come closer.
+                self._path = None
+                self._repath_timer = 1.0
+            elif self._repath_timer <= 0.0 and _PATH_BUDGET[0] <= 0:
+                # Other enemies already used this frame's A* budget; retry next frame.
+                self._repath_timer = 0.01
+            elif self._repath_timer <= 0.0:
+                _PATH_BUDGET[0] -= 1
                 self._repath_timer = 3.0
                 self._last_player_pos = (player_x, player_y)
                 try:
@@ -715,6 +731,7 @@ class EnemyManager:
             else:
                 self.frenzy_active = sanity < SANITY_FRENZY_THRESHOLD
 
+        _PATH_BUDGET[0] = PATHFINDS_PER_FRAME  # cap A* searches per frame (see Enemy.update)
         for enemy_index, enemy in enumerate(self.enemies):
             was_frenzy = enemy.frenzy
             enemy.set_frenzy(self.frenzy_active)
