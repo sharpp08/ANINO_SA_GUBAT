@@ -291,6 +291,30 @@ AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
+def _audio_buffer_size(default=2048):
+    """Mixer buffer in samples (power of two, 512-8192).
+
+    1024 samples is only ~23 ms at 44.1 kHz: any scheduling hiccup while the CPU is busy
+    underruns it, heard as crackle/"crunch". 2048 (~46 ms) is much more forgiving for a
+    small latency cost. Override with "audio_buffer" in settings.json or ANINO_AUDIO_BUFFER.
+    """
+    val = os.environ.get('ANINO_AUDIO_BUFFER')
+    if not val:
+        try:
+            import settings as _s
+            val = (getattr(_s, 'RUNTIME_SETTINGS', None) or {}).get('audio_buffer')
+        except Exception:
+            val = None
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return default
+    for size in (512, 1024, 2048, 4096, 8192):
+        if n <= size:
+            return size
+    return 8192
+
+
 class SoundManager:
     def __init__(self):
         # If something already started the mixer with driver defaults (small buffer,
@@ -303,14 +327,17 @@ class SoundManager:
             pass
         # allowedchanges=0 stops SDL from silently switching the sample format /
         # rate to whatever the Windows driver prefers (a source of resampling noise).
+        buf = _audio_buffer_size()
         for kwargs in (
-            dict(frequency=44100, size=-16, channels=2, buffer=1024, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=2048),
-            dict(frequency=22050, size=-16, channels=2, buffer=1024),
+            dict(frequency=44100, size=-16, channels=2, buffer=buf, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048), allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048)),
+            dict(frequency=22050, size=-16, channels=2, buffer=buf),
         ):
             try:
                 pygame.mixer.init(**kwargs)
+                print(f"[AUDIO] mixer started: {kwargs['frequency']} Hz, buffer={kwargs['buffer']} samples "
+                      f"(~{kwargs['buffer'] * 1000 // kwargs['frequency']} ms)")
                 break
             except Exception:
                 continue
