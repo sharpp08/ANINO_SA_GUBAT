@@ -30,10 +30,12 @@ import os
 import numpy as np
 import pygame
 
-# scipy's FFT is ~2x faster and multi-threaded; numpy's is the dependency-free fallback.
+# Keep DSP transforms single-threaded. Spawning FFT workers across every CPU
+# core can oversubscribe the machine and starve SDL_mixer's real-time callback,
+# especially when the game renders above its normal frame rate.
 try:
     import scipy.fft as _fftmod
-    _FFT_KW = {'workers': -1}
+    _FFT_KW = {'workers': 1}
 except ImportError:
     _fftmod = np.fft
     _FFT_KW = {}
@@ -293,27 +295,30 @@ FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback
 
 class SoundManager:
     def __init__(self):
-        # pygame.init() in main.py may have opened the mixer with SDL defaults.
-        # Always close that instance so the explicit rate/format/buffer below take effect.
+        # main.py configures mixer with pygame.mixer.pre_init() before
+        # pygame.init(). Do not quit/reopen an already-running mixer: restarting
+        # SDL_mixer here tears down and recreates its real-time audio callback.
+        # If this module is used from another entry point, initialize only when
+        # no mixer exists, preferring a larger buffer for underrun tolerance.
         try:
-            if pygame.mixer.get_init():
-                pygame.mixer.quit()
+            mixer_init = pygame.mixer.get_init()
         except Exception:
-            pass
-        # Prefer the common Windows device rate and a larger callback buffer.
-        # Larger buffers trade a little latency for more protection against underruns.
-        for kwargs in (
-            dict(frequency=48000, size=-16, channels=2, buffer=2048,
-                 allowedchanges=getattr(pygame.mixer, 'ALLOW_FREQUENCY_CHANGE', 0x1)),
-            dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=4096),
-            dict(frequency=22050, size=-16, channels=2, buffer=2048),
-        ):
-            try:
-                pygame.mixer.init(**kwargs)
-                break
-            except Exception:
-                continue
+            mixer_init = None
+        if not mixer_init:
+            for kwargs in (
+                dict(frequency=48000, size=-16, channels=2, buffer=4096,
+                     allowedchanges=getattr(pygame.mixer, 'ALLOW_FREQUENCY_CHANGE', 0x1)),
+                dict(frequency=44100, size=-16, channels=2, buffer=4096, allowedchanges=0),
+                dict(frequency=44100, size=-16, channels=2, buffer=8192),
+                dict(frequency=22050, size=-16, channels=2, buffer=4096),
+            ):
+                try:
+                    pygame.mixer.init(**kwargs)
+                    mixer_init = pygame.mixer.get_init()
+                    if mixer_init:
+                        break
+                except Exception:
+                    continue
         mixer_init = pygame.mixer.get_init()
         self.sample_rate = mixer_init[0] if mixer_init else 44100
         self.rate = self.sample_rate
