@@ -66,17 +66,20 @@ void main() {
     vec3 grade = vec3(0.82, 0.91, 1.0);
     col.rgb = mix(col.rgb, col.rgb * grade, 0.18);
     col.rgb = pow(max(col.rgb, 0.0), vec3(1.12));
+    // The scene renderer already computes the real flashlight beam and falloff.
+    // Do not add a second screen-centred fake beam or darken the entire scene here.
+    // Keep the flag as a subtle neutral exposure adjustment only.
     if (u_flashlight_on == 1) {
-        float beam = smoothstep(0.48, 0.05, distance(uv, vec2(0.5)));
-        col.rgb += vec3(0.10, 0.08, 0.05) * beam;
-    } else {
-        col.rgb *= 0.65;
+        col.rgb *= vec3(1.005, 1.008, 1.012);
     }
+    // Screen-space atmospheric tint is deliberately restrained; depth fog is handled
+    // by the scene renderer where per-column ray distances are available.
     float fog = smoothstep(0.25, 0.95, distance(uv, vec2(0.5)) * u_fog_density);
-    col.rgb = mix(col.rgb, vec3(0.03, 0.06, 0.05), fog * 0.55);
+    col.rgb = mix(col.rgb, vec3(0.03, 0.06, 0.05), fog * 0.35);
     vec2 cc = uv * 2.0 - 1.0;
-    col.rgb *= clamp(1.0 - dot(cc, cc) * 0.45, 0.2, 1.0);
-    col.rgb += vec3((rand(uv * mod(u_time, 100.0)) - 0.5) * 0.055);
+    col.rgb *= clamp(1.0 - dot(cc, cc) * 0.38, 0.24, 1.0);
+    // Fine grain: keep it subtle to avoid noisy dark gradients.
+    col.rgb += vec3((rand(uv * mod(u_time, 100.0)) - 0.5) * 0.018);
     fragColor = vec4(col.rgb, 1.0);
 }
 """
