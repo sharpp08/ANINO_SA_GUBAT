@@ -339,7 +339,7 @@ GOLD = (220, 180, 50)
 LIGHT_GOLD = (255, 220, 100)
 SKY_COLOR = (5, 5, 15)
 FLOOR_COLOR = (25, 18, 12)
-FOG_COLOR = (12, 18, 15)
+FOG_COLOR = (18, 25, 29)
 HUD_BG = (20, 20, 20, 180)
 BLOOD_RED = (150, 0, 0)
 SACRED_GOLD = (255, 215, 0)
@@ -352,7 +352,7 @@ SANITY_PURPLE = (140, 80, 200)
 
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
-AMBIENT_LIGHT_OFF = 0.38  # preserve readable terrain and silhouettes when the flashlight is off / dead
+AMBIENT_LIGHT_OFF = 0.24  # darker night exposure; preserve only enough detail to navigate
 # Tactical Flashlight Tuning Constants (controlled, realistic illumination)
 FLASHLIGHT_BEAM_ANGLE = 12.0
 FLASHLIGHT_PENUMBRA_ANGLE = 3.0
@@ -370,11 +370,11 @@ HOTSPOT_GLOW = (232, 236, 230) # soft neutral-white hotspot
 PERIPHERAL_SPILL = (35, 45, 65) # faint 10% spill in atmospheric haze
 FOG_DISTANCE = 35.0
 # Atmospheric depth-fog overlay parameters (subtle haze; controlled by ENABLE_FOG)
-FOG_NEAR = 8.0       # tiles: fog begins here (closer surfaces stay clear)
-FOG_FAR = 28.0       # tiles: fog reaches maximum opacity
-FOG_MAX_ALPHA = 72   # keep distant silhouettes readable through the night haze
+FOG_NEAR = 6.0       # tiles: fog begins sooner to build depth in the forest
+FOG_FAR = 24.0       # tiles: haze reaches its full density at a shorter distance
+FOG_MAX_ALPHA = 94   # stronger layered night haze; distant silhouettes remain visible
 AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
-AMBIENT_LIGHT_OFF = 0.38
+AMBIENT_LIGHT_OFF = 0.24
 ENEMY_EYE_GLOW = True
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
