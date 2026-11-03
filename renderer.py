@@ -348,6 +348,7 @@ class Renderer:
         self._generate_tree_billboard = generate_tree_billboard
         self._generate_undergrowth_sprite = generate_undergrowth_sprite
         self._tree_sprite_cache = {}   # (type, variant) -> surface  (bounded LRU)
+        self._tree_shadow_cache = {}  # quantized soft contact shadows, bounded LRU
         self._undergrowth_cache = {}  # type -> surface            (bounded LRU)
         self._TREE_SPRITE_VARIANTS = 12
         # 11 species x 5 variants = 55 max combinations; a cache of 24 thrashes
@@ -1467,6 +1468,36 @@ class Renderer:
             self._tree_sprite_cache[key] = self._tree_sprite_cache.pop(key)
         return img
 
+    def _tree_ground_shadow(self, width, height):
+        """Return a cached soft ground-contact shadow for a projected tree base."""
+        sw = max(8, min(256, int((width + 3) // 4 * 4)))
+        sh = max(3, min(28, int((height + 1) // 2 * 2)))
+        key = (sw, sh)
+        shadow = self._tree_shadow_cache.get(key)
+        if shadow is None:
+            shadow = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            # Three nested low-alpha ellipses approximate a soft penumbra while
+            # keeping the pass cheap and independent of the number of foliage pixels.
+            pygame.draw.ellipse(shadow, (2, 5, 3, 28),
+                                (0, 0, sw, sh))
+            inset_x = max(1, sw // 12)
+            inset_y = max(1, sh // 5)
+            pygame.draw.ellipse(shadow, (2, 4, 2, 34),
+                                (inset_x, inset_y, max(1, sw - 2 * inset_x),
+                                 max(1, sh - 2 * inset_y)))
+            core_x = max(2, sw // 5)
+            core_y = max(1, sh // 3)
+            pygame.draw.ellipse(shadow, (1, 3, 2, 24),
+                                (core_x, core_y, max(1, sw - 2 * core_x),
+                                 max(1, sh - 2 * core_y)))
+            shadow = shadow.convert_alpha()
+            self._tree_shadow_cache[key] = shadow
+            if len(self._tree_shadow_cache) > 96:
+                self._tree_shadow_cache.pop(next(iter(self._tree_shadow_cache)))
+        else:
+            self._tree_shadow_cache[key] = self._tree_shadow_cache.pop(key)
+        return shadow
+
     def _undergrowth_sprite(self, ptype):
         """Same lazy/bounded pattern for environment decorations."""
         img = self._undergrowth_cache.get(ptype)
@@ -1600,6 +1631,17 @@ class Renderer:
                 sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
                 
+                # Soft projected contact shadow anchors the billboard to the terrain.
+                # Draw before the tree so its trunk and roots naturally cover the shadow.
+                shadow_w = min(256, max(8, int(sw * 0.92)))
+                shadow_h = max(3, min(28, int(unit * 0.10)))
+                tree_shadow = self._tree_ground_shadow(shadow_w, shadow_h)
+                shadow_x = screen_x + sw * 0.10
+                shadow_y = floor_y - shadow_h * 0.55
+                self.surface.blit(tree_shadow,
+                                  (int(shadow_x - tree_shadow.get_width() * 0.5),
+                                   int(shadow_y - tree_shadow.get_height() * 0.5)))
+
                 # Enhanced wind animation with gusts
                 if ENABLE_ANIMATIONS and ENABLE_ENV_ANIM:
                     base_wind = math.sin(self.wind_time * 0.8 + obj['x'] * 1.7) * self.wind_strength
