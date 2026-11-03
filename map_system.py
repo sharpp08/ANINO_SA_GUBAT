@@ -310,7 +310,7 @@ class GameMap:
             4: (['balete', 'strangler', 'mahogany', 'supernatural', 'narra'], [38, 24, 17, 8, 13]),
             5: (['dead', 'balete', 'mahogany', 'bamboo'], [35, 25, 25, 15]),
         }
-        target_tree_count = (5200 if chapter_num == 1 else 6500)
+        target_tree_count = (6000 if chapter_num == 1 else 7400)  # +15% forest density; billboard render cap remains unchanged
         step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
         cell_step = 2 if chapter_num == 2 else max(2, int(step))
         tree_clearings = (
