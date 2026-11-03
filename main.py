@@ -551,6 +551,10 @@ class Game:
         print(f"[DIAGNOSTICS] Trees Generated (Chapter 1): {len(test_gm.trees)}")
         print(f"[DIAGNOSTICS] Undergrowth Generated: {len(test_gm.undergrowth)}")
 
+        # Avoid half-refresh VSync throttling (often exactly 30 FPS on 60 Hz displays).
+        # The main loop already applies a 60 FPS software cap, so presentation stays paced
+        # without forcing the GPU to wait for every monitor refresh.
+        self.vsync_enabled = bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('vsync', False))
         self.gl_presenter = None
         self.screen = self._set_display_mode()
         self._install_present_hook()
@@ -633,12 +637,12 @@ class Game:
             SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
         requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
-                           or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", True))
+                           or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", False))
         FULLSCREEN = requested_fullscreen
         if display_changed:
             self.screen = self._set_display_mode()
         self.target_fps = 240 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
-        self.vsync_enabled = bool(values.get("vsync", True))
+        self.vsync_enabled = bool(values.get("vsync", False))
         tier = str(values.get("quality_tier", "medium")).lower()
         if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
             try:
