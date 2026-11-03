@@ -490,6 +490,7 @@ def load_settings(path=SETTINGS_PATH):
         'fullscreen': FULLSCREEN,
         'mouse_sensitivity': PLAYER_ROT_SPEED,
         'master_volume': MASTER_VOLUME,
+        'audio_buffer': 4096,
         'music_volume': MUSIC_VOLUME,
         'sfx_volume': SFX_VOLUME,
         'enable_bloom': ENABLE_BLOOM,
