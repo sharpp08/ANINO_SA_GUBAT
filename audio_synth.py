@@ -304,7 +304,7 @@ class SoundManager:
         # Larger buffers trade a little latency for more protection against underruns.
         for kwargs in (
             dict(frequency=48000, size=-16, channels=2, buffer=2048,
-                 allowedchanges=pygame.mixer.ALLOW_FREQUENCY_CHANGE),
+                 allowedchanges=getattr(pygame.mixer, 'ALLOW_FREQUENCY_CHANGE', 0x1)),
             dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
             dict(frequency=44100, size=-16, channels=2, buffer=4096),
             dict(frequency=22050, size=-16, channels=2, buffer=2048),
