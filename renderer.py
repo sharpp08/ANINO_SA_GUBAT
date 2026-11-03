@@ -188,11 +188,17 @@ class Flashlight:
         intensity = 0.15 + 0.85 * angular_falloff * dist_falloff * batt_factor * flicker
         return max(0.05, min(1.0, intensity * brightness))
 
-    def draw(self, surf, player):
-        """Draw the darkness overlay (called ONCE per frame)."""
+    def draw(self, surf, player, sunrise_progress=0.0):
+        """Draw darkness/flashlight once; ambient visibility naturally rises toward daylight."""
+        daylight = max(0.0, min(1.0, float(sunrise_progress)))
         if not player.flashlight_on or player.flashlight_battery <= 0:
+            # Keep the night readable, then fade the darkness overlay away as dawn arrives.
+            self.dark_off.set_alpha(int(255 * (1.0 - daylight)))
             surf.blit(self.dark_off, (0, 0))
             return
+
+        # The flashlight should not darken the whole world during daylight.
+        self.dark_mask.set_alpha(int(255 * (1.0 - daylight)))
 
         cx = int(self.w // 2 + self.sway_x)
         cy = int(self.h // 2 + self.sway_y)
@@ -797,7 +803,7 @@ class Renderer:
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
         if not self.debug_f4:
-            self.flashlight.draw(self.surface, player)
+            self.flashlight.draw(self.surface, player, sunrise_progress)
 
         # 6. Glowing eyes / halos: drawn AFTER darkness so they show in the dark
         self._draw_emissive()
