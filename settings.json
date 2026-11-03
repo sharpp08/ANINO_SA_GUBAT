@@ -69,5 +69,6 @@
   "enemy_aggression": "high",
   "enemy_spawn_rate": "high",
   "difficulty": "hard",
-  "adaptive_perf": true
+  "adaptive_perf": true,
+  "gpu_world_rendering": false
 }
