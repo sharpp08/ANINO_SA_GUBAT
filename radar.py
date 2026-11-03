@@ -15,8 +15,8 @@ import pygame
 from settings import FOV, EMPTY
 
 RADAR_RANGE = 14.0      # tiles: enemies farther away than this are not detected
-RADAR_RADIUS = 52       # radar radius in pixels (on the 640x360 internal screen)
-RADAR_MARGIN = 12       # distance from the screen edge
+RADAR_RADIUS = 36       # radar radius in pixels (on the 640x360 internal screen)
+RADAR_MARGIN = 8       # distance from the screen edge
 ALERT_DIST = 5.0        # ring flashes red when an enemy is this close
 HUNTING_STATES = ('stalk', 'attack', 'investigate')
 
