@@ -4,6 +4,7 @@
   "fullscreen": true,
   "mouse_sensitivity": 0.004,
   "master_volume": 1.0,
+  "audio_buffer": 4096,
   "music_volume": 0.7,
   "sfx_volume": 0.8,
   "enable_bloom": true,
