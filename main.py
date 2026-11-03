@@ -8,6 +8,11 @@ import math
 import random
 import pygame
 
+# Initialize SDL/Pygame before importing audio_synth. The audio manager opens
+# the mixer when its module is imported, so doing this first avoids creating
+# the audio device before Pygame's other SDL subsystems are initialized.
+pygame.init()
+
 import settings as _settings_mod
 # Apply the quality preset from settings.json before any module copies resolution-dependent values
 _settings_mod.apply_quality_preset(_settings_mod.load_settings().get('quality_tier', _settings_mod.QUALITY_TIER))
