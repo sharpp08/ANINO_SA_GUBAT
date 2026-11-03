@@ -88,6 +88,19 @@ def test_no_flapping_after_failed_restore():
     assert gov.level == top
 
 
+def test_skips_gpu_post_level_when_gpu_presenter_active():
+    rm = types.SimpleNamespace(ENABLE_PARTICLES=True, ENABLE_PARTICLE_PHYSICS=True,
+                               ENABLE_ENV_ANIM=True, MAX_RENDER_TREES=150)
+    sm = types.SimpleNamespace(ENABLE_FOG=True)
+    renderer = types.SimpleNamespace(shader_renderer=types.SimpleNamespace(enabled=False),
+                                     perf_no_stars=False)   # old readback shader inert (SKIP)
+    gov = PerfGovernor(renderer, rm, sm)
+    run(gov, 30.0, 400)
+    assert gov.level == 2 and rm.ENABLE_PARTICLES is False   # went straight to level 2
+    run(gov, 6.0, 20000)
+    assert gov.level == 0 and rm.ENABLE_PARTICLES is True
+
+
 def test_can_be_disabled():
     gov, *_ = make()
     gov.enabled = False
@@ -102,5 +115,6 @@ if __name__ == '__main__':
     test_ignores_hitches_and_non_gameplay()
     test_respects_user_settings_that_were_off()
     test_no_flapping_after_failed_restore()
+    test_skips_gpu_post_level_when_gpu_presenter_active()
     test_can_be_disabled()
     print("All perf governor tests passed.")

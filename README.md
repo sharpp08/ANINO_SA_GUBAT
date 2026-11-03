@@ -291,3 +291,11 @@ The game measures its own per-frame work time (excluding the vsync wait). If the
 4. Depth fog off and a further tree cut
 
 Changes are logged to the console as `[PERF] ... -> level N`. Disable it with `"adaptive_perf": false` in `settings.json` or `ANINO_ADAPTIVE=0`. The GPU post-process pass can also be turned off alone with `"enable_gpu_post": false` or `ANINO_GPU_POST=0`. Tests: `python tests/test_perf_governor.py`.
+
+## GPU presentation path (OpenGL window)
+
+The CPU still draws the scene, but the finished 640x360 frame is now uploaded to the GPU once and a single shader pass does the colour grade, vignette, fog tint, grain and the upscale to the window. This replaces the old offscreen shader that read the frame back to the CPU, the software 640x360 -> 1280x720 scale, and ~2 MB/frame of allocations. Fullscreen uses the monitor's native resolution with letterboxing.
+
+On startup it draws a test pattern and reads four pixels back once to verify colours and orientation; if that fails (or no OpenGL 3.3 context exists) the game silently keeps the normal 2D window. Look for `[GPU]` lines in the console (`GL_RENDERER=...` shows which GPU is used).
+
+Turn it off with `"gpu_present": false` in `settings.json` or `ANINO_GPU_PRESENT=0`. Tests: `python tests/test_gl_present.py`.
