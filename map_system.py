@@ -366,7 +366,14 @@ class GameMap:
         # never covers the main trail, shallow pools, buildings or spawn.
         self.undergrowth = []
         plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
-        desired_plants = UNDERGROWTH_DENSITY
+        # Density follows the active quality tier (settings.VEGETATION_SCALE):
+        # Low thins the forest floor, High/Ultra make it dense.  Deterministic:
+        # the same seed + count always reproduces the same placement.
+        try:
+            import settings as _settings_mod
+            desired_plants = int(UNDERGROWTH_DENSITY * float(getattr(_settings_mod, 'VEGETATION_SCALE', 1.0)))
+        except Exception:
+            desired_plants = UNDERGROWTH_DENSITY
         plant_clearings = (
             (15, 128, 7.0), (65, 70, 5.0), (83, 70, 5.0),
             (75, 91, 5.0), (69, 202, 5.0), (130, 130, 9.0),

@@ -317,6 +317,18 @@ class WeatherFX:
         self.pos = (0.0, 0.0)                                     # last known player position
         self.wind_dir = 0.9                                       # direction the wind blows (radians)
 
+    def set_density(self, density):
+        """Rebuild the drop field at a new density (quality-tier rain scaling).
+
+        The new field uses the same RNG stream, so dropping/raising the tier
+        mid-game does not visually "pop" the storm into a different shape.
+        """
+        self.density = max(0.1, float(density))
+        try:
+            self._init_rain()
+        except Exception:
+            pass
+
     def _project(self, x, y, z, horizon_y):
         """World points -> (screen x, screen y, depth) for the current camera."""
         px, py = self.pos

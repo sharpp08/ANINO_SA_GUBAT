@@ -22,10 +22,15 @@ from collections import deque
 LEVEL_NAMES = {
     0: "full quality",
     1: "GPU post-process off",
-    2: "particles + stars off",
+    2: "GPU bloom/god-rays + particles + stars off",
     3: "wind sway off, fewer trees",
     4: "depth fog off, minimum trees",
 }
+
+
+def _gl_presenter_for(governor):
+    """The GL presenter, if the game wired one onto the renderer (see main.py)."""
+    return getattr(governor.renderer, 'gl_presenter', None)
 MAX_LEVEL = 4
 
 
@@ -123,6 +128,11 @@ class PerfGovernor:
         sr = getattr(self.renderer, 'shader_renderer', None)
         if sr is not None and self._shader_was_on:
             sr.enabled = not (level >= 1)
+        # Optional GPU post effects (bloom / god rays on the GL window) are the
+        # single most expensive frame item on integrated graphics: shed level 2.
+        gp = _gl_presenter_for(self)
+        if gp is not None and hasattr(gp, 'set_effects_enabled'):
+            gp.set_effects_enabled(not (level >= 2))
         rm.ENABLE_PARTICLES = o['ENABLE_PARTICLES'] and not (level >= 2)
         rm.ENABLE_PARTICLE_PHYSICS = o['ENABLE_PARTICLE_PHYSICS'] and not (level >= 2)
         self.renderer.perf_no_stars = level >= 2
@@ -134,3 +144,6 @@ class PerfGovernor:
         else:
             rm.MAX_RENDER_TREES = o['MAX_RENDER_TREES']
         self.sm.ENABLE_FOG = o['ENABLE_FOG'] and not (level >= 4)
+        # NOTE: the governor never touches the ambient-visibility values
+        # (AMBIENT_LIGHT_OFF / DARK_TINT / terrain brightness floor): the
+        # flashlight-off night must stay readable at every level.

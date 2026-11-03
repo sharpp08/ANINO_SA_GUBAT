@@ -14,9 +14,13 @@ MIST_COLOR = np.array([30.0, 40.0, 38.0], dtype=np.float32)
 _floor_const_cache = {}
 
 
-def _get_floor_constants(h, horizon_y, pitch_offset, mist_phase):
-    """Return cached (dist, fog, fshade, mist_strength) + per-frame mist."""
-    key = (h, horizon_y, pitch_offset)
+def _get_floor_constants(w, h, horizon_y, pitch_offset, mist_phase):
+    """Return cached (dist, fog, fshade, mist_strength) + per-frame mist.
+
+    The key includes the width: the arrays are (rows, w) and stale entries from
+    a different resolution (e.g. a quality-tier switch inside one process)
+    would otherwise broadcast-fail."""
+    key = (w, h, horizon_y, pitch_offset)
     cached = _floor_const_cache.get(key)
     if cached is not None:
         dist, fog, fshade, mist_strength, ys = cached
@@ -48,7 +52,7 @@ def fill_floor(arr_3d, ground_arr, tint_lut, terrain_grid, map_w, map_h,
     gw, gh, _ = ground_arr.shape
 
     dist, fog, fshade, mist_strength, ma = _get_floor_constants(
-        h, horizon_y, pitch_offset, mist_phase)
+        arr_3d.shape[0], h, horizon_y, pitch_offset, mist_phase)
     n_rows = len(dist)
 
     ray_dx_f32 = np.asarray(ray_dx, dtype=np.float32)
@@ -92,7 +96,7 @@ def fill_floor_terrain(arr_3d, atlas, far_atlas, packed, fine, map_w, map_h,
     size = atlas.shape[1]
 
     dist, fog, fshade, mist_strength, ma = _get_floor_constants(
-        h, horizon_y, pitch_offset, mist_phase)
+        arr_3d.shape[0], h, horizon_y, pitch_offset, mist_phase)
     n_rows = len(dist)
 
     ray_dx_f32 = np.asarray(ray_dx, dtype=np.float32)

@@ -21,22 +21,34 @@ class SettingsMenu:
         self.notice_until = 0
         self.waiting_for_key = None
         self.previous_values = dict(self.values)
+        self.benchmark_requested = False
         self.rows = self._build_rows()
+
+    def take_benchmark_request(self):
+        """Consume a pending 'Run Graphics Benchmark' request (at most one)."""
+        wanted = self.benchmark_requested
+        self.benchmark_requested = False
+        return wanted
 
     def _build_rows(self):
         return {
             "VIDEO": [
                 ("Fullscreen", "fullscreen", "toggle", None), ("VSync", "vsync", "toggle", None),
                 ("Resolution", "resolution", "choice", ["1280 x 720", "1600 x 900", "1920 x 1080"]),
-                ("Preset Quality", "quality_tier", "choice", ["low", "medium", "high"]),
+                ("Preset Quality", "quality_tier", "choice", ["low", "medium", "high", "ultra"]),
                 ("FPS Limit", "fps_limit", "choice", ["30", "45", "60", "90", "120", "unlimited"]),
                 ("Brightness", "brightness", "slider", (50, 150)), ("Field of View", "fov", "slider", (60, 100)),
                 ("Fog Effects", "enable_fog", "toggle", None), ("Particles", "enable_particles", "toggle", None),
+                ("Adaptive Performance", "adaptive_perf", "toggle", None),
+                ("Run Graphics Benchmark", "run_benchmark", "benchmark", None),
             ],
             "AUDIO": [
                 ("Master Volume", "master_volume", "volume", (0, 100)), ("Music Volume", "music_volume", "volume", (0, 100)),
                 ("Sound Effects", "sfx_volume", "volume", (0, 100)), ("Ambient Volume", "ambient_volume", "volume", (0, 100)),
                 ("Enemy Sounds", "enemy_volume", "volume", (0, 100)),
+                ("Weapons Volume", "weapons_volume", "volume", (0, 100)),
+                ("Rain & Weather Volume", "weather_volume", "volume", (0, 100)),
+                ("UI Sounds Volume", "ui_volume", "volume", (0, 100)),
             ],
             "CONTROLS": [
                 ("Move Forward", "forward", "bind", None), ("Move Backward", "backward", "bind", None),
@@ -79,6 +91,8 @@ class SettingsMenu:
             defaults = {
                 "master_volume": 70, "music_volume": 40, "sfx_volume": 80,
                 "ambient_volume": 70, "enemy_volume": 80, "ui_volume": 70,
+                "weapons_volume": 100, "weather_volume": 70,
+                "adaptive_perf": 1, "run_benchmark": "",
                 "mouse_sensitivity": 50, "brightness": 55, "fov": 80,
                 "fps_limit": "60", "quality_tier": "medium", "resolution": "1280 x 720",
                 "texture_quality": "medium", "anti_aliasing": "FXAA", "anisotropic": "8x",
@@ -102,7 +116,8 @@ class SettingsMenu:
             controls = dict(self.values.get("controls", cfg.DEFAULT_CONTROLS))
             controls[key] = value
             self.values["controls"] = controls
-        elif key in ("master_volume", "music_volume", "sfx_volume", "ambient_volume", "enemy_volume", "ui_volume"):
+        elif key in ("master_volume", "music_volume", "sfx_volume", "ambient_volume", "enemy_volume",
+                     "ui_volume", "weapons_volume", "weather_volume"):
             self.values[key] = value / 100.0
         elif key == "mouse_sensitivity":
             self.values[key] = value / 50.0 * 0.002
@@ -135,6 +150,9 @@ class SettingsMenu:
             self.values["controls"] = dict(cfg.DEFAULT_CONTROLS)
             self.dirty = True
             self._message("Controls reset")
+        elif kind == "benchmark":
+            self.benchmark_requested = True
+            self._message("Benchmark starting... stay on this screen for a few seconds")
 
     def _message(self, text):
         self.notice = text
@@ -179,7 +197,7 @@ class SettingsMenu:
                     if kind == "bind":
                         self.waiting_for_key = key
                         self._message("Press a key to bind • ESC cancels")
-                    elif kind in ("toggle", "action"):
+                    elif kind in ("toggle", "action", "benchmark"):
                         self._change(1)
                     elif kind in ("choice", "slider", "volume"):
                         self._change(1)
@@ -225,6 +243,8 @@ class SettingsMenu:
             "quality_tier": "medium", "fps_limit": "60", "brightness": 1.0, "fov": 75,
             "master_volume": cfg.MASTER_VOLUME, "music_volume": cfg.MUSIC_VOLUME,
             "sfx_volume": cfg.SFX_VOLUME, "ambient_volume": 0.7, "enemy_volume": 0.8,
+            "weapons_volume": 1.0, "ui_volume": 0.7, "weather_volume": 0.7,
+            "adaptive_perf": True,
             "enable_fog": True, "enable_particles": True, "enable_sanity": True,
             "enable_camera_shake": True, "mouse_sensitivity": cfg.PLAYER_ROT_SPEED,
             "invert_mouse_y": False, "sprint_toggle": "hold", "crouch_toggle": "hold",
@@ -302,6 +322,8 @@ class SettingsMenu:
                     shown = "PRESS KEY" if self.waiting_for_key == key else str(value).upper()
                 elif kind == "action":
                     shown = "RESET"
+                elif kind == "benchmark":
+                    shown = "RUN"
                 else:
                     shown = str(value).upper()
                 val_img = font_tiny.render(shown[:13], True, (203, 194, 176))

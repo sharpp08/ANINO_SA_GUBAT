@@ -355,6 +355,10 @@ class SoundManager:
         self.sfx_volume = 1.0
         self.ambient_volume = 1.0
         self.enemy_volume = 1.0
+        # Fine-grained volume groups (synced by main.py from the settings sliders).
+        self.weapons_volume = 1.0   # gunfire, reloads, weapon handling
+        self.ui_volume = 0.7        # doors, page rustle, flashlight click
+        self.weather_volume = 0.7   # rain loop, thunder
         self.sounds = {}
         self.variants = {}
         self._muffle_cache = {}
@@ -371,7 +375,7 @@ class SoundManager:
                                       'assets', 'audio', 'shotgun_fire.mp3')
         if os.path.isfile(custom_shotgun):
             try:
-                self.sounds['shotgun'] = pygame.mixer.Sound(custom_shotgun)
+                self.sounds['shotgun'] = self._load_recording(custom_shotgun, cap=0.95)
                 self.sounds['shotgun'].set_volume(0.80)
                 print('[Audio] Loaded custom shotgun firing sound.')
             except Exception as exc:
@@ -381,7 +385,7 @@ class SoundManager:
                                        'assets', 'audio', 'revolver_gunshot.mp3')
         if os.path.isfile(custom_revolver):
             try:
-                self.sounds['revolver'] = pygame.mixer.Sound(custom_revolver)
+                self.sounds['revolver'] = self._load_recording(custom_revolver, cap=0.95)
                 print('[Audio] Loaded custom revolver gunshot.')
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver gunshot: {exc}')
@@ -393,7 +397,7 @@ class SoundManager:
         )
         if os.path.isfile(custom_revolver_reload):
             try:
-                self.sounds['revolver_reload'] = pygame.mixer.Sound(custom_revolver_reload)
+                self.sounds['revolver_reload'] = self._load_recording(custom_revolver_reload, cap=0.95)
                 print('[Audio] Loaded custom revolver reload sound.')
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver reload sound: {exc}')
@@ -405,7 +409,7 @@ class SoundManager:
         )
         if os.path.isfile(custom_shotgun_reload):
             try:
-                self.sounds['shotgun_reload'] = pygame.mixer.Sound(custom_shotgun_reload)
+                self.sounds['shotgun_reload'] = self._load_recording(custom_shotgun_reload, cap=0.95)
                 self.sounds['shotgun_reload'].set_volume(0.80)
                 print('[Audio] Loaded custom shotgun reload sound.')
             except Exception as exc:
@@ -431,10 +435,36 @@ class SoundManager:
                                  'assets', 'audio', 'rain_ambience.mp3')
         if os.path.isfile(rain_path):
             try:
-                self._rain_ambience_sound = pygame.mixer.Sound(rain_path)
+                self._rain_ambience_sound = self._load_recording(rain_path, cap=0.90)
                 print('[Audio] Loaded recorded rain ambience.')
             except Exception as exc:
                 print(f'[Audio] Could not load rain ambience: {exc}')
+
+    # ── recorded asset loading ────────────────────────────────────────────────
+    def _load_recording(self, path, cap=0.90):
+        """Load a supplied recording with peak control, without altering the file.
+
+        The file is decoded at the mixer's rate/format (44.1 kHz, 16-bit,
+        stereo).  If its peak exceeds ``cap`` it would clip the mixer output
+        — most audibly when several effects overlap — so the in-memory samples
+        are rescaled to the cap (same content, same length, same timbre).
+        Quiet recordings are kept untouched; nothing is ever boosted upward.
+        """
+        snd = pygame.mixer.Sound(path)
+        try:
+            raw = np.frombuffer(snd.get_raw(), dtype=np.int16).astype(np.float64)
+            ch = max(1, self.channels)
+            raw = raw[:len(raw) - len(raw) % ch].reshape(-1, ch) / 32768.0
+            peak = float(np.max(np.abs(raw))) if raw.size else 0.0
+            if peak > cap + 1e-3:
+                fixed = self._generate_sound(raw * (cap / peak))
+                if fixed is not None:
+                    print(f'[Audio] Peak-limited {os.path.basename(path)} '
+                          f'(peak {peak:.2f} -> {cap:.2f}).')
+                    return fixed
+        except Exception:
+            pass
+        return snd
 
     # ── recorded footsteps ───────────────────────────────────────────────────
     FOOTSTEP_PEAK = 0.85          # every recorded step is levelled to this peak so none stands out
@@ -488,7 +518,7 @@ class SoundManager:
         for kind in ('near', 'far'):
             for path in sorted(glob.glob(os.path.join(base, f'thunder_{kind}_*.mp3'))):
                 try:
-                    self._thunder[kind].append(pygame.mixer.Sound(path))
+                    self._thunder[kind].append(self._load_recording(path, cap=0.95))
                 except Exception as exc:
                     print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
         total = len(self._thunder['near']) + len(self._thunder['far'])
@@ -521,6 +551,7 @@ class SoundManager:
             gain *= float(getattr(_settings, 'THUNDER_VOLUME', 1.0))
         except Exception:
             pass
+        gain *= max(0.0, min(1.0, getattr(self, 'weather_volume', 1.0)))
         return self.play_object(snd, volume * gain, pan, headroom=1.0)
 
     # ── low level helpers (kept for backwards compatibility) ─────────────────
@@ -1207,10 +1238,12 @@ class SoundManager:
             # by the same Ambient Volume slider and gameplay ambience state.
             rain_channel = pygame.mixer.Channel(4)
             rain = getattr(self, '_rain_ambience_sound', None)
+            rain_gain = 0.38 * self.master_volume * self.ambient_volume \
+                * max(0.0, min(1.0, getattr(self, 'weather_volume', 1.0)))
             if active and rain is not None:
                 if not rain_channel.get_busy():
                     rain_channel.play(rain, loops=-1, fade_ms=2500)
-                rain_channel.set_volume(0.38 * self.master_volume * self.ambient_volume)
+                rain_channel.set_volume(rain_gain)
             elif rain_channel.get_busy():
                 rain_channel.fadeout(1200)
         except Exception as exc:
