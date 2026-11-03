@@ -637,7 +637,7 @@ class Game:
             SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
         requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
-                           or bool(values.get("vsync", True)) != getattr(self, "vsync_enabled", False))
+                           or bool(values.get("vsync", False)) != getattr(self, "vsync_enabled", False))
         FULLSCREEN = requested_fullscreen
         if display_changed:
             self.screen = self._set_display_mode()
@@ -708,8 +708,7 @@ class Game:
             except Exception:
                 pass
     def _vsync_flag(self):
-        """vsync is only requested on ~60 Hz panels: with the clock.tick(60) limiter on a
-        120/144 Hz panel it would lock to every 3rd refresh."""
+        """Optional VSync; disabled by default because missed 60 Hz deadlines halve presentation to 30 FPS."""
         try:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
