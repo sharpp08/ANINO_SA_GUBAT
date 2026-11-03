@@ -440,6 +440,50 @@ class SoundManager:
             except Exception as exc:
                 print(f'[Audio] Could not load rain ambience: {exc}')
 
+        # Build short-sound spatial filters during loading rather than on the
+        # first gameplay event. FFT filtering on the main thread can cause a
+        # one-time audio hitch when a distant sound is heard for the first time.
+        try:
+            spatial_sounds = []
+            seen_sound_ids = set()
+            for name, sound in self.sounds.items():
+                if sound is None or name in {
+                    'wind_bed', 'crickets_bed', 'intro_wind', 'drone',
+                    'intro_score', 'frenzy_ambience', 'rain_ambience'
+                }:
+                    continue
+                try:
+                    if sound.get_length() > 4.0:
+                        continue
+                except Exception:
+                    continue
+                if id(sound) not in seen_sound_ids:
+                    seen_sound_ids.add(id(sound))
+                    spatial_sounds.append(sound)
+
+            for pool in self.variants.values():
+                for sound in pool:
+                    if sound is None or id(sound) in seen_sound_ids:
+                        continue
+                    try:
+                        if sound.get_length() > 4.0:
+                            continue
+                    except Exception:
+                        continue
+                    seen_sound_ids.add(id(sound))
+                    spatial_sounds.append(sound)
+
+            for pool in getattr(self, '_thunder', {}).values():
+                for sound in pool:
+                    if sound is not None and id(sound) not in seen_sound_ids:
+                        seen_sound_ids.add(id(sound))
+                        spatial_sounds.append(sound)
+
+            self.prewarm_muffled(spatial_sounds)
+        except Exception as exc:
+            # Audio preparation must never prevent the game from starting.
+            print(f'[AUDIO] Spatial prewarm skipped: {exc}')
+
     # ── recorded asset loading ────────────────────────────────────────────────
     def _load_recording(self, path, cap=0.90):
         """Load a supplied recording with peak control, without altering the file.
