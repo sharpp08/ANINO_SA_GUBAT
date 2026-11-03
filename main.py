@@ -1531,7 +1531,11 @@ class Game:
         mouse_dy  = 0
 
         while running:
-            dt = min(self.clock.tick(getattr(self, 'target_fps', FPS)) / 1000.0, 0.05)
+            # The procedural intro has expensive full-frame effects. Cap only
+            # this non-interactive cinematic at 30 FPS to leave CPU time for SDL's
+            # audio thread; gameplay keeps its configured frame rate.
+            frame_cap = 30 if self.state == STATE_INTRO else getattr(self, 'target_fps', FPS)
+            dt = min(self.clock.tick(frame_cap) / 1000.0, 0.05)
             self._loop_t0 = _perf_counter()   # start of this frame's work (after the limiter's wait)
             mouse_dx = 0
             mouse_dy = 0
