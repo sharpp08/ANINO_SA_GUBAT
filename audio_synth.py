@@ -1072,21 +1072,10 @@ class SoundManager:
         if os.path.isfile(path):
             try:
                 self._intro_score = pygame.mixer.Sound(path)
-                # The supplied cinematic score is mastered quietly. Normalize its
-                # decoded samples to a healthy peak so it is clearly audible on
-                # laptop speakers while still respecting the Music Volume slider.
-                raw = np.frombuffer(self._intro_score.get_raw(), dtype=np.int16)
-                peak = int(np.max(np.abs(raw.astype(np.int32)))) if raw.size else 0
-                if peak > 0:
-                    samples = raw.astype(np.float64) / 32768.0
-                    samples *= min(4.0, (0.92 * 32767.0) / peak)
-                    channels = max(1, self.channels)
-                    samples = samples[:len(samples) - len(samples) % channels]
-                    samples = samples.reshape(-1, channels)
-                    boosted = self._generate_sound(samples)
-                    if boosted is not None:
-                        self._intro_score = boosted
-                print('[Audio] Loaded intro score (level-normalized).')
+                # Keep the mastered WAV samples unchanged. Rebuilding and boosting
+                # the score here can introduce harsh peaks; leave headroom at the
+                # dedicated playback channel instead.
+                print('[Audio] Loaded intro score without sample amplification.')
             except Exception as exc:
                 print(f'[Audio] Could not load intro score: {exc}')
         return self._intro_score
