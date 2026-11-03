@@ -291,13 +291,12 @@ AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
-def _audio_buffer_size(default=4096):
+def _audio_buffer_size(default=2048):
     """Mixer buffer in samples (power of two, 512-8192).
 
-    4096 samples (~93 ms at 44.1 kHz) is the stability-first default for this
-    CPU-heavy game. Smaller buffers reduce latency but are more vulnerable to
-    scheduling hiccups and audible underruns. Override with "audio_buffer" in
-    settings.json or ANINO_AUDIO_BUFFER.
+    2048 samples (~46 ms at 44.1 kHz) is a balanced default for stability
+    and responsive effects. Override with "audio_buffer" in settings.json or
+    ANINO_AUDIO_BUFFER.
     """
     val = os.environ.get('ANINO_AUDIO_BUFFER')
     if not val:
@@ -318,11 +317,11 @@ def _audio_buffer_size(default=4096):
 
 class SoundManager:
     def __init__(self):
-        # Always restart an existing mixer at startup: get_init() exposes the
-        # format but not the buffer size, so an already-running 512/1024-sample
-        # mixer could otherwise survive this configuration unnoticed.
+        # Do not tear down a mixer another startup component already opened.
+        # Keep a compatible device alive to avoid Windows audio-device glitches.
         try:
-            if pygame.mixer.get_init():
+            current = pygame.mixer.get_init()
+            if current and (current[0] != 44100 or current[1] != -16 or current[2] != 2):
                 pygame.mixer.quit()
         except Exception:
             pass
@@ -331,7 +330,7 @@ class SoundManager:
         buf = _audio_buffer_size()
         for kwargs in (
             dict(frequency=44100, size=-16, channels=2, buffer=buf, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096), allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048), allowedchanges=0),
             dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096)),
             dict(frequency=22050, size=-16, channels=2, buffer=buf),
         ):
