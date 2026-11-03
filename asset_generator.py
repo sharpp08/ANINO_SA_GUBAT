@@ -504,6 +504,21 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             pygame.draw.circle(surf, fc, (fx, fy), fr)
 
     # --- Canopy: layered, asymmetrical, species-specific ---
+    # Give broadleaf trees a continuous dark foliage core first. The later
+    # overlapping leaf clusters add silhouette variation and highlights, but
+    # this backing prevents large see-through holes between procedural clumps.
+    if not is_dead and not is_bam and not is_trop:
+        canopy_h = max(24, canopy_bot - canopy_top)
+        core = (12, 29, 14) if not is_sup else (9, 17, 16)
+        pygame.draw.ellipse(
+            surf, core,
+            (max(0, cx - 35), max(0, canopy_top - 4),
+             min(width, 70), min(height, canopy_h + 10)))
+        # Offset lobes keep the crown irregular instead of looking like a disk.
+        pygame.draw.ellipse(surf, core,
+                            (max(0, cx - 29), max(0, canopy_top + 8), 43, max(18, canopy_h - 4)))
+        pygame.draw.ellipse(surf, core,
+                            (max(0, cx - 12), max(0, canopy_top - 1), 39, max(18, canopy_h - 8)))
 
     if is_dead:
         # Bare skeletal branches reaching upward
@@ -610,6 +625,11 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             r = 20 + i * 4
             pygame.draw.circle(surf, (60, 10, 40, 30), (cx, trunk_top + 10), r, 1)
 
+    # Preserve intentional soft moss/aura pixels, but ensure all fully drawn
+    # bark and foliage pixels are truly opaque after conversion/scaling.
+    alpha = pygame.surfarray.pixels_alpha(surf)
+    alpha[alpha >= 240] = 255
+    del alpha
     return surf
 
 def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42):
