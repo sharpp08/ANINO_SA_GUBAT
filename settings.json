@@ -15,7 +15,7 @@
   "enable_intro": true,
   "debug_overlay": false,
   "quality_tier": "medium",
-  "vsync": true,
+  "vsync": false,
   "brightness": 1,
   "fov": 75,
   "fps_limit": "60",
