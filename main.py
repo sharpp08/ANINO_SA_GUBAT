@@ -16,6 +16,9 @@ from player import Player
 from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
+import renderer as _renderer_mod
+from perf_governor import PerfGovernor
+from time import perf_counter as _perf_counter
 from radar import Radar
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
 from enemy_audio import enemy_audio_mgr
@@ -589,6 +592,11 @@ class Game:
         self.renderer      = Renderer(self.internal, textures, weapon_spr, enemy_spr, pickup_spr)
         self.renderer.crosshair = crosshair_spr
         self.renderer.clock = self.clock
+        # Adaptive 60 FPS governor: sheds optional effects if frame work time stays over budget.
+        self.perf = PerfGovernor(self.renderer, _renderer_mod, _settings_mod,
+                                 enabled=bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('adaptive_perf', True)))
+        self._loop_t0 = _perf_counter()
+        self._work_ms = 0.0
         self.cinematic     = Cinematic(self.internal)
         self.radar         = Radar()
 
@@ -759,6 +767,8 @@ class Game:
             gc.set_threshold(10000, 20, 20)
         except Exception:
             pass
+        if hasattr(self, 'perf'):
+            self.perf.reset()
 
     def max_chapter(self):
         return getattr(self.game_map, 'max_chapters', 2)
@@ -1297,6 +1307,8 @@ class Game:
 
         # Scale to screen
         pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
+        # Work time excludes the flip, which blocks on vsync and would look like load.
+        self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
         pygame.display.flip()
 
     # ── Main loop ─────────────────────────────────────────────────────────
@@ -1307,6 +1319,7 @@ class Game:
 
         while running:
             dt = min(self.clock.tick(getattr(self, 'target_fps', FPS)) / 1000.0, 0.05)
+            self._loop_t0 = _perf_counter()   # start of this frame's work (after the limiter's wait)
             mouse_dx = 0
             mouse_dy = 0
 
@@ -1433,6 +1446,7 @@ class Game:
                 pass
 
             self.render(dt)
+            self.perf.update(self._work_ms, self.state == STATE_PLAYING)
 
         pygame.quit()
         sys.exit()

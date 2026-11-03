@@ -280,3 +280,14 @@ Steps to produce the latest binary:
 The forest has always been alive. Tonight, the old warnings mean something more. Ancient spirits roam the cursed woods. You are a lone traveler with a bolo, a flickering flashlight and faith passed down through generations. Find the pages. Hold on until dawn.
 
 *Ingatan mo ang iyong sarili. Ang gubat ay may ibang batas sa gabi.*
+
+## Adaptive 60 FPS governor
+
+The game measures its own per-frame work time (excluding the vsync wait). If the average stays above ~14.5 ms it sheds optional effects one level at a time, and restores them after ~10 s of headroom:
+
+1. GPU post-process pass off
+2. Floating particles, physics particles and stars off
+3. Tree wind sway off and ~40% fewer billboard trees
+4. Depth fog off and a further tree cut
+
+Changes are logged to the console as `[PERF] ... -> level N`. Disable it with `"adaptive_perf": false` in `settings.json` or `ANINO_ADAPTIVE=0`. The GPU post-process pass can also be turned off alone with `"enable_gpu_post": false` or `ANINO_GPU_POST=0`. Tests: `python tests/test_perf_governor.py`.

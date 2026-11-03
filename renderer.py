@@ -260,6 +260,7 @@ class Renderer:
 
         # Wind system for tree/plant animation
         self.wind_time = 0.0
+        self.perf_no_stars = False   # set by PerfGovernor when shedding load
         self.wind_strength = 0.3
         self.wind_gust_timer = 0.0
 
@@ -701,7 +702,7 @@ class Renderer:
             # Lock once for the whole loop: set_at() locks/unlocks per call,
             # which is the slow path.  One lock amortises it across all stars.
             self.surface.lock()
-            if sunrise_progress < 0.98:
+            if sunrise_progress < 0.98 and not getattr(self, 'perf_no_stars', False):
                 for s_az, s_el, phase, big in self.stars:
                     az_diff = s_az - player.angle
                     while az_diff > math.pi: az_diff -= 2 * math.pi
