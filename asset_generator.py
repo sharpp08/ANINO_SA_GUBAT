@@ -712,6 +712,38 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
                 pygame.draw.line(surf, (54, 103, 47), (px, py), (px - 4, py - 3), 1)
                 pygame.draw.line(surf, (54, 103, 47), (px, py), (px + 4, py - 3), 1)
 
+    # Add deterministic, directional canopy shading at pixel level. The original
+    # circle layers read as flat dark blobs at game scale; this mottled leaf pass
+    # creates small tonal breakup and a soft upper-left moonlight catch without
+    # changing the alpha silhouette or adding per-frame rendering cost.
+    if not is_dead and not is_bam:
+        foliage_rgb = pygame.surfarray.pixels3d(surf)
+        foliage_alpha = pygame.surfarray.pixels_alpha(surf)
+        yy, xx = np.mgrid[0:height, 0:width]
+        canopy_mask = (
+            (foliage_alpha >= 180)
+            & (yy >= max(0, canopy_top - 2))
+            & (yy < max(canopy_top + 1, canopy_bot + 2))
+            & (np.abs(xx - cx) > max(2, int(tw * 0.72)))
+        )
+        detail_rng = np.random.RandomState(int(seed) ^ 0x5A17)
+        mottling = detail_rng.uniform(0.88, 1.13, (width, height)).astype(np.float32)
+        upper_light = 1.0 + 0.12 * np.clip(
+            1.0 - (yy.T.astype(np.float32) - canopy_top) /
+            max(1.0, float(canopy_bot - canopy_top)), 0.0, 1.0
+        )
+        side_light = 1.0 + 0.045 * np.clip(
+            1.0 - np.abs(xx.T.astype(np.float32) - cx) / max(1.0, width * 0.5), 0.0, 1.0
+        )
+        light = np.clip(mottling * upper_light * side_light, 0.78, 1.28)
+        for channel, tint in ((0, 1.5), (1, 7.0), (2, -1.5)):
+            plane = foliage_rgb[:, :, channel].astype(np.float32)
+            plane[canopy_mask] = np.clip(
+                plane[canopy_mask] * light[canopy_mask] + tint, 0, 255
+            )
+            foliage_rgb[:, :, channel] = plane.astype(np.uint8)
+        del foliage_rgb, foliage_alpha
+
     # Preserve intentional soft moss/aura pixels, but ensure all fully drawn
     # bark and foliage pixels are truly opaque after conversion/scaling.
     alpha = pygame.surfarray.pixels_alpha(surf)
