@@ -264,10 +264,7 @@ class EnemyAudioManager:
             wave = wave / max(float(np.max(np.abs(wave))), 1e-9) + rumble
 
         # saturation (lungs/throat overdrive), then level
-        # Keep each creature's rough vocal character without flattening it into
-        # harsh digital clipping. Extreme event/profile products were reaching
-        # nearly 8x drive, making screams and attacks brittle on laptop speakers.
-        drive = min(2.2, max(0.3, profile['drive'] * event['drive']))
+        drive = max(0.3, profile['drive'] * event['drive'])
         wave = _pk(wave)
         if drive > 1.05:
             wave = np.tanh(drive * wave) / np.tanh(drive)
@@ -301,10 +298,6 @@ class EnemyAudioManager:
                 except Exception as exc:                 # never let audio crash the game
                     print(f"[EnemyAudio] failed to build {key}: {exc}")
                     self.sounds[key] = None
-
-        # Precompute all distance-muffled variants while the game is loading.
-        # The first encounter with an enemy must not trigger an FFT on the game loop.
-        audio_mgr.prewarm_muffled(self.sounds.values())
 
     # ── playback ──────────────────────────────────────────────────────────────
     def duration_for(self, enemy_type, event_name):

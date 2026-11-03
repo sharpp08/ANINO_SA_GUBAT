@@ -144,24 +144,6 @@ class Flashlight:
                             int((1.0 - AMBIENT_LIGHT_OFF) * 255)))
         self.dark_flicker = pygame.Surface((w, h), pygame.SRCALPHA)
         self.dark_flicker.fill((DARK_TINT[0], DARK_TINT[1], DARK_TINT[2], 90))
-        # Cool moonlight + ground-bounce glow, additively composited only when
-        # the flashlight is off: keeps the player's immediate surroundings and
-        # nearby tree silhouettes readable without lifting the whole night.
-        self.ambient_glow = None
-        try:
-            gys, gxs = np.ogrid[:h, :w]
-            gd = np.sqrt((gxs - w / 2.0) ** 2 + (gys - h / 2.0) ** 2) / max(1.0, math.hypot(w, h) / 2.0)
-            gf = np.clip(1.0 - gd, 0.0, 1.0) ** 1.6
-            garr = np.zeros((h, w, 4), dtype=np.uint8)
-            for c, gcol in enumerate((26, 40, 62)):
-                garr[:, :, c] = (gf * gcol).astype(np.uint8)
-            garr[:, :, 3] = 255
-            glow = pygame.Surface((w, h), pygame.SRCALPHA)
-            pygame.surfarray.blit_array(glow, garr)
-            self.ambient_glow = glow.convert_alpha()
-            self.ambient_glow.set_alpha(55)
-        except Exception:
-            self.ambient_glow = None
         try:
             self.dark_off = self.dark_off.convert_alpha()
             self.dark_flicker = self.dark_flicker.convert_alpha()
@@ -206,21 +188,11 @@ class Flashlight:
         intensity = 0.15 + 0.85 * angular_falloff * dist_falloff * batt_factor * flicker
         return max(0.05, min(1.0, intensity * brightness))
 
-    def draw(self, surf, player, sunrise_progress=0.0):
-        """Draw darkness/flashlight once; ambient visibility naturally rises toward daylight."""
-        daylight = max(0.0, min(1.0, float(sunrise_progress)))
+    def draw(self, surf, player):
+        """Draw the darkness overlay (called ONCE per frame)."""
         if not player.flashlight_on or player.flashlight_battery <= 0:
-            # Keep the night readable, then fade the darkness overlay away as dawn arrives.
-            self.dark_off.set_alpha(int(255 * (1.0 - daylight)))
             surf.blit(self.dark_off, (0, 0))
-            if self.ambient_glow is not None:
-                # Moonlight / ground bounce: strongest at night, gone by morning.
-                self.ambient_glow.set_alpha(int(55 * (1.0 - daylight)))
-                surf.blit(self.ambient_glow, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
             return
-
-        # The flashlight should not darken the whole world during daylight.
-        self.dark_mask.set_alpha(int(255 * (1.0 - daylight)))
 
         cx = int(self.w // 2 + self.sway_x)
         cy = int(self.h // 2 + self.sway_y)
@@ -263,16 +235,6 @@ class Renderer:
 
         from shader_renderer import ShaderRenderer
         self.shader_renderer = ShaderRenderer(self.w, self.h)
-        # Optional switch for the GPU post-process pass, whose per-frame CPU<->GPU readback
-        # can cost more than it gives on integrated graphics. Default is unchanged (on).
-        # Turn it off with "enable_gpu_post": false in settings.json, or ANINO_GPU_POST=0.
-        _want_gpu_post = (getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('enable_gpu_post', True)
-        _env_gpu_post = os.environ.get('ANINO_GPU_POST')
-        if _env_gpu_post in ('0', '1'):
-            _want_gpu_post = (_env_gpu_post == '1')
-        if not _want_gpu_post and self.shader_renderer.enabled:
-            self.shader_renderer.enabled = False
-            print("[SHADERS] GPU post-processing disabled by setting (software renderer only).")
 
         from animation_core import ParticleSystem, CameraShake
         self.physics_particles = ParticleSystem(400)
@@ -288,23 +250,19 @@ class Renderer:
 
         # Wind system for tree/plant animation
         self.wind_time = 0.0
-        self.perf_no_stars = False   # set by PerfGovernor when shedding load
         self.wind_strength = 0.3
         self.wind_gust_timer = 0.0
 
         # Storm weather (weather_fx.py): three-layer rain with wind slant, ground splashes, mist,
         # lightning (flash + bolt + cloud glow) and the thunder that follows it.
         _low = getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low'
-        _rain_dens = getattr(_settings_mod, 'RAIN_DENSITY', 1.0)
         self.weather = WeatherFX(
             self.w, self.h, math.radians(FOV),
             rain=getattr(_settings_mod, 'ENABLE_RAIN', True),
             lightning=getattr(_settings_mod, 'ENABLE_LIGHTNING', True),
-            rain_density=_rain_dens * (0.6 if _low else 1.0),
+            rain_density=getattr(_settings_mod, 'RAIN_DENSITY', 1.0) * (0.6 if _low else 1.0),
             flash_strength=getattr(_settings_mod, 'LIGHTNING_FLASH_STRENGTH', 1.0))
         self.sunrise_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        # Blue-grey pre-dawn wash, separate from the warm sunrise (below).
-        self.predawn_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
 
         # Precompute ray angles
         self.fov_rad = math.radians(FOV)
@@ -321,11 +279,6 @@ class Renderer:
         # float64 copies for the wall raycaster (same precision as the old scalar loop)
         self._ray_ang64 = np.asarray(self.ray_angles, dtype=np.float64)
         self._ray_cos64 = np.cos(self._ray_ang64)
-        self._ray_sin64 = np.sin(self._ray_ang64)
-        # Reusable world-space ray directions. Updated once per frame and shared
-        # by floor projection and wall casting to avoid duplicate trig/array work.
-        self._frame_ray_dx = np.empty(self.num_rays, dtype=np.float64)
-        self._frame_ray_dy = np.empty(self.num_rays, dtype=np.float64)
 
         # Coarse spatial buckets avoid scanning the entire forest each frame.
         self._sprite_bucket_size = 8.0
@@ -374,11 +327,10 @@ class Renderer:
         self._tree_sprite_cache = {}   # (type, variant) -> surface  (bounded LRU)
         self._undergrowth_cache = {}  # type -> surface            (bounded LRU)
         self._TREE_SPRITE_VARIANTS = 5
-        # 11 species x 5 variants x 2 LODs = 110 max combinations; a cache of
-        # 24 thrashed and regenerated ~12 billboards per frame (each costs
-        # ~1.3 ms).  128 covers every near+far combination with headroom
-        # (~6 MB at 64x256x4 bytes; far LODs are half that).
-        self._TREE_CACHE_LIMIT = 128
+        # 11 species x 5 variants = 55 max combinations; a cache of 24 thrashes
+        # and regenerates ~12 billboards per frame (each costs ~1.3 ms).
+        # 64 covers all combinations with headroom (~4 MB at 64x256x4 bytes).
+        self._TREE_CACHE_LIMIT = 64
         self._UNDERGROWTH_CACHE_LIMIT = 16
         self._TREE_HEIGHT_MULT = {
             'balete': 4.5, 'mahogany': 5.25, 'bamboo': 4.25, 'dead': 3.75,
@@ -509,10 +461,6 @@ class Renderer:
         # Emissive effects (eyes / halos) drawn after the darkness pass
         self._emissive = []
         self._glow_cache = {}
-        # Ground contact shadows (High/Ultra tiers): soft cached ellipses that
-        # anchor trees and enemies to the forest floor.
-        self._shadow_cache = {}
-        self._contact_shadows_on = False
 
         # Heartbeat / danger
         self.heart_phase = 0.0
@@ -726,17 +674,6 @@ class Renderer:
         half_h = self.h // 2
         horizon_y = max(0, half_h + pitch_offset)
 
-        # Calculate the rotated ray directions once. Both floor projection and
-        # wall casting consume these same arrays; avoid per-frame np.cos/np.sin
-        # over a newly allocated angle array in _cast_rays().
-        cos_pa = math.cos(player.angle)
-        sin_pa = math.sin(player.angle)
-        np.multiply(self._ray_cos64, cos_pa, out=self._frame_ray_dx)
-        np.multiply(self._ray_sin64, sin_pa, out=self._frame_ray_dy)
-        self._frame_ray_dx -= self._frame_ray_dy
-        np.multiply(self._ray_sin64, cos_pa, out=self._frame_ray_dy)
-        self._frame_ray_dy += self._ray_cos64 * sin_pa
-
         # 1. Sky Gradient (SKY_COLOR to blue-green haze (24,34,42))
         # One vectorised write instead of ~180 draw.line calls per frame.
         sky_rows = min(horizon_y, self.h)
@@ -754,7 +691,7 @@ class Renderer:
             # Lock once for the whole loop: set_at() locks/unlocks per call,
             # which is the slow path.  One lock amortises it across all stars.
             self.surface.lock()
-            if sunrise_progress < 0.98 and not getattr(self, 'perf_no_stars', False):
+            if sunrise_progress < 0.98:
                 for s_az, s_el, phase, big in self.stars:
                     az_diff = s_az - player.angle
                     while az_diff > math.pi: az_diff -= 2 * math.pi
@@ -810,8 +747,10 @@ class Renderer:
             arr_3d = pygame.surfarray.pixels3d(self.surface)
             px, py, pa = player.x, player.y, player.angle
 
-            ray_dx = self._frame_ray_dx
-            ray_dy = self._frame_ray_dy
+            cos_pa = math.cos(pa)
+            sin_pa = math.sin(pa)
+            ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
+            ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
 
             # Whole floor in one vectorised pass (see floor_fast.py).
             if self._enhanced_terrain_ready(game_map):
@@ -837,9 +776,6 @@ class Renderer:
         self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
         # 4. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
-        self._contact_shadows_on = (
-            bool((getattr(_settings_mod, 'ACTIVE_QUALITY', {}) or {}).get('enable_contact_shadows', False))
-            and not self.debug_f4)
         self._draw_world_sprites(player, enemies, game_map)
 
         # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls
@@ -850,7 +786,7 @@ class Renderer:
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
         if not self.debug_f4:
-            self.flashlight.draw(self.surface, player, sunrise_progress)
+            self.flashlight.draw(self.surface, player)
 
         # 6. Glowing eyes / halos: drawn AFTER darkness so they show in the dark
         self._draw_emissive()
@@ -959,21 +895,11 @@ class Renderer:
         # hidden when a wall is closer than the ground point it lands on.
         self.weather.draw_rain(self.surface, horizon_y, self._col_visible,
                                self.z_buffer[self._col_to_ray])
-        # Slow, cinematic exposure shift: cold blue night -> blue-grey pre-dawn
-        # -> warm golden sunrise.  Two overlapping washes so no colour pops in.
+        # Slow, cinematic exposure shift: cold blue night -> warm golden dawn.
         if progress > 0.0:
-            # Pre-dawn (0.0-0.55): cool blue-grey sky light creeping up.
-            predawn_t = max(0.0, min(1.0, progress / 0.55))
-            pa = int(120 * (predawn_t ** 1.2) * max(0.0, 1.0 - (progress - 0.45) / 0.55))
-            if pa > 0:
-                self.predawn_surf.fill((150, 168, 195, pa))
-                self.surface.blit(self.predawn_surf, (0, 0))
-            # Warm sunrise (0.35-1.0): golden light takes over the pre-dawn.
-            warm_t = max(0.0, (progress - 0.35) / 0.65)
-            dawn_alpha = int(185 * (warm_t ** 1.35))
-            if dawn_alpha > 0:
-                self.sunrise_surf.fill((255, 190, 125, dawn_alpha))
-                self.surface.blit(self.sunrise_surf, (0, 0))
+            dawn_alpha = int(185 * (progress ** 1.35))
+            self.sunrise_surf.fill((255, 190, 125, dawn_alpha))
+            self.surface.blit(self.sunrise_surf, (0, 0))
 
     # ─── Horror feedback ──────────────────────────────────────────────────
     def _danger_effects(self, player, enemies, dt):
@@ -1115,9 +1041,10 @@ class Renderer:
         far = float(MAX_DEPTH) + 1.0
         h = self.h
 
+        ang = player.angle + self._ray_ang64
         dist, tile, frac, side, hit = cast_rays(
             self._grid_array(game_map), game_map.width, game_map.height,
-            px, py, self._frame_ray_dx, self._frame_ray_dy, MAX_DEPTH, EMPTY)
+            px, py, np.cos(ang), np.sin(ang), MAX_DEPTH, EMPTY)
 
         # Fish-eye correction + z-buffer. Rays that hit nothing within MAX_DEPTH
         # draw no wall and never hide a sprite.
@@ -1413,51 +1340,15 @@ class Renderer:
         img.fill((v, v, v), special_flags=pygame.BLEND_RGB_MULT)
         return img
 
-    def _draw_contact_shadow(self, cx, bottom, sw, dist):
-        """One cached, soft dark ellipse under a billboard: cheap grounding
-        (the 'ambient occlusion' this orthographic-style engine can actually
-        do) that matters most when daylight lifts the scene."""
-        wsh = max(4, min(96, int(sw * 1.15)))
-        hsh = max(2, int(wsh * 0.28))
-        # Snap so a few cached surfaces cover every screen size.
-        wsh = (wsh + 7) // 8 * 8
-        hsh = (hsh + 7) // 8 * 8
-        key = (wsh, hsh)
-        s = self._shadow_cache.get(key)
-        if s is None:
-            s = pygame.Surface((wsh, hsh), pygame.SRCALPHA)
-            s.fill((0, 0, 0, 0))
-            pygame.draw.ellipse(s, (0, 0, 0, 150), (0, 0, wsh, hsh))
-            pygame.draw.ellipse(s, (0, 0, 0, 90), (int(wsh * 0.15), int(hsh * 0.18),
-                                                     int(wsh * 0.7), int(hsh * 0.64)))
-            s = s.convert_alpha()
-            self._shadow_cache[key] = s
-            if len(self._shadow_cache) > 48:
-                self._shadow_cache.pop(next(iter(self._shadow_cache)))
-        # Softer with distance (fog does the rest).
-        x = int(cx - wsh / 2)
-        y = int(bottom - hsh * 0.5)
-        if x + wsh > 0 and x < self.w and 0 <= y < self.h + hsh:
-            self.surface.blit(s, (x, y))
-
     # ─── Procedural visual streaming (lazy, bounded, deterministic) ─────
-    def _tree_sprite(self, ttype, variant_idx, far=False):
-        """Return the billboard for (species, variant, LOD), generating it only
+    def _tree_sprite(self, ttype, variant_idx):
+        """Return the billboard for (species, variant), generating it only
         on first use.  Deterministic seed => re-generates identically after
-        eviction.  Bounded LRU so memory stays capped.
-
-        ``far=True`` gives the distance LOD: the same silhouette (same seed,
-        so the tree never "pops" into a different tree) baked at 32x128 instead
-        of 64x256.  Scaling a small source down is cheaper than scaling a
-        large one, and far trees don't need the bark striations and moss."""
-        key = (ttype, variant_idx, far)
+        eviction.  Bounded LRU so memory stays capped."""
+        key = (ttype, variant_idx)
         img = self._tree_sprite_cache.get(key)
         if img is None:
-            seed = 42 + variant_idx * 333
-            if far:
-                img = self._generate_tree_billboard(ttype, 32, 128, seed=seed)
-            else:
-                img = self._generate_tree_billboard(ttype, 64, 256, seed=seed)
+            img = self._generate_tree_billboard(ttype, 64, 256, seed=42 + variant_idx * 333)
             img = img.convert_alpha()  # display-format for fast per-frame blits
             self._tree_sprite_cache[key] = img
             while len(self._tree_sprite_cache) > self._TREE_CACHE_LIMIT:
@@ -1595,10 +1486,7 @@ class Renderer:
 
             if kind == 'tree':
                 variant_idx = obj.get('canopy_seed', 0) % self._TREE_SPRITE_VARIANTS
-                # Distance LOD: trees beyond the tier's TREE_LOD_FAR_DIST use the
-                # pre-baked low-detail silhouette (half the pixels to scale).
-                use_far = dist > getattr(_settings_mod, 'TREE_LOD_FAR_DIST', 10.0)
-                img = self._tree_sprite(obj.get('type', 'balete'), variant_idx, far=use_far)
+                img = self._tree_sprite(obj.get('type', 'balete'), variant_idx)
                 height_mult = self._TREE_HEIGHT_MULT.get(obj.get('type'), 2.5)
                 sh = unit * height_mult * obj.get('scale', 1.0)
                 sw = sh * img.get_width() / img.get_height()
@@ -1613,8 +1501,6 @@ class Renderer:
                     sway = math.sin(t_ticks * 0.0012 + obj['x'] * 1.7) * sw * 0.015
                 
                 bottom = floor_y
-                if self._contact_shadows_on:
-                    self._draw_contact_shadow(screen_x + sway, bottom, sw, dist)
                 self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats)
 
             elif kind == 'plant':
@@ -1856,9 +1742,6 @@ class Renderer:
                 sw_r, sh_r = sw * rw / ow, sh * rh / oh
                 bottom += (sh_r - sh) * 0.5   # rotate about the body centre, not the feet
                 sw, sh = sw_r, sh_r
-        if self._contact_shadows_on and not is_dead and float_mul <= 0:
-            # Grounded enemies only (floaters / white lady / multo keep the gap).
-            self._draw_contact_shadow(screen_x + sway, floor_y - min(0.0, hover), sw * 0.85, dist)
         n = self._draw_one(img, screen_x + sway, bottom, sw, sh, dist, stats,
                            cache=not special, alpha=alpha)
 
@@ -2230,17 +2113,10 @@ class Renderer:
         cx, cy = self.w // 2, self.h // 2 + 20
         radius = int(self.muzzle_flash * 30)
         if radius > 0:
-            # Reuse one scratch surface and only clear/blit the flash's bounding box,
-            # instead of allocating a full-screen alpha surface every frame of the flash.
-            flash = getattr(self, '_muzzle_fx', None)
-            if flash is None:
-                flash = self._muzzle_fx = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
-            rect = pygame.Rect(cx - radius, cy - radius, radius * 2 + 1, radius * 2 + 1).clip(flash.get_rect())
-            if rect.width > 0 and rect.height > 0:
-                flash.fill((0, 0, 0, 0), rect)
-                pygame.draw.circle(flash, (255, 220, 100, max(0, min(255, int(self.muzzle_flash * 200)))),
-                                   (cx, cy), radius)
-                self.surface.blit(flash, rect.topleft, rect)
+            flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            pygame.draw.circle(flash, (255, 220, 100, max(0, min(255, int(self.muzzle_flash * 200)))),
+                               (cx, cy), radius)
+            self.surface.blit(flash, (0, 0))
 
     def trigger_muzzle_flash(self):
         self.muzzle_flash = 1.0
@@ -2296,11 +2172,7 @@ class Renderer:
         self.ward_effect_timer -= dt
         t = self.ward_effect_timer
 
-        # One reusable full-screen scratch surface, cleared each frame (no per-frame allocation).
-        effect = getattr(self, '_ward_fx', None)
-        if effect is None:
-            effect = self._ward_fx = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
-        effect.fill((0, 0, 0, 0))
+        effect = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         cx, cy = self.w // 2, self.h // 2
 
         if self.ward_effect_type == 'repel':

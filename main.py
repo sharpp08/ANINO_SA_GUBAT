@@ -8,11 +8,6 @@ import math
 import random
 import pygame
 
-# Initialize SDL/Pygame before importing audio_synth. The audio manager opens
-# the mixer when its module is imported, so doing this first avoids creating
-# the audio device before Pygame's other SDL subsystems are initialized.
-pygame.init()
-
 import settings as _settings_mod
 # Apply the quality preset from settings.json before any module copies resolution-dependent values
 _settings_mod.apply_quality_preset(_settings_mod.load_settings().get('quality_tier', _settings_mod.QUALITY_TIER))
@@ -21,11 +16,6 @@ from player import Player
 from map_system import GameMap
 from enemies import EnemyManager
 from renderer import Renderer
-import renderer as _renderer_mod
-from perf_governor import PerfGovernor
-from gl_present import GLPresenter
-import shader_renderer as _shader_mod
-from time import perf_counter as _perf_counter
 from radar import Radar
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
 from enemy_audio import enemy_audio_mgr
@@ -400,9 +390,6 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
 
 
 # ─── Startup Loading Animation ───────────────────────────────────────────────
-_GL_PRESENT_HOOK = None   # set by Game when the OpenGL window is active (see Game._install_present_hook)
-
-
 def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
     """Render a brief animated ritual-style loading scene."""
     sw, sh = screen.get_size()
@@ -527,8 +514,6 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
         warning = font_sm.render("DO NOT ANSWER WHEN IT CALLS YOUR NAME", True, (105, 91, 79))
         screen.blit(warning, (panel_x+25, panel_y+panel_h-30))
 
-        if _GL_PRESENT_HOOK is not None:
-            _GL_PRESENT_HOOK(screen)      # GPU presentation path: upload this frame to the GL window
         pygame.display.flip()
         clock.tick(30)
 
@@ -556,9 +541,7 @@ class Game:
         print(f"[DIAGNOSTICS] Trees Generated (Chapter 1): {len(test_gm.trees)}")
         print(f"[DIAGNOSTICS] Undergrowth Generated: {len(test_gm.undergrowth)}")
 
-        self.gl_presenter = None
         self.screen = self._set_display_mode()
-        self._install_present_hook()
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
 
@@ -580,9 +563,6 @@ class Game:
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Generating Procedural Textures & Sprites...", 0.3)
         textures      = generate_all_textures()
-        # Keep the source sprite sets so the renderer can be re-created when the
-        # quality tier changes internal resolution (e.g. the optional Ultra tier).
-        self._textures    = textures
         # Convert to display pixel format so every blit uses SDL's fast blitter
         # instead of the slow software fallback (biggest pygame perf win).
         textures = {k: v.convert() for k, v in textures.items()}
@@ -600,7 +580,6 @@ class Game:
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Preparing Items & Relics...", 0.85)
         pickup_spr    = {k: v.convert_alpha() for k, v in generate_all_pickups().items()}
         crosshair_spr = generate_crosshair(16).convert_alpha()
-        self._weapon_spr, self._enemy_spr, self._pickup_spr = weapon_spr, enemy_spr, pickup_spr
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Entering the Forest...", 1.0)
 
@@ -610,16 +589,6 @@ class Game:
         self.renderer      = Renderer(self.internal, textures, weapon_spr, enemy_spr, pickup_spr)
         self.renderer.crosshair = crosshair_spr
         self.renderer.clock = self.clock
-        # The perf governor finds the GL presenter (for shedding GPU post
-        # effects) through the renderer.
-        self.renderer.gl_presenter = self.gl_presenter
-        # Arm the tier's GPU post effects (bloom / god rays) on the presenter.
-        self._push_gpu_post_params()
-        # Adaptive 60 FPS governor: sheds optional effects if frame work time stays over budget.
-        self.perf = PerfGovernor(self.renderer, _renderer_mod, _settings_mod,
-                                 enabled=bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('adaptive_perf', True)))
-        self._loop_t0 = _perf_counter()
-        self._work_ms = 0.0
         self.cinematic     = Cinematic(self.internal)
         self.radar         = Radar()
 
@@ -654,7 +623,7 @@ class Game:
         self.target_fps = 240 if str(values.get("fps_limit", "60")).lower() == "unlimited" else int(values.get("fps_limit", 60))
         self.vsync_enabled = bool(values.get("vsync", True))
         tier = str(values.get("quality_tier", "medium")).lower()
-        if self._graphics_mgr is not None and tier in ("low", "medium", "high", "ultra"):
+        if self._graphics_mgr is not None and tier in ("low", "medium", "high"):
             try:
                 self._graphics_mgr.apply_tier(tier)
             except Exception as exc:
@@ -677,32 +646,11 @@ class Game:
             audio_mgr.sfx_volume = sfx
             audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
             audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
-            # Fine-grained volume groups (Weapons / UI / Rain & Weather).
-            audio_mgr.weapons_volume = max(0.0, min(1.0, float(values.get("weapons_volume", 1.0))))
-            audio_mgr.ui_volume = max(0.0, min(1.0, float(values.get("ui_volume", 0.7))))
-            audio_mgr.weather_volume = max(0.0, min(1.0, float(values.get("weather_volume", 0.7))))
             pygame.mixer.music.set_volume(master * music)
-            # Re-key ordinary SFX channels only.  Channels 0-5 are reserved
-            # (forest beds x2, Frenzy bed, jumpscare, rain loop, intro score)
-            # and carry their own group gains; stomping them with master*sfx
-            # is what used to mute the rain layer and the cinematic score.
-            from audio_synth import AMBIENCE_RESERVED
-            for channel_index in range(AMBIENCE_RESERVED, pygame.mixer.get_num_channels()):
+            for channel_index in range(4, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
         except Exception:
             pass
-        # Resolution-affecting tiers (Low = 320x180, Ultra = 1280x720) need
-        # the internal surface and renderer re-created for the new pixel
-        # budget; same-size tiers are a no-op.
-        self._rebuild_internal()
-        # Adaptive-performance governor toggle from the settings menu
-        # (applied AFTER the rebuild so it sticks on the live governor).
-        try:
-            self.perf.enabled = bool(values.get("adaptive_perf", True))
-        except Exception:
-            pass
-        # GPU post effects (bloom / god rays) follow the tier, not the window.
-        self._push_gpu_post_params()
 
     def _open_settings(self, return_state):
         self.settings_return_state = return_state
@@ -718,96 +666,18 @@ class Game:
         except Exception as e:
             print(f"[QUALITY] Could not init GraphicsManager: {e}")
 
-    def _rebuild_internal(self):
-        """Swap the internal surface, renderer and cinematic for the tier's
-        resolution (e.g. the optional Ultra tier at 1280x720).  Returns True
-        when a rebuild actually happened.
-
-        The GL presenter (when active) adapts automatically: its per-frame
-        upload re-keys on the surface size, so no window/letterbox churn.
-        """
-        try:
-            aq = getattr(_settings_mod, 'ACTIVE_QUALITY', {}) or {}
-            new_w = int(aq.get('internal_width', INTERNAL_WIDTH))
-            new_h = int(aq.get('internal_height', INTERNAL_HEIGHT))
-        except Exception:
-            return False
-        if self.renderer.w == new_w and self.renderer.h == new_h:
-            return False
-        try:
-            try:
-                new_internal = pygame.Surface((new_w, new_h)).convert()
-            except Exception:
-                new_internal = pygame.Surface((new_w, new_h))
-            new_renderer = Renderer(new_internal, self._textures, self._weapon_spr,
-                                    self._enemy_spr, self._pickup_spr)
-            new_renderer.crosshair = self.renderer.crosshair
-            new_renderer.clock = self.clock
-            new_renderer.gl_presenter = self.gl_presenter
-            self.internal = new_internal
-            self.renderer = new_renderer
-            self.cinematic = Cinematic(self.internal)
-            self.perf = PerfGovernor(
-                self.renderer, _renderer_mod, _settings_mod,
-                enabled=bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('adaptive_perf', True)))
-            self._graphics_mgr.renderer = new_renderer
-            # Push the tier's GPU post parameters (bloom / god rays) to the presenter.
-            self._push_gpu_post_params()
-            print(f"[SETTINGS] Internal resolution now {new_w}x{new_h}.")
-            return True
-        except Exception as exc:
-            print(f"[SETTINGS] Internal rebuild to {new_w}x{new_h} failed: {exc}")
-            return False
-
-    def _push_gpu_post_params(self):
-        """Feed the active tier's bloom / god-ray settings to the GL presenter
-        (no-op when the OpenGL window is not in use)."""
-        gp = getattr(self, 'gl_presenter', None)
-        if gp is None or not hasattr(gp, 'set_post_params'):
-            return
-        aq = getattr(_settings_mod, 'ACTIVE_QUALITY', {}) or {}
-        try:
-            gp.set_post_params(
-                bloom_enabled=bool(aq.get('enable_bloom', False)),
-                bloom_threshold=float(aq.get('bloom_threshold', 0.7)),
-                bloom_intensity=float(aq.get('bloom_intensity', 0.5)),
-                god_ray_samples=int(aq.get('god_ray_samples', 0)),
-                god_ray_intensity=float(aq.get('god_ray_intensity', 0.0)),
-                god_ray_decay=float(aq.get('god_ray_decay', 0.88)),
-            )
-        except Exception:
-            pass
-
-    def _run_quick_benchmark(self):
-        """Run the in-game graphics benchmark on the live renderer and report a
-        tier recommendation.  Blocks for a few seconds; safe from the menu."""
-        try:
-            from tools.graphics_benchmark import quick_benchmark_report
-            report = quick_benchmark_report(self)
-            self.notify(f"Benchmark: {report['verdict']}", 8.0)
-            print(f"[BENCH] {report}")
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            self.notify("Benchmark failed - see console.", 6.0)
-
     def _cycle_quality(self, direction):
         """Cycle quality tier up or down."""
         if self._graphics_mgr is None:
             return
-        tiers = ['low', 'medium', 'high', 'ultra']
-        try:
-            idx = tiers.index(self._graphics_mgr.tier)
-        except ValueError:
-            idx = 1
+        tiers = ['low', 'medium', 'high']
+        idx = tiers.index(self._graphics_mgr.tier)
         if direction == 'next':
             idx = (idx + 1) % len(tiers)
         else:
             idx = (idx - 1) % len(tiers)
         new_tier = tiers[idx]
         if self._graphics_mgr.apply_tier(new_tier):
-            self._rebuild_internal()
-            self._push_gpu_post_params()
             self.notify(f"Quality: {new_tier.upper()}")
             # Save the preference
             try:
@@ -816,91 +686,20 @@ class Game:
                 _s.save_settings(_s.load_settings())
             except Exception:
                 pass
-    def _vsync_flag(self):
-        """vsync is only requested on ~60 Hz panels: with the clock.tick(60) limiter on a
-        120/144 Hz panel it would lock to every 3rd refresh."""
+    def _set_display_mode(self):
+        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
+
+        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
+        (no desktop mode switch).  vsync is only requested on ~60 Hz panels: with the
+        clock.tick(60) limiter on a 120/144 Hz panel it would lock to every 3rd refresh.
+        """
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
         try:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
             rate = 0
-        return 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
-
-    def _gpu_present_wanted(self):
-        env = os.environ.get('ANINO_GPU_PRESENT')
-        if env in ('0', '1'):
-            return env == '1'
-        return bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('gpu_present', True))
-
-    def _close_gl(self):
-        gp = getattr(self, 'gl_presenter', None)
-        if gp is not None:
-            gp.close()
-        self.gl_presenter = None
-        r = getattr(self, 'renderer', None)
-        if r is not None:
-            r.gl_presenter = None
-        # The governor also looks the presenter up through the renderer.
-
-    def _sync_presenter_to_renderer(self):
-        r = getattr(self, 'renderer', None)
-        if r is not None:
-            r.gl_presenter = self.gl_presenter
-
-    def _install_present_hook(self):
-        global _GL_PRESENT_HOOK
-        _GL_PRESENT_HOOK = self._present_raw
-
-    def _present_raw(self, surface):
-        """Used by loading screens that draw straight onto self.screen."""
-        gp = getattr(self, 'gl_presenter', None)
-        if gp is not None:
-            try:
-                gp.present(surface, post=False)
-            except Exception as exc:
-                print(f"[GPU] present failed during loading ({exc}); falling back to 2D.")
-                self._fallback_to_2d()
-
-    def _fallback_to_2d(self):
-        self._close_gl()
-        self._shader_skip(False)
-        self.screen = self._set_display_mode_2d()
-
-    @staticmethod
-    def _shader_skip(skip):
-        _shader_mod.ShaderRenderer.SKIP = bool(skip)
-
-    def _set_display_mode(self):
-        """Open the window: OpenGL presentation if it verifies, else the 2D SCALED window."""
-        self._close_gl()
-        if self._gpu_present_wanted():
-            try:
-                GLPresenter.open_window((SCREEN_WIDTH, SCREEN_HEIGHT), FULLSCREEN, self._vsync_flag())
-                presenter = GLPresenter()
-                if presenter.attach(pygame.display.get_surface()):
-                    self.gl_presenter = presenter
-                    self._sync_presenter_to_renderer()
-                    self._push_gpu_post_params()
-                    # The old offscreen readback shader would duplicate the work (and open a
-                    # second GL context), so the GPU presenter replaces it.
-                    self._shader_skip(True)
-                    # Software canvas for loading screens (they draw straight to "screen").
-                    return pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert()
-                presenter.close()
-            except Exception as exc:
-                print(f"[GPU] could not open the OpenGL window ({type(exc).__name__}: {exc}).")
-        self._shader_skip(False)
-        self._sync_presenter_to_renderer()
-        return self._set_display_mode_2d()
-
-    def _set_display_mode_2d(self):
-        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
-
-        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
-        (no desktop mode switch).
-        """
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
-        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
-        vsync = self._vsync_flag()
+        vsync = 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
         except Exception:
@@ -951,17 +750,6 @@ class Game:
                   + ("  <-- INSIDE A WALL!" if solid else ""))
         if self.level_enemy_total == 0:
             print(f"[WARNING] Chapter {chapter_num} has NO enemies - it can only be completed by reaching the exit.")
-        # The map, textures and caches are long-lived: move them out of the garbage
-        # collector's tracking so gameplay GC passes stay short (fewer frame hitches).
-        try:
-            import gc
-            gc.collect()
-            gc.freeze()
-            gc.set_threshold(10000, 20, 20)
-        except Exception:
-            pass
-        if hasattr(self, 'perf'):
-            self.perf.reset()
 
     def max_chapter(self):
         return getattr(self.game_map, 'max_chapters', 2)
@@ -1043,11 +831,10 @@ class Game:
                     and p.ammo_revolver > 0 and p.revolver_mag < REVOLVER_MAG_SIZE
                 )
                 p.start_reload()
-                wvol = max(0.0, min(1.0, getattr(audio_mgr, 'weapons_volume', 1.0)))
                 if can_reload_shotgun and p.reloading:
-                    audio_mgr.play('shotgun_reload', volume=0.80 * wvol, headroom=1.0)
+                    audio_mgr.play('shotgun_reload', volume=0.80, headroom=1.0)
                 elif can_reload_revolver and p.reloading:
-                    audio_mgr.play('revolver_reload', volume=1.0 * wvol, headroom=1.0)
+                    audio_mgr.play('revolver_reload', volume=1.0, headroom=1.0)
             elif k == pygame.K_f:
                 p.flashlight_on = not p.flashlight_on
             elif k == pygame.K_e:
@@ -1064,7 +851,7 @@ class Game:
                 if p.flashlight_battery > 0:
                     p.flashlight_on = not p.flashlight_on
                     try:
-                        audio_mgr.play('flashlight_click', volume=max(0.0, min(1.0, getattr(audio_mgr, 'ui_volume', 0.7))))
+                        audio_mgr.play('flashlight_click')
                     except Exception:
                         pass
                 else:
@@ -1091,8 +878,7 @@ class Game:
             elif event.y < 0:
                 p.current_weapon = (p.current_weapon + 1) % 3
             try:
-                # Weapon handling belongs to the Weapons volume group.
-                audio_mgr.play('click', volume=max(0.0, min(1.0, getattr(audio_mgr, 'weapons_volume', 1.0))))
+                audio_mgr.play('click')
             except Exception:
                 pass
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1109,9 +895,7 @@ class Game:
                 if wi['type'] == 'shotgun':
                     self.renderer.trigger_shotgun_fire()
             if wi['type'] in ('shotgun', 'revolver', 'bolo'):
-                # Gunfire belongs to the Weapons volume group; headroom=1.0
-                # because the recordings are already peak-capped at load.
-                audio_mgr.play(wi['type'], volume=max(0.0, min(1.0, getattr(audio_mgr, 'weapons_volume', 1.0))), headroom=1.0)
+                audio_mgr.play(wi['type'], volume=1.0, headroom=1.0)
                 if wi['type'] in ('shotgun', 'revolver'):
                     self.renderer.emit_casing(self.renderer.w // 2 + 60, self.renderer.h - 30, random.uniform(40, 90), random.uniform(-110, -60))
                     self.renderer.emit_smoke(self.renderer.w // 2, self.renderer.h // 2, random.uniform(-10, 10), random.uniform(-30, -10))
@@ -1149,7 +933,7 @@ class Game:
         if p.rosary_cooldown <= 0:
             if p.use_rosary():
                 try:
-                    audio_mgr.play('page_rustle', volume=max(0.0, min(1.0, getattr(audio_mgr, 'ui_volume', 0.7))))
+                    audio_mgr.play('page_rustle')
                 except Exception:
                     pass
                 self.notify("Rosary prayed. Sanity restored.")
@@ -1202,7 +986,7 @@ class Game:
                 from enemies import Enemy
                 enemy = Enemy(random.choice(enemy_types), x, y)
                 self.enemy_manager.enemies.append(enemy)
-                self.survival_spawn_count = getattr(self, 'survival_spawn_count', 0) + 1
+                self.survival_spawn_count += 1
                 self.notify('Something is hunting you in the forest...', 2.0)
                 return True
         return False
@@ -1386,16 +1170,12 @@ class Game:
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
 
         # Survival objective: collect all five pages, then endure the night until 7 AM.
-        # (getattr: the attribute is created by start_new_game(); tests that
-        #  drive update_playing after a bare load_chapter must not crash.)
-        self.player.survival_time_left = max(0.0, getattr(self.player, 'survival_time_left', 420.0) - dt)
-        # (getattr: both attributes are created in start_new_game(); tests that
-        #  drive update_playing after a bare load_chapter must not crash.)
-        self.survival_spawn_timer = getattr(self, 'survival_spawn_timer', 18.0) - dt
+        self.player.survival_time_left = max(0.0, self.player.survival_time_left - dt)
+        self.survival_spawn_timer -= dt
         if self.survival_spawn_timer <= 0.0:
             self._spawn_survival_enemy()
             # The forest grows more aggressive as sunrise approaches.
-            interval = max(10.0, 30.0 - getattr(self, 'survival_spawn_count', 0) * 1.2)
+            interval = max(10.0, 30.0 - self.survival_spawn_count * 1.2)
             sanity_ratio = max(0.0, min(1.0, p.sanity / SANITY_MAX))
             spawn_multiplier = (SANITY_SPAWN_MIN_INTERVAL_MULTIPLIER
                                 + (1.0 - SANITY_SPAWN_MIN_INTERVAL_MULTIPLIER) * sanity_ratio)
@@ -1433,8 +1213,7 @@ class Game:
         render_enemies = self.enemy_manager.get_renderable_enemies()
 
         if self.state == STATE_PLAYING:
-            sunrise_progress = 1.0 - max(0.0, min(1.0,
-                                                 getattr(self.player, 'survival_time_left', 420.0) / 120.0))
+            sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             # Rain, lightning and thunder only advance while actually playing (not while paused).
             self.renderer.update_weather(self.player, dt, sunrise_progress)
@@ -1456,8 +1235,7 @@ class Game:
                 self.internal.blit(nt, (nx, panel_bottom + 5))
 
         elif self.state == STATE_PAUSED:
-            sunrise_progress = 1.0 - max(0.0, min(1.0,
-                                                  getattr(self.player, 'survival_time_left', 420.0) / 120.0))
+            sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
@@ -1492,41 +1270,24 @@ class Game:
         except Exception:
             pass
 
-        gp = getattr(self, 'gl_presenter', None)
-        if gp is not None:
-            # GPU presentation: one upload, then the shader does grade/vignette/fog + upscale.
-            # No readback and no software scale (see gl_present.py).
-            try:
-                playing = self.state in (STATE_PLAYING, STATE_PAUSED)
-                fl_on = 1 if (playing and self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
-                sup_int = 1.0 if (playing and (self.player.damage_flash > 0 or self.player.sanity < 30)) else 0.0
-                gp.present(self.internal, pygame.time.get_ticks() / 1000.0, flashlight_on=fl_on,
-                           supernatural=sup_int, fog_density=1.0, post=playing)
-            except Exception as exc:
-                print(f"[GPU] present failed ({type(exc).__name__}: {exc}); falling back to the 2D window.")
-                self._fallback_to_2d()
-                gp = None
-        if gp is None:
-            # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
-            # Only during gameplay, and the result is copied back into the SAME surface:
-            # the renderer and cinematic hold a reference to self.internal, so it must
-            # never be rebound to a new Surface object.
-            if (self.state in (STATE_PLAYING, STATE_PAUSED)
-                    and hasattr(self.renderer, 'shader_renderer')
-                    and self.renderer.shader_renderer.enabled):
-                time_sec = pygame.time.get_ticks() / 1000.0
-                fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
-                sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
-                shaded = self.renderer.shader_renderer.render(
-                    self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
-                )
-                if shaded is not self.internal:
-                    self.internal.blit(shaded, (0, 0))
+        # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
+        # Only during gameplay, and the result is copied back into the SAME surface:
+        # the renderer and cinematic hold a reference to self.internal, so it must
+        # never be rebound to a new Surface object.
+        if (self.state in (STATE_PLAYING, STATE_PAUSED)
+                and hasattr(self.renderer, 'shader_renderer')
+                and self.renderer.shader_renderer.enabled):
+            time_sec = pygame.time.get_ticks() / 1000.0
+            fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
+            sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
+            shaded = self.renderer.shader_renderer.render(
+                self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
+            )
+            if shaded is not self.internal:
+                self.internal.blit(shaded, (0, 0))
 
-            # Scale to screen
-            pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
-        # Work time excludes the flip, which blocks on vsync and would look like load.
-        self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
+        # Scale to screen
+        pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
         pygame.display.flip()
 
     # ── Main loop ─────────────────────────────────────────────────────────
@@ -1536,12 +1297,7 @@ class Game:
         mouse_dy  = 0
 
         while running:
-            # The procedural intro has expensive full-frame effects. Cap only
-            # this non-interactive cinematic at 30 FPS to leave CPU time for SDL's
-            # audio thread; gameplay keeps its configured frame rate.
-            frame_cap = 30 if self.state == STATE_INTRO else getattr(self, 'target_fps', FPS)
-            dt = min(self.clock.tick(frame_cap) / 1000.0, 0.05)
-            self._loop_t0 = _perf_counter()   # start of this frame's work (after the limiter's wait)
+            dt = min(self.clock.tick(getattr(self, 'target_fps', FPS)) / 1000.0, 0.05)
             mouse_dx = 0
             mouse_dy = 0
 
@@ -1595,14 +1351,11 @@ class Game:
 
                 elif self.state == STATE_SETTINGS:
                     if event.type == pygame.MOUSEBUTTONDOWN:
-                        if self.gl_presenter is not None:
-                            # OpenGL window: undo the letterbox/scale from window pixels.
-                            mapped = self.gl_presenter.map_mouse(
-                                event.pos, self.internal.get_width(), self.internal.get_height())
-                        else:
-                            mapped = (int(event.pos[0] * self.internal.get_width() / max(1, self.screen.get_width())),
-                                      int(event.pos[1] * self.internal.get_height() / max(1, self.screen.get_height())))
-                        scaled_event = pygame.event.Event(event.type, {"pos": mapped, "button": event.button})
+                        scaled_event = pygame.event.Event(event.type, {
+                            "pos": (int(event.pos[0] * self.internal.get_width() / max(1, self.screen.get_width())),
+                                    int(event.pos[1] * self.internal.get_height() / max(1, self.screen.get_height()))),
+                            "button": event.button
+                        })
                         action = self.settings_menu.handle_event(scaled_event)
                     else:
                         action = self.settings_menu.handle_event(event)
@@ -1612,8 +1365,6 @@ class Game:
                             safe_set_relative_mouse(True)
                     elif action == "apply":
                         self.settings_menu.apply(self._apply_settings)
-                    if self.settings_menu.take_benchmark_request():
-                        self._run_quick_benchmark()
 
                 elif self.state == STATE_GAMEOVER:
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
@@ -1673,7 +1424,6 @@ class Game:
                 pass
 
             self.render(dt)
-            self.perf.update(self._work_ms, self.state == STATE_PLAYING)
 
         pygame.quit()
         sys.exit()

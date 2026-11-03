@@ -291,57 +291,26 @@ AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare
 FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
 
 
-def _audio_buffer_size(default=2048):
-    """Mixer buffer in samples (power of two, 512-8192).
-
-    2048 samples (~46 ms at 44.1 kHz) is a balanced default for stability
-    and responsive effects. Override with "audio_buffer" in settings.json or
-    ANINO_AUDIO_BUFFER.
-    """
-    val = os.environ.get('ANINO_AUDIO_BUFFER')
-    if not val:
-        try:
-            import settings as _s
-            val = (getattr(_s, 'RUNTIME_SETTINGS', None) or {}).get('audio_buffer')
-        except Exception:
-            val = None
-    try:
-        n = int(val)
-    except (TypeError, ValueError):
-        return default
-    for size in (512, 1024, 2048, 4096, 8192):
-        if n <= size:
-            return size
-    return 8192
-
-
 class SoundManager:
     def __init__(self):
-        # Do not tear down a mixer another startup component already opened.
-        # Keep a compatible device alive to avoid Windows audio-device glitches.
+        # If something already started the mixer with driver defaults (small buffer,
+        # format negotiation), restart it with our settings.
         try:
-            current = pygame.mixer.get_init()
-            if current and (current[0] != 44100 or current[1] != -16 or current[2] != 2):
+            cur = pygame.mixer.get_init()
+            if cur and (cur[0] != 44100 or cur[1] != -16 or cur[2] != 2):
                 pygame.mixer.quit()
         except Exception:
             pass
-        # Let SDL negotiate the output frequency with the Windows audio device.
-        # Forcing 44.1 kHz can make the backend resample continuously when the
-        # device runs at 48 kHz; frequency-only negotiation keeps 16-bit stereo.
-        buf = _audio_buffer_size()
-        frequency_change = getattr(pygame, 'AUDIO_ALLOW_FREQUENCY_CHANGE', 1)
+        # allowedchanges=0 stops SDL from silently switching the sample format /
+        # rate to whatever the Windows driver prefers (a source of resampling noise).
         for kwargs in (
-            dict(frequency=48000, size=-16, channels=2, buffer=buf,
-                 allowedchanges=frequency_change),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048),
-                 allowedchanges=frequency_change),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096)),
-            dict(frequency=22050, size=-16, channels=2, buffer=buf),
+            dict(frequency=44100, size=-16, channels=2, buffer=1024, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
+            dict(frequency=44100, size=-16, channels=2, buffer=2048),
+            dict(frequency=22050, size=-16, channels=2, buffer=1024),
         ):
             try:
                 pygame.mixer.init(**kwargs)
-                print(f"[AUDIO] mixer started: {kwargs['frequency']} Hz, buffer={kwargs['buffer']} samples "
-                      f"(~{kwargs['buffer'] * 1000 // kwargs['frequency']} ms)")
                 break
             except Exception:
                 continue
@@ -359,10 +328,6 @@ class SoundManager:
         self.sfx_volume = 1.0
         self.ambient_volume = 1.0
         self.enemy_volume = 1.0
-        # Fine-grained volume groups (synced by main.py from the settings sliders).
-        self.weapons_volume = 1.0   # gunfire, reloads, weapon handling
-        self.ui_volume = 0.7        # doors, page rustle, flashlight click
-        self.weather_volume = 0.7   # rain loop, thunder
         self.sounds = {}
         self.variants = {}
         self._muffle_cache = {}
@@ -379,7 +344,7 @@ class SoundManager:
                                       'assets', 'audio', 'shotgun_fire.mp3')
         if os.path.isfile(custom_shotgun):
             try:
-                self.sounds['shotgun'] = self._load_recording(custom_shotgun, cap=0.95)
+                self.sounds['shotgun'] = pygame.mixer.Sound(custom_shotgun)
                 self.sounds['shotgun'].set_volume(0.80)
                 print('[Audio] Loaded custom shotgun firing sound.')
             except Exception as exc:
@@ -389,7 +354,7 @@ class SoundManager:
                                        'assets', 'audio', 'revolver_gunshot.mp3')
         if os.path.isfile(custom_revolver):
             try:
-                self.sounds['revolver'] = self._load_recording(custom_revolver, cap=0.95)
+                self.sounds['revolver'] = pygame.mixer.Sound(custom_revolver)
                 print('[Audio] Loaded custom revolver gunshot.')
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver gunshot: {exc}')
@@ -401,7 +366,7 @@ class SoundManager:
         )
         if os.path.isfile(custom_revolver_reload):
             try:
-                self.sounds['revolver_reload'] = self._load_recording(custom_revolver_reload, cap=0.95)
+                self.sounds['revolver_reload'] = pygame.mixer.Sound(custom_revolver_reload)
                 print('[Audio] Loaded custom revolver reload sound.')
             except Exception as exc:
                 print(f'[Audio] Could not load custom revolver reload sound: {exc}')
@@ -413,7 +378,7 @@ class SoundManager:
         )
         if os.path.isfile(custom_shotgun_reload):
             try:
-                self.sounds['shotgun_reload'] = self._load_recording(custom_shotgun_reload, cap=0.95)
+                self.sounds['shotgun_reload'] = pygame.mixer.Sound(custom_shotgun_reload)
                 self.sounds['shotgun_reload'].set_volume(0.80)
                 print('[Audio] Loaded custom shotgun reload sound.')
             except Exception as exc:
@@ -439,80 +404,10 @@ class SoundManager:
                                  'assets', 'audio', 'rain_ambience.mp3')
         if os.path.isfile(rain_path):
             try:
-                self._rain_ambience_sound = self._load_recording(rain_path, cap=0.90)
+                self._rain_ambience_sound = pygame.mixer.Sound(rain_path)
                 print('[Audio] Loaded recorded rain ambience.')
             except Exception as exc:
                 print(f'[Audio] Could not load rain ambience: {exc}')
-
-        # Build short-sound spatial filters during loading rather than on the
-        # first gameplay event. FFT filtering on the main thread can cause a
-        # one-time audio hitch when a distant sound is heard for the first time.
-        try:
-            spatial_sounds = []
-            seen_sound_ids = set()
-            for name, sound in self.sounds.items():
-                if sound is None or name in {
-                    'wind_bed', 'crickets_bed', 'intro_wind', 'drone',
-                    'intro_score', 'frenzy_ambience', 'rain_ambience'
-                }:
-                    continue
-                try:
-                    if sound.get_length() > 4.0:
-                        continue
-                except Exception:
-                    continue
-                if id(sound) not in seen_sound_ids:
-                    seen_sound_ids.add(id(sound))
-                    spatial_sounds.append(sound)
-
-            for pool in self.variants.values():
-                for sound in pool:
-                    if sound is None or id(sound) in seen_sound_ids:
-                        continue
-                    try:
-                        if sound.get_length() > 4.0:
-                            continue
-                    except Exception:
-                        continue
-                    seen_sound_ids.add(id(sound))
-                    spatial_sounds.append(sound)
-
-            for pool in getattr(self, '_thunder', {}).values():
-                for sound in pool:
-                    if sound is not None and id(sound) not in seen_sound_ids:
-                        seen_sound_ids.add(id(sound))
-                        spatial_sounds.append(sound)
-
-            self.prewarm_muffled(spatial_sounds)
-        except Exception as exc:
-            # Audio preparation must never prevent the game from starting.
-            print(f'[AUDIO] Spatial prewarm skipped: {exc}')
-
-    # ── recorded asset loading ────────────────────────────────────────────────
-    def _load_recording(self, path, cap=0.90):
-        """Load a supplied recording with peak control, without altering the file.
-
-        The file is decoded at the mixer's rate/format (44.1 kHz, 16-bit,
-        stereo).  If its peak exceeds ``cap`` it would clip the mixer output
-        — most audibly when several effects overlap — so the in-memory samples
-        are rescaled to the cap (same content, same length, same timbre).
-        Quiet recordings are kept untouched; nothing is ever boosted upward.
-        """
-        snd = pygame.mixer.Sound(path)
-        try:
-            raw = np.frombuffer(snd.get_raw(), dtype=np.int16).astype(np.float64)
-            ch = max(1, self.channels)
-            raw = raw[:len(raw) - len(raw) % ch].reshape(-1, ch) / 32768.0
-            peak = float(np.max(np.abs(raw))) if raw.size else 0.0
-            if peak > cap + 1e-3:
-                fixed = self._generate_sound(raw * (cap / peak))
-                if fixed is not None:
-                    print(f'[Audio] Peak-limited {os.path.basename(path)} '
-                          f'(peak {peak:.2f} -> {cap:.2f}).')
-                    return fixed
-        except Exception:
-            pass
-        return snd
 
     # ── recorded footsteps ───────────────────────────────────────────────────
     FOOTSTEP_PEAK = 0.85          # every recorded step is levelled to this peak so none stands out
@@ -566,7 +461,7 @@ class SoundManager:
         for kind in ('near', 'far'):
             for path in sorted(glob.glob(os.path.join(base, f'thunder_{kind}_*.mp3'))):
                 try:
-                    self._thunder[kind].append(self._load_recording(path, cap=0.95))
+                    self._thunder[kind].append(pygame.mixer.Sound(path))
                 except Exception as exc:
                     print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
         total = len(self._thunder['near']) + len(self._thunder['far'])
@@ -599,7 +494,6 @@ class SoundManager:
             gain *= float(getattr(_settings, 'THUNDER_VOLUME', 1.0))
         except Exception:
             pass
-        gain *= max(0.0, min(1.0, getattr(self, 'weather_volume', 1.0)))
         return self.play_object(snd, volume * gain, pan, headroom=1.0)
 
     # ── low level helpers (kept for backwards compatibility) ─────────────────
@@ -717,7 +611,7 @@ class SoundManager:
         boom = sine_sweep(t, r, 150, 38, 0.05) * np.exp(-t / 0.11) * (1 - np.exp(-t / 0.0008))
         body = fft_filter(rng.standard_normal(n), r, lo=90, hi=700) * np.exp(-t / 0.22)
         shot = 1.1 * _pk(crack) + 1.0 * _pk(blast) + 1.4 * _pk(boom) + 0.9 * _pk(body)
-        # Avoid hard saturation of the weapon transient; _finish() performs final peak control.
+        shot = np.tanh(1.6 * shot)
         wet = reverb(shot, r, rt60=1.5, wet=0.35, brightness=0.35,
                      echoes=[(0.16, 0.22, 2500), (0.34, 0.12, 1800), (0.58, 0.06, 1300)])
         # pump-action rack: scrape + two heavy clicks
@@ -743,7 +637,7 @@ class SoundManager:
                    for f, a, tau in ((2150, 0.10, 0.05), (3400, 0.07, 0.035), (5200, 0.04, 0.02))
                    if f < 0.45 * r)
         shot = 1.3 * _pk(crack) + 0.9 * _pk(blast) + 0.9 * _pk(boom) + ring
-        # Keep the revolver transient clean; _finish() performs final peak control.
+        shot = np.tanh(1.5 * shot)
         wet = reverb(shot, r, rt60=1.0, wet=0.3, brightness=0.5,
                      echoes=[(0.13, 0.18, 3000), (0.29, 0.09, 2000)])
         return self._finish(wet, peak=0.92)
@@ -1076,10 +970,21 @@ class SoundManager:
         if os.path.isfile(path):
             try:
                 self._intro_score = pygame.mixer.Sound(path)
-                # Keep the mastered WAV samples unchanged. Rebuilding and boosting
-                # the score here can introduce harsh peaks; leave headroom at the
-                # dedicated playback channel instead.
-                print('[Audio] Loaded intro score without sample amplification.')
+                # The supplied cinematic score is mastered quietly. Normalize its
+                # decoded samples to a healthy peak so it is clearly audible on
+                # laptop speakers while still respecting the Music Volume slider.
+                raw = np.frombuffer(self._intro_score.get_raw(), dtype=np.int16)
+                peak = int(np.max(np.abs(raw.astype(np.int32)))) if raw.size else 0
+                if peak > 0:
+                    samples = raw.astype(np.float64) / 32768.0
+                    samples *= min(4.0, (0.92 * 32767.0) / peak)
+                    channels = max(1, self.channels)
+                    samples = samples[:len(samples) - len(samples) % channels]
+                    samples = samples.reshape(-1, channels)
+                    boosted = self._generate_sound(samples)
+                    if boosted is not None:
+                        self._intro_score = boosted
+                print('[Audio] Loaded intro score (level-normalized).')
             except Exception as exc:
                 print(f'[Audio] Could not load intro score: {exc}')
         return self._intro_score
@@ -1180,23 +1085,6 @@ class SoundManager:
             self._muffle_keep.append(snd)       # keep id() stable
         return got
 
-    def prewarm_muffled(self, sounds, levels=(1, 2, 3)):
-        """Build spatial low-pass copies during loading, never on a gameplay frame.
-
-        Accepts an iterable of Sound objects. Repeated sounds are harmless because
-        muffled() uses an identity cache.
-        """
-        prepared = 0
-        for snd in sounds:
-            if snd is None:
-                continue
-            for level in levels:
-                self.muffled(snd, level)
-                prepared += 1
-        if prepared:
-            print(f"[AUDIO] Prepared {prepared} spatial sound variants.")
-        return prepared
-
     def spatial_params(self, player_x, player_y, player_angle, target_x, target_y,
                        base_volume=1.0, max_dist=15.0):
         """-> (volume, pan, muffle_level) or None when out of earshot."""
@@ -1275,12 +1163,10 @@ class SoundManager:
             # by the same Ambient Volume slider and gameplay ambience state.
             rain_channel = pygame.mixer.Channel(4)
             rain = getattr(self, '_rain_ambience_sound', None)
-            rain_gain = 0.38 * self.master_volume * self.ambient_volume \
-                * max(0.0, min(1.0, getattr(self, 'weather_volume', 1.0)))
             if active and rain is not None:
                 if not rain_channel.get_busy():
                     rain_channel.play(rain, loops=-1, fade_ms=2500)
-                rain_channel.set_volume(rain_gain)
+                rain_channel.set_volume(0.38 * self.master_volume * self.ambient_volume)
             elif rain_channel.get_busy():
                 rain_channel.fadeout(1200)
         except Exception as exc:

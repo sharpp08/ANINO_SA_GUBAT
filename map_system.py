@@ -310,7 +310,7 @@ class GameMap:
             4: (['balete', 'strangler', 'mahogany', 'supernatural', 'narra'], [38, 24, 17, 8, 13]),
             5: (['dead', 'balete', 'mahogany', 'bamboo'], [35, 25, 25, 15]),
         }
-        target_tree_count = (6000 if chapter_num == 1 else 7400)  # +15% forest density; billboard render cap remains unchanged
+        target_tree_count = (5200 if chapter_num == 1 else 6500)
         step = max(2.4, math.sqrt((self.width * self.height) / float(target_tree_count)))
         cell_step = 2 if chapter_num == 2 else max(2, int(step))
         tree_clearings = (
@@ -366,14 +366,7 @@ class GameMap:
         # never covers the main trail, shallow pools, buildings or spawn.
         self.undergrowth = []
         plant_types = ['fern', 'mushroom', 'rock', 'bush', 'log', 'stump', 'boulder', 'sapling']
-        # Density follows the active quality tier (settings.VEGETATION_SCALE):
-        # Low thins the forest floor, High/Ultra make it dense.  Deterministic:
-        # the same seed + count always reproduces the same placement.
-        try:
-            import settings as _settings_mod
-            desired_plants = int(UNDERGROWTH_DENSITY * float(getattr(_settings_mod, 'VEGETATION_SCALE', 1.0)))
-        except Exception:
-            desired_plants = UNDERGROWTH_DENSITY
+        desired_plants = UNDERGROWTH_DENSITY
         plant_clearings = (
             (15, 128, 7.0), (65, 70, 5.0), (83, 70, 5.0),
             (75, 91, 5.0), (69, 202, 5.0), (130, 130, 9.0),

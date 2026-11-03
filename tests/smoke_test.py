@@ -238,8 +238,7 @@ def run_extended_tests():
         gm.apply_tier('medium')
         assert gm.tier == 'medium'
         assert gm.get_effective('enable_bloom') == True
-        assert gm.stage_transition('ultra') == True
-        assert gm.stage_transition('bogus') == False
+        assert gm.stage_transition('ultra') == False
     test_case("GraphicsManager Runtime Switching", test_graphics_manager)
 
     def test_shader_renderer_interface():

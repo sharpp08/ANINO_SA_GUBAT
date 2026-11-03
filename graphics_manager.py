@@ -41,10 +41,6 @@ class GraphicsManager:
         'ssao_radius': 'SSAO_RADIUS',
         'ssao_strength': 'SSAO_STRENGTH',
         'water_speed_multiplier': 'WATER_SPEED_MULTIPLIER',
-        'terrain_tex_size': 'TERRAIN_TEX_SIZE',
-        'vegetation_scale': 'VEGETATION_SCALE',
-        'tree_lod_far_dist': 'TREE_LOD_FAR_DIST',
-        'rain_density': 'RAIN_DENSITY',
     }
 
     def __init__(self, renderer=None):
@@ -135,13 +131,6 @@ class GraphicsManager:
         _s.ACTIVE_QUALITY = cfg.copy()
 
     def _rebuild_renderer(self, cfg):
-        # Live rain-density scaling for the storm (cheap array rebuild, no storm reset).
-        weather = getattr(self.renderer, 'weather', None)
-        if weather is not None and 'rain_density' in cfg:
-            try:
-                weather.set_density(cfg['rain_density'])
-            except Exception:
-                pass
         sr = getattr(self.renderer, 'shader_renderer', None)
         if sr is None or not getattr(sr, 'enabled', False):
             return

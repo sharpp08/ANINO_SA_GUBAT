@@ -15,10 +15,6 @@ except Exception:
 class ShaderRenderer:
     """Manages ModernGL context with bloom, god-ray, and tone-mapping passes."""
 
-    # Set True by the game when the OpenGL window (gl_present.py) does this work on the GPU
-    # without a readback; this class then stays inert and opens no second GL context.
-    SKIP = False
-
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -32,10 +28,6 @@ class ShaderRenderer:
         self.bloom_fbo = None
         self.bloom_tex = None
         self.feature_flags = {}
-        self._fail_count = 0
-        self._logged_fail = False
-        if ShaderRenderer.SKIP:
-            return
         if not MODERNGL_AVAILABLE:
             print("[SHADERS] ModernGL not available. Using software fallback.")
             return
@@ -48,14 +40,6 @@ class ShaderRenderer:
     def _init_gl(self, w, h):
         self.ctx = moderngl.create_context(standalone=True)
         self.ctx.enable(moderngl.BLEND)
-        # Log which GPU/driver this offscreen context landed on: on laptops with two GPUs
-        # it can differ from the one driving the window, which hurts frame times.
-        try:
-            info = self.ctx.info
-            print(f"[SHADERS] GL_RENDERER={info.get('GL_RENDERER')} | "
-                  f"GL_VENDOR={info.get('GL_VENDOR')} | GL_VERSION={info.get('GL_VERSION')}")
-        except Exception:
-            pass
         vertices = np.array([
             -1.0, 1.0, 0.0, 1.0,
             -1.0, -1.0, 0.0, 0.0,
@@ -95,20 +79,8 @@ class ShaderRenderer:
             # NOTE: the old _apply_bloom/_apply_godrays passes re-drew this same quad
             # (bloom into a buffer nothing sampled, god rays over the identical image),
             # so they cost GPU time for no visual change and were removed from the frame.
-            out = pygame.image.fromstring(self.fbo.read(components=3), (self.width, self.height), 'RGB')
-            self._fail_count = 0
-            return out
-        except Exception as e:
-            # Don't fail silently: an intermittently failing GL driver makes the game flip
-            # between shaded and unshaded frames. Log it, and after repeated failures turn
-            # the pass off for good so the game stops paying for a path that isn't working.
-            self._fail_count += 1
-            if not self._logged_fail:
-                self._logged_fail = True
-                print(f"[SHADERS] render pass failed ({type(e).__name__}: {e}); using unshaded frame.")
-            if self._fail_count >= 5:
-                self.enabled = False
-                print("[SHADERS] 5 consecutive failures - GPU post-processing disabled for this session.")
+            return pygame.image.fromstring(self.fbo.read(components=3), (self.width, self.height), 'RGB')
+        except Exception:
             return pygame_surface
 
     def _apply_bloom(self):

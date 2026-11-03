@@ -53,16 +53,12 @@ ENABLE_CHROMATIC_ABERRATION = True
 
 
 # Quality Tier Presets
-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high', 'ultra'; overridden by "quality_tier" in settings.json at startup
+QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
 
 # Performance-optimized quality presets with measurable differences.
 # Each tier is the single source of truth for all renderer feature flags.
 # User overrides (from settings.json "graphics_overrides") take precedence
 # over these values; legacy ENABLE_* constants are the final fallback.
-#
-# Keys that carry no actual rendering cost are intentionally left disabled in
-# every tier (enable_pbr, ssao_*): a settings row that cannot change the
-# rendered image is not exposed as a toggle (see settings_menu.py).
 QUALITY_PRESETS = {
     'low': {
         'internal_width': 320, 'internal_height': 180,
@@ -70,9 +66,6 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': False, 'enable_god_rays': False,
         'enable_particles': False, 'enable_dynamic_lights': False,
         'enable_aurora': False, 'enable_enhanced_floor': False,
-        'enable_contact_shadows': False,
-        'terrain_tex_size': 512, 'vegetation_scale': 0.7,
-        'tree_lod_far_dist': 6.0, 'rain_density': 0.6,
         'max_render_trees': 80, 'max_particles': 50, 'max_enemies': 4,
         # Ground detail tiers
         'ground_grass_blade_layers': 2,
@@ -92,9 +85,6 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': False,
         'enable_particles': True, 'enable_dynamic_lights': False,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'enable_contact_shadows': False,
-        'terrain_tex_size': 512, 'vegetation_scale': 1.0,
-        'tree_lod_far_dist': 10.0, 'rain_density': 1.0,
         'max_render_trees': 150, 'max_particles': 150, 'max_enemies': 6,
         # Ground detail tiers
         'ground_grass_blade_layers': 4,
@@ -113,9 +103,6 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': True,
         'enable_particles': True, 'enable_dynamic_lights': True,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'enable_contact_shadows': True,
-        'terrain_tex_size': 512, 'vegetation_scale': 1.2,
-        'tree_lod_far_dist': 14.0, 'rain_density': 1.25,
         'max_render_trees': 220, 'max_particles': 300, 'max_enemies': 8,
         # Ground detail tiers
         'ground_grass_blade_layers': 6,
@@ -125,34 +112,6 @@ QUALITY_PRESETS = {
         'bloom_threshold': 0.65, 'bloom_intensity': 0.6, 'bloom_blur_passes': 3,
         'god_ray_samples': 40, 'god_ray_intensity': 0.35, 'god_ray_decay': 0.88,
         'hdr_exposure': 1.1, 'tone_mapping': 'aces',
-        'ssao_samples': 0, 'ssao_radius': 0.5, 'ssao_strength': 0.0,
-        'water_speed_multiplier': 0.4,
-    },
-    # ULTRA - MAXIMUM VISUAL QUALITY (optional). Everything below is a real
-    # rendering cost, none of it a configuration flag that does nothing:
-    #   * 1280x720 internal resolution (2x the ray count, per-pixel floor)
-    #   * 1024px per-biome ground textures (vs 512)
-    #   * denser undergrowth and 45% more renderable trees
-    #   * far trees keep their detailed billboards to 16 tiles (LOD switch)
-    #   * heavier rain, GPU bloom + god-ray passes, stronger god rays
-    #   * ground contact shadows keep sprites visually anchored in daylight
-    'ultra': {
-        'internal_width': 1280, 'internal_height': 720,
-        'enable_hdr': True, 'enable_pbr': False, 'enable_normal_mapping': False,
-        'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': True,
-        'enable_particles': True, 'enable_dynamic_lights': True,
-        'enable_aurora': True, 'enable_enhanced_floor': True,
-        'enable_contact_shadows': True,
-        'terrain_tex_size': 1024, 'vegetation_scale': 1.5,
-        'tree_lod_far_dist': 16.0, 'rain_density': 1.6,
-        'max_render_trees': 320, 'max_particles': 300, 'max_enemies': 10,
-        'ground_grass_blade_layers': 8,
-        'ground_enable_clover': True,
-        'ground_enable_flowers': True,
-        'ground_enable_roots': True,
-        'bloom_threshold': 0.6, 'bloom_intensity': 0.75, 'bloom_blur_passes': 3,
-        'god_ray_samples': 64, 'god_ray_intensity': 0.45, 'god_ray_decay': 0.9,
-        'hdr_exposure': 1.15, 'tone_mapping': 'aces',
         'ssao_samples': 0, 'ssao_radius': 0.5, 'ssao_strength': 0.0,
         'water_speed_multiplier': 0.4,
     }
@@ -175,7 +134,6 @@ def apply_quality_preset(tier):
     global ACTIVE_QUALITY, QUALITY_TIER, INTERNAL_WIDTH, INTERNAL_HEIGHT
     global NUM_RAYS, WALL_HEIGHT_SCALE, MAX_RENDER_TREES
     global ENABLE_PARTICLES, ENABLE_DYNAMIC_LIGHTS
-    global TERRAIN_TEX_SIZE, VEGETATION_SCALE, TREE_LOD_FAR_DIST, RAIN_DENSITY
     global ENABLE_BLOOM, ENABLE_HDR, ENABLE_PBR, ENABLE_SSAO, ENABLE_GOD_RAYS
     global BLOOM_THRESHOLD, BLOOM_INTENSITY, BLOOM_BLUR_PASSES
     global GOD_RAY_SAMPLES, GOD_RAY_INTENSITY, GOD_RAY_DECAY
@@ -214,12 +172,6 @@ def apply_quality_preset(tier):
     SSAO_RADIUS = ACTIVE_QUALITY['ssao_radius']
     SSAO_STRENGTH = ACTIVE_QUALITY['ssao_strength']
     WATER_SPEED_MULTIPLIER = ACTIVE_QUALITY['water_speed_multiplier']
-    # Tier-driven environment density / LOD / weather (all consumed live by
-    # the renderer and by map generation at chapter load).
-    TERRAIN_TEX_SIZE = int(ACTIVE_QUALITY.get('terrain_tex_size', 512))
-    VEGETATION_SCALE = float(ACTIVE_QUALITY.get('vegetation_scale', 1.0))
-    TREE_LOD_FAR_DIST = float(ACTIVE_QUALITY.get('tree_lod_far_dist', 10.0))
-    RAIN_DENSITY = float(ACTIVE_QUALITY.get('rain_density', 1.0))
     return ACTIVE_QUALITY
 
 
@@ -258,14 +210,6 @@ ENHANCED_TERRAIN = True
 TERRAIN_TEX_SIZE = 512     # seamless per-biome texture size; 256 saves memory on weak machines
 TERRAIN_BRIGHTNESS = 1.0   # global multiplier for the new ground
 TERRAIN_FAR_DIST = 12.0    # beyond this many tiles the softened texture is used (anti-shimmer)
-
-# Vegetation density multiplier for the chapter's undergrowth (1.0 = the
-# baseline UNDERGROWTH_DENSITY). Set by apply_quality_preset() from the tier.
-VEGETATION_SCALE = 1.0
-
-# Tree LOD: billboards beyond this many tiles switch to the low-detail
-# silhouette variant. Set by apply_quality_preset() from the tier.
-TREE_LOD_FAR_DIST = 10.0
 
 # Storm weather (weather_fx.py): layered rain, ground splashes, lightning and thunder.
 ENABLE_RAIN = True
@@ -408,10 +352,7 @@ SANITY_PURPLE = (140, 80, 200)
 
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
-AMBIENT_LIGHT_OFF = 0.55  # moonlit night: ~55% of the scene survives the dark
-                           # overlay when the flashlight is off, so terrain,
-                           # paths and tree silhouettes stay readable without
-                           # losing the horror atmosphere.
+AMBIENT_LIGHT_OFF = 0.20  # readable low-light visibility when the flashlight is off / dead
 # Tactical Flashlight Tuning Constants (Narrow, Focused, High-Intensity)
 FLASHLIGHT_BEAM_ANGLE = 12.0
 FLASHLIGHT_PENUMBRA_ANGLE = 3.0
@@ -420,9 +361,9 @@ FLASHLIGHT_SPILL_ANGLE = 22.0
 FLASHLIGHT_SPILL_INTENSITY = 0.10
 FLASHLIGHT_RANGE = 20.0
 FLASHLIGHT_HOTSPOT_INTENSITY = 1.0
-FLASHLIGHT_AMBIENT_LEVEL = 0.10
+FLASHLIGHT_AMBIENT_LEVEL = 0.06
 
-DARK_TINT = (8, 14, 28)   # cool midnight fill; retains shadow detail instead of crushing blacks
+DARK_TINT = (4, 8, 18)   # near-black cool midnight tint for deep forest
 BEAM_RADIUS = 0.28        # narrower beam width for tactical profile
 BEAM_GLOW = (240, 240, 235)  # neutral white 5000K LED main beam
 HOTSPOT_GLOW = (255, 255, 250) # intense neutral white hotspot
@@ -431,8 +372,9 @@ FOG_DISTANCE = 35.0
 # Atmospheric depth-fog overlay parameters (subtle haze; controlled by ENABLE_FOG)
 FOG_NEAR = 8.0       # tiles: fog begins here (closer surfaces stay clear)
 FOG_FAR = 28.0       # tiles: fog reaches maximum opacity
-FOG_MAX_ALPHA = 72   # keep distant silhouettes readable through the night haze
+FOG_MAX_ALPHA = 90   # 0-255; 90 ≈ 35% (subtle, never blinds the player)
 AMBIENT = FLASHLIGHT_AMBIENT_LEVEL
+AMBIENT_LIGHT_OFF = 0.20
 ENEMY_EYE_GLOW = True
 ENEMY_EYE_GLOW = True
 MIN_SPRITE_LIGHT = 0.45   # sprites never get darker than this from distance shading
@@ -563,11 +505,8 @@ def load_settings(path=SETTINGS_PATH):
         'brightness': 1.0,
         'fov': 75,
         'fps_limit': '60',
-        'ambient_volume': 0.25,
+        'ambient_volume': 0.7,
         'enemy_volume': 0.8,
-        'weapons_volume': 1.0,
-        'ui_volume': 0.7,
-        'weather_volume': 0.7,
         'enable_sanity': ENABLE_SANITY,
         'enable_camera_shake': ENABLE_CAMERA_SHAKE,
         'sprint_toggle': 'hold',
