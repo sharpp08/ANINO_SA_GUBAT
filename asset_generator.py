@@ -576,6 +576,34 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             hy = canopy_top + rng.randint(0, 12)
             pygame.draw.circle(surf, (35, 70, 35), (hx, hy), rng.randint(3, 6))
 
+    # --- High-frequency natural detail: bark fissures, epiphytes and leaf variation ---
+    # Kept within the transparent silhouette; seeded RNG preserves deterministic variants.
+    if not is_bam:
+        bark_left = cx - max(2, tw // 2)
+        bark_right = cx + max(2, tw // 2)
+        for _ in range(34):
+            bx = rng.randint(max(0, bark_left), min(width - 1, bark_right))
+            by = rng.randint(max(trunk_top, 0), max(trunk_top + 1, trunk_base - 2))
+            length = rng.randint(2, 8)
+            shade = rng.choice((0, 1, 2))
+            bark = ((28, 22, 17), (92, 70, 46), (45, 53, 31))[shade]
+            pygame.draw.line(surf, bark, (bx, by), (bx + rng.choice((-1, 0, 1)), min(trunk_base, by + length)), 1)
+        if not is_dead:
+            # Moss and epiphytes cling to the shaded lower trunk and root shoulders.
+            for _ in range(12):
+                mx = cx + rng.randint(-max(2, tw // 2), max(2, tw // 2))
+                my = rng.randint(max(trunk_top, trunk_base - 58), trunk_base - 3)
+                radius = rng.randint(1, 3)
+                pygame.draw.circle(surf, rng.choice(((31, 65, 34, 170), (43, 77, 39, 150), (65, 79, 42, 125))),
+                                   (mx, my), radius)
+    if not is_dead and not is_bam and not is_trop:
+        # Small broken leaf clusters add a less repetitive canopy surface.
+        for _ in range(28):
+            lx = cx + rng.randint(-24, 24)
+            ly = rng.randint(max(0, canopy_top), max(canopy_top + 1, canopy_bot - 2))
+            leaf_col = rng.choice(((28, 57, 27), (38, 72, 31), (48, 83, 39),
+                                   (19, 43, 24), (57, 82, 42)))
+            pygame.draw.ellipse(surf, leaf_col, (lx, ly, rng.randint(2, 5), rng.randint(1, 3)))
     # --- Supernatural dark aura ---
     if is_sup:
         for i in range(5):
