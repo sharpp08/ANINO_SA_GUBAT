@@ -220,6 +220,10 @@ class Renderer:
 
     def __init__(self, internal_surface, textures, weapon_sprites, enemy_sprites, pickup_sprites):
         self.surface = internal_surface
+        # Optional live GPU wall pass. It is deliberately opt-in until validated on target hardware.
+        self.gpu_wall_pass = None
+        self.gpu_wall_enabled = False
+        self._gpu_wall_surface = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         self.w = INTERNAL_WIDTH
         self.h = INTERNAL_HEIGHT
         self.textures = textures
@@ -794,7 +798,11 @@ class Renderer:
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
         t_rays = pygame.time.get_ticks()
-        self._cast_rays(player, game_map)
+        gpu_walls_requested = self.gpu_wall_enabled and self.gpu_wall_pass is not None
+        self._cast_rays(player, game_map, draw_walls=not gpu_walls_requested)
+        if gpu_walls_requested and not self._draw_gpu_walls(player, game_map):
+            # If the shader/context fails, restore the reference wall image immediately.
+            self._cast_rays(player, game_map, draw_walls=True)
         self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
         # 4. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
@@ -1065,7 +1073,7 @@ class Renderer:
             self._grid_rev = rev
         return self._grid_np
 
-    def _cast_rays(self, player, game_map):
+    def _cast_rays(self, player, game_map, draw_walls=True):
         """Cast rays for wall rendering (all rays walk the grid together in numpy)."""
         px, py = player.x, player.y
         pitch_offset = int(player.pitch * self.h)
@@ -1087,6 +1095,10 @@ class Renderer:
 
         drawable = seen & (corrected >= 0.01)
         if not drawable.any():
+            return
+
+        # GPU wall mode still uses this CPU depth buffer for the existing Python sprite-occlusion rules.
+        if not draw_walls:
             return
 
         # Per-ray wall geometry and lighting buckets, computed for all rays at once.
@@ -1148,6 +1160,72 @@ class Renderer:
                     pygame.draw.line(self.surface, color, (i, max(0, ds)), (i, min(h, ends[i])))
         if blits:
             self.surface.blits(blits, False)
+
+    def attach_gpu_wall_pass(self, ctx):
+        """Attach the experimental GLSL wall pass to the active presentation context."""
+        if self.gpu_wall_pass is not None:
+            return True
+        try:
+            from gpu_wall_raycast import GPUWallRaycaster
+            gpu_pass = GPUWallRaycaster(ctx, self.w, self.h,
+                                        tile_size=TILE_SIZE, max_depth=MAX_DEPTH)
+            gpu_pass.upload_wall_textures(self.textures)
+            self.gpu_wall_pass = gpu_pass
+            self.gpu_wall_enabled = True
+            print("[GPU WORLD] GLSL wall raycasting connected to live gameplay (readback bridge enabled).")
+            return True
+        except Exception as exc:
+            try:
+                if 'gpu_pass' in locals():
+                    gpu_pass.close()
+            except Exception:
+                pass
+            self.gpu_wall_pass = None
+            self.gpu_wall_enabled = False
+            print(f"[GPU WORLD] Wall pass unavailable; CPU walls remain active ({type(exc).__name__}: {exc}).")
+            return False
+
+    def close_gpu_wall_pass(self):
+        """Release wall-pass resources before the shared OpenGL context is closed."""
+        gpu_pass = self.gpu_wall_pass
+        self.gpu_wall_pass = None
+        self.gpu_wall_enabled = False
+        if gpu_pass is not None:
+            try:
+                gpu_pass.close()
+            except Exception:
+                pass
+
+    def _draw_gpu_walls(self, player, game_map):
+        """Render walls with GLSL and bridge its color attachment into the Pygame scene.
+
+        This is an opt-in migration bridge: the existing CPU z-buffer remains authoritative
+        for sprite occlusion, while the wall pixels themselves come from the GPU pass.
+        The readback is intentionally documented as transitional and is not an FPS claim.
+        """
+        if not self.gpu_wall_enabled or self.gpu_wall_pass is None:
+            return False
+        try:
+            grid = self._grid_array(game_map)
+            color_tex, _depth_tex = self.gpu_wall_pass.render(
+                grid, getattr(game_map, 'grid_rev', 0),
+                (player.x, player.y), player.angle, self.fov_rad,
+                WALL_HEIGHT_SCALE, tile_size=TILE_SIZE, max_depth=MAX_DEPTH,
+                pitch_offset=int(player.pitch * self.h),
+            )
+            raw = color_tex.read(alignment=1)
+            rgba = np.frombuffer(raw, dtype=np.uint8).reshape((self.h, self.w, 4))[::-1]
+            rgb_dst = pygame.surfarray.pixels3d(self._gpu_wall_surface)
+            alpha_dst = pygame.surfarray.pixels_alpha(self._gpu_wall_surface)
+            rgb_dst[:, :, :] = rgba[:, :, :3].transpose(1, 0, 2)
+            alpha_dst[:, :] = rgba[:, :, 3].T
+            del rgb_dst, alpha_dst
+            self.surface.blit(self._gpu_wall_surface, (0, 0))
+            return True
+        except Exception as exc:
+            print(f"[GPU WORLD] Wall pass failed; switching back to CPU walls ({type(exc).__name__}: {exc}).")
+            self.close_gpu_wall_pass()
+            return False
 
     def _wall_columns(self, tex):
         """Return the 1px-wide column subsurfaces of a wall texture (sliced once, zero-copy)."""
