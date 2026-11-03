@@ -223,9 +223,9 @@ class Renderer:
         # Optional live GPU wall pass. It is deliberately opt-in until validated on target hardware.
         self.gpu_wall_pass = None
         self.gpu_wall_enabled = False
-        self._gpu_wall_surface = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         self.w = INTERNAL_WIDTH
         self.h = INTERNAL_HEIGHT
+        self._gpu_wall_surface = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
         self.textures = textures
         self._wall_col_cache = {}
         self._wall_col_lit_cache = {}  # quantised scale+light buckets (bounded)
