@@ -133,7 +133,7 @@ class Enemy:
         self._path_index = 0
         self._last_repath_dist = 5.0
         self._last_player_pos = (x, y)
-        self._repath_timer = 0.0
+        self._repath_timer = random.uniform(0.0, 3.0)  # stagger initial A* work across enemies
 
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
