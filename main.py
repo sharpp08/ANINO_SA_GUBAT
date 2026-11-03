@@ -1299,7 +1299,7 @@ class Game:
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(self.internal, self.player, self.font_sm, self.font_tiny)
+            draw_hud(self.internal, self.player, self.font_sm, self.font_hud)
             draw_top_hud(self.internal, self.player, self.game_map,
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
