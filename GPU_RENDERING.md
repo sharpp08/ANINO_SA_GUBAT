@@ -10,7 +10,11 @@ The project currently uses a **hybrid renderer**, not a fully GPU-rendered world
 - `gl_present.py` can upload the completed CPU frame and present/upscale it with an OpenGL shader.
 - `shader_renderer.py` contains an older offscreen post-process path that reads the processed framebuffer back into a Pygame surface.
 
-The GPU migration below is a roadmap. It is **not implemented yet** and must not be described as complete until the world, sprites, and final presentation are actually rendered on the GPU.
+Stage 1 now has an **experimental GPU wall-raycasting pass** in `gpu_wall_raycast.py`.
+It uploads the existing tile grid and wall textures, runs GLSL 330 DDA, and
+produces GPU color/depth attachments. It is not yet connected to the live scene
+compositor, so the game still uses the CPU wall renderer by default. The full
+GPU world migration remains incomplete.
 
 ## Target architecture
 
@@ -39,6 +43,15 @@ Document the current render entry points, map/grid encoding, wall texture IDs, t
 **Acceptance:** existing gameplay and renderer tests pass; the benchmark reports frame-time statistics and which renderer path is active.
 
 ### 2. GPU wall raycasting and depth
+
+**Experimental foundation added:** `gpu_wall_raycast.py` implements map upload,
+wall texture arrays, GLSL 330 per-fragment DDA, pitch-aware wall projection,
+and color/depth attachments. Contract tests are in
+`tests/test_gpu_wall_raycast.py`. See `GPU_WALL_RAYCAST_STAGE1.md`.
+
+**Remaining before gameplay rollout:** connect this pass to a GPU compositor,
+match the CPU renderer's wall output pixel-for-pixel, and batch sprites against
+the GPU depth attachment. Until then, the CPU renderer remains active.
 
 Upload the map as a GPU texture. Implement per-column DDA in a GLSL 330 fragment shader and sample wall textures from an atlas. Produce depth data for later sprite occlusion. Match the existing FOV, wall hit-side shading, texture coordinates, distance fog, and clipping. Keep a feature flag and CPU fallback until image comparisons pass.
 
