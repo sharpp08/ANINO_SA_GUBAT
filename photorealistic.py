@@ -70,7 +70,7 @@ class PhotorealisticPass:
         ambient_level = max(0.0, min(1.0, float(ambient)))
         darkness = 1.0 - ambient_level
         # A restrained 0–35% boost keeps the haze readable without washing out the scene.
-        dark_boost = 1.0 + darkness * 0.35
+        dark_boost = 1.0 + darkness * 0.55
         alpha_scale = (max(0.0, min(1.0, float(strength)))
                        * (1.0 - day * 0.72) * dark_boost)
         if alpha_scale <= 0.01:
@@ -80,13 +80,13 @@ class PhotorealisticPass:
         base = max(int(horizon_y) + 5, int(h * 0.52))
         # Broad overlapping ribbons with slow lateral drift, not opaque full-screen fog.
         for layer in range(3):
-            y = min(h - 12, base + int(h * (0.11 + layer * 0.105)))
+            y = min(h - 12, base + int(h * (0.085 + layer * 0.085)))
             drift = math.sin(time_s * (0.12 + layer * 0.035) + layer * 2.1) * self.width * 0.07
-            width = int(self.width * (0.82 + layer * 0.16))
-            height = max(10, int(h * (0.055 + layer * 0.012)))
-            a = int((13 - layer * 2) * alpha_scale)
+            width = int(self.width * (0.92 + layer * 0.18))
+            height = max(12, int(h * (0.075 + layer * 0.018)))
+            a = int((22 - layer * 4) * alpha_scale)
             rect = (int(self.width * 0.5 + drift - width * 0.5), y - height // 2, width, height)
-            # Cool blue-gray haze keeps the night palette; low alpha preserves silhouettes.
+            # Cool blue-gray haze is stronger near the ground while preserving readable silhouettes.
             pygame.draw.ellipse(self._mist, (96, 116, 124, a), rect)
         surface.blit(self._mist, (0, 0))
 
