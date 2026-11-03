@@ -293,10 +293,10 @@ FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback
 
 class SoundManager:
     def __init__(self):
-        # Re-open an incompatible pre-existing mixer before creating game sounds.
+        # pygame.init() in main.py may have opened the mixer with SDL defaults.
+        # Always close that instance so the explicit rate/format/buffer below take effect.
         try:
-            cur = pygame.mixer.get_init()
-            if cur and (cur[1] != -16 or cur[2] != 2):
+            if pygame.mixer.get_init():
                 pygame.mixer.quit()
         except Exception:
             pass
