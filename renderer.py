@@ -128,7 +128,7 @@ class Flashlight:
         rgb = np.zeros((mw, mh, 3), dtype=np.uint8)
         for c in range(3):
             ch_val = (
-                main_beam * BEAM_GLOW[c] * 0.85 +
+                main_beam * BEAM_GLOW[c] * 0.68 +
                 spill * PERIPHERAL_SPILL[c] * 0.35
             )
             rgb[:, :, c] = np.clip(ch_val, 0, 255).T.astype(np.uint8)

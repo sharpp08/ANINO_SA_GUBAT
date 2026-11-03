@@ -353,20 +353,20 @@ SANITY_PURPLE = (140, 80, 200)
 # Lighting & Horror Atmosphere Constants
 AMBIENT = 0.40            # 0 = pitch black outside the beam, 1 = fully lit
 AMBIENT_LIGHT_OFF = 0.38  # preserve readable terrain and silhouettes when the flashlight is off / dead
-# Tactical Flashlight Tuning Constants (Narrow, Focused, High-Intensity)
+# Tactical Flashlight Tuning Constants (controlled, realistic illumination)
 FLASHLIGHT_BEAM_ANGLE = 12.0
 FLASHLIGHT_PENUMBRA_ANGLE = 3.0
 FLASHLIGHT_HOTSPOT_ANGLE = 3.0
 FLASHLIGHT_SPILL_ANGLE = 22.0
-FLASHLIGHT_SPILL_INTENSITY = 0.10
-FLASHLIGHT_RANGE = 20.0
-FLASHLIGHT_HOTSPOT_INTENSITY = 1.0
+FLASHLIGHT_SPILL_INTENSITY = 0.06
+FLASHLIGHT_RANGE = 18.0
+FLASHLIGHT_HOTSPOT_INTENSITY = 0.70
 FLASHLIGHT_AMBIENT_LEVEL = 0.10
 
 DARK_TINT = (8, 14, 28)   # cool midnight fill; retains shadow detail instead of crushing blacks
-BEAM_RADIUS = 0.28        # narrower beam width for tactical profile
-BEAM_GLOW = (240, 240, 235)  # neutral white 5000K LED main beam
-HOTSPOT_GLOW = (255, 255, 250) # intense neutral white hotspot
+BEAM_RADIUS = 0.25        # tighter, controlled beam without flooding the scene
+BEAM_GLOW = (218, 224, 222)  # restrained neutral-white LED beam
+HOTSPOT_GLOW = (232, 236, 230) # soft neutral-white hotspot
 PERIPHERAL_SPILL = (35, 45, 65) # faint 10% spill in atmospheric haze
 FOG_DISTANCE = 35.0
 # Atmospheric depth-fog overlay parameters (subtle haze; controlled by ENABLE_FOG)
