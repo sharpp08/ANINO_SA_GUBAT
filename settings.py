@@ -53,7 +53,7 @@ ENABLE_CHROMATIC_ABERRATION = True
 
 
 # Quality Tier Presets
-QUALITY_TIER = 'medium'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
+QUALITY_TIER = 'low'  # 'low', 'medium', 'high'; overridden by "quality_tier" in settings.json at startup
 
 # Performance-optimized quality presets with measurable differences.
 # Each tier is the single source of truth for all renderer feature flags.
@@ -118,7 +118,7 @@ QUALITY_PRESETS = {
 }
 
 # Active quality settings (applied from presets)
-ACTIVE_QUALITY = QUALITY_PRESETS['medium'].copy()
+ACTIVE_QUALITY = QUALITY_PRESETS['low'].copy()
 
 
 def apply_quality_preset(tier):
