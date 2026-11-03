@@ -11,13 +11,24 @@
 
 ## Current rollout status
 
-This is the first GPU world-rendering pass, but it is **not yet the default game
-renderer**. The existing scene is composed in Pygame: floor, walls, sprites,
-flashlight overlays, weather, weapon and HUD. Replacing only the wall draw call
-would break sprite occlusion and render order. The GPU pass therefore exposes
-color/depth textures without reading them back; the next integration step is a
-GPU scene compositor that can combine these attachments with GPU sprite batches
-and preserve the current Python z-buffer behavior during migration.
+The pass is now connected to the live gameplay render sequence as an **opt-in migration bridge**.
+When enabled, GLSL draws the wall pixels between the CPU floor and the existing Python sprite pass.
+The CPU raycaster still builds the authoritative z-buffer so current sprite occlusion, trees,
+enemies, pickups, fog and gameplay behavior remain unchanged. The GPU wall color attachment is
+read back into a reusable Pygame surface for this first integration; this is a transitional bridge,
+not the final no-readback architecture and may be slower than the CPU renderer. It is disabled by
+default until shader output and performance are validated on the target Intel UHD system.
+
+Enable for a local test with PowerShell:
+
+```powershell
+$env:ANINO_GPU_WALLS = "1"
+python -B main.py
+```
+
+Set it to `0` to force CPU walls. The GPU pass requires the OpenGL presenter to have created a
+working ModernGL context. If initialization or a frame fails, the renderer immediately returns
+to CPU wall drawing.
 
 ## API sketch
 
@@ -43,12 +54,11 @@ layers are built once per wall-texture set.
 
 ## Known limits in Stage 1
 
-- No GPU scene compositor or game-loop activation yet.
+- The opt-in live wall bridge uses GPU-to-CPU color readback; a GPU-native scene compositor and GPU sprite/depth composition are still required.
 - No GPU floor/ceiling, sprite batching, flashlight lighting, or shadow mapping.
 - Texture array uses a common square resolution; the CPU renderer remains the
   visual reference and automatic fallback.
-- The CPU renderer remains active until GPU color/depth can be composited with
-  sprites without per-frame GPU-to-CPU readback.
+- The CPU raycaster remains active for the Python sprite z-buffer. The GPU wall pass replaces the wall pixels only when explicitly enabled; its color readback is temporary migration scaffolding.
 - Run the shader contract tests on any machine; compile/render validation still
   requires a working OpenGL 3.3 context and should be performed on the target
   Intel UHD laptop before enabling this pass in gameplay.
