@@ -325,12 +325,16 @@ class SoundManager:
                 pygame.mixer.quit()
         except Exception:
             pass
-        # allowedchanges=0 stops SDL from silently switching the sample format /
-        # rate to whatever the Windows driver prefers (a source of resampling noise).
+        # Let SDL negotiate the output frequency with the Windows audio device.
+        # Forcing 44.1 kHz can make the backend resample continuously when the
+        # device runs at 48 kHz; frequency-only negotiation keeps 16-bit stereo.
         buf = _audio_buffer_size()
+        frequency_change = getattr(pygame, 'AUDIO_ALLOW_FREQUENCY_CHANGE', 1)
         for kwargs in (
-            dict(frequency=44100, size=-16, channels=2, buffer=buf, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048), allowedchanges=0),
+            dict(frequency=48000, size=-16, channels=2, buffer=buf,
+                 allowedchanges=frequency_change),
+            dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 2048),
+                 allowedchanges=frequency_change),
             dict(frequency=44100, size=-16, channels=2, buffer=max(buf, 4096)),
             dict(frequency=22050, size=-16, channels=2, buffer=buf),
         ):
