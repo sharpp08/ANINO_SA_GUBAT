@@ -202,7 +202,7 @@ class GLPresenter:
             self.tex.release()
         mgl = self._moderngl
         self.tex = self.ctx.texture((w, h), 4, dtype='f1')
-        self.tex.filter = (mgl.LINEAR, mgl.LINEAR)
+        self.tex.filter = (mgl.NEAREST, mgl.NEAREST)
         self.tex.repeat_x = False
         self.tex.repeat_y = False
         self.tex.swizzle = compute_swizzle(surface.get_shifts())
