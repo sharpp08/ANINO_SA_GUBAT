@@ -8,6 +8,8 @@ import math
 import random
 import pygame
 
+pygame.init()  # Initialize SDL before the audio manager
+
 import settings as _settings_mod
 # Apply the quality preset from settings.json before any module copies resolution-dependent values
 _settings_mod.apply_quality_preset(_settings_mod.load_settings().get('quality_tier', _settings_mod.QUALITY_TIER))
