@@ -221,7 +221,7 @@ class SettingsMenu:
     def _default_values(self):
         defaults = cfg.load_settings(path="__anino_defaults_missing__.json")
         defaults.update({
-            "fullscreen": cfg.FULLSCREEN, "vsync": True, "resolution": "1280 x 720",
+            "fullscreen": cfg.FULLSCREEN, "vsync": False, "resolution": "1280 x 720",
             "quality_tier": "medium", "fps_limit": "60", "brightness": 1.0, "fov": 75,
             "master_volume": cfg.MASTER_VOLUME, "music_volume": cfg.MUSIC_VOLUME,
             "sfx_volume": cfg.SFX_VOLUME, "ambient_volume": 0.7, "enemy_volume": 0.8,
