@@ -63,10 +63,16 @@ class PhotorealisticPass:
         rgb[:, horizon:, 2] = np.minimum(255, rgb[:, horizon:, 2].astype(np.float32) + glint).astype(np.uint8)
         del rgb
 
-    def draw_mist(self, surface, horizon_y, time_s=0.0, daylight=0.0, strength=1.0):
-        """Layer faint low forest mist below the horizon; keep nearby silhouettes readable."""
+    def draw_mist(self, surface, horizon_y, time_s=0.0, daylight=0.0,
+                  strength=1.0, ambient=0.4):
+        """Layer faint low forest mist; reveal it a little more in darker conditions."""
         day = max(0.0, min(1.0, float(daylight)))
-        alpha_scale = max(0.0, min(1.0, float(strength))) * (1.0 - day * 0.72)
+        ambient_level = max(0.0, min(1.0, float(ambient)))
+        darkness = 1.0 - ambient_level
+        # A restrained 0–35% boost keeps the haze readable without washing out the scene.
+        dark_boost = 1.0 + darkness * 0.35
+        alpha_scale = (max(0.0, min(1.0, float(strength)))
+                       * (1.0 - day * 0.72) * dark_boost)
         if alpha_scale <= 0.01:
             return
         h = self.height
@@ -80,7 +86,8 @@ class PhotorealisticPass:
             height = max(10, int(h * (0.055 + layer * 0.012)))
             a = int((13 - layer * 2) * alpha_scale)
             rect = (int(self.width * 0.5 + drift - width * 0.5), y - height // 2, width, height)
-            pygame.draw.ellipse(self._mist, (105, 124, 116, a), rect)
+            # Cool blue-gray haze keeps the night palette; low alpha preserves silhouettes.
+            pygame.draw.ellipse(self._mist, (96, 116, 124, a), rect)
         surface.blit(self._mist, (0, 0))
 
     def apply_grade(self, surface, daylight=0.0, strength=1.0):

@@ -804,8 +804,10 @@ class Renderer:
         # get hazed, but before the flashlight so the beam cuts through it.
         if not self.debug_f4:
             self._draw_depth_fog(player, game_map)
-            self.photo_pass.draw_mist(self.surface, horizon_y, t_ticks * 0.001, sunrise_progress,
-                                      0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
+            self.photo_pass.draw_mist(
+                self.surface, horizon_y, t_ticks * 0.001, sunrise_progress,
+                0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0,
+                ambient=getattr(_settings_mod, 'AMBIENT', 0.4))
 
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
