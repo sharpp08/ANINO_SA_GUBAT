@@ -32,6 +32,7 @@ color_tex, depth_tex = wall_pass.render(
     math.radians(FOV),
     WALL_HEIGHT_SCALE,
     tile_size=TILE_SIZE,
+    pitch_offset=int(player.pitch * INTERNAL_HEIGHT),
 )
 # Bind color_tex/depth_tex in a later GPU composition pass.
 ```
