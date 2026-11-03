@@ -32,6 +32,7 @@ import settings as _settings_mod   # live module: ACTIVE_QUALITY is reassigned w
 from floor_fast import fill_floor, fill_floor_terrain
 from raycast_fast import cast_rays, visible_runs
 from weather_fx import WeatherFX
+from photorealistic import PhotorealisticPass
 from enemies import DEATH_ANIM_TIME
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
@@ -232,6 +233,7 @@ class Renderer:
         self.crosshair = None
         self.clock = None
         self.flashlight = Flashlight(self.w, self.h)
+        self.photo_pass = PhotorealisticPass(self.w, self.h)
 
         try:
             from anim_integration import get_enemy_animator
@@ -786,6 +788,9 @@ class Renderer:
                            px, py, ray_dx, ray_dy,
                            self.h, half_h, horizon_y, pitch_offset, mist_phase)
             del arr_3d
+            # Low-cost wet leaf / puddle highlights on the floor plane only.
+            self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
+                                          0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
         # 3. Cast rays and draw walls (also fills the z-buffer)
         t_rays = pygame.time.get_ticks()
@@ -799,6 +804,8 @@ class Renderer:
         # get hazed, but before the flashlight so the beam cuts through it.
         if not self.debug_f4:
             self._draw_depth_fog(player, game_map)
+            self.photo_pass.draw_mist(self.surface, horizon_y, t_ticks * 0.001, sunrise_progress,
+                                      0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
@@ -872,6 +879,11 @@ class Renderer:
 
         # Lightning lights up everything, hands and weapon included, so it goes on last.
         self.weather.draw_flash(self.surface)
+
+        # Restrained cold-night / warm-dawn grade; UI and crosshair remain untouched.
+        if not self.debug_f4:
+            self.photo_pass.apply_grade(self.surface, sunrise_progress,
+                                        0.65 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
         # Draw crosshair
         if self.crosshair:
