@@ -294,9 +294,10 @@ FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback
 def _audio_buffer_size(default=4096):
     """Mixer buffer in samples (power of two, 512-8192).
 
-    1024 samples is only ~23 ms at 44.1 kHz: any scheduling hiccup while the CPU is busy
-    underruns it, heard as crackle/"crunch". 2048 (~46 ms) is much more forgiving for a
-    small latency cost. Override with "audio_buffer" in settings.json or ANINO_AUDIO_BUFFER.
+    4096 samples (~93 ms at 44.1 kHz) is the stability-first default for this
+    CPU-heavy game. Smaller buffers reduce latency but are more vulnerable to
+    scheduling hiccups and audible underruns. Override with "audio_buffer" in
+    settings.json or ANINO_AUDIO_BUFFER.
     """
     val = os.environ.get('ANINO_AUDIO_BUFFER')
     if not val:
