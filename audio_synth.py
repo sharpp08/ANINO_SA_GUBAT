@@ -288,7 +288,7 @@ FRENZY_AMBIENCE_CHANNEL = 2
 JUMPSCARE_CHANNEL = 3
 INTRO_SCORE_CHANNEL = 5
 AMBIENCE_RESERVED = 6          # channels 0/1 forest beds, 2 Frenzy, 3 jumpscare, 4 rain, 5 intro score
-FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback audible
+FRENZY_AMBIENCE_VOLUME = 0.55  # lift the supplied track; ambient slider still controls its final level
 
 
 def _audio_buffer_size(default=2048):
@@ -1166,14 +1166,19 @@ class SoundManager:
     def set_frenzy_ambience(self, active):
         """Loop the quiet Frenzy bed only while Frenzy is active during gameplay."""
         active = bool(active and self._frenzy_ambience_sound is not None)
-        if active == self._frenzy_ambience_active:
+        channel_busy = self._frenzy_ambience_channel.get_busy()
+        # If another system stopped the reserved channel, restart the loop even
+        # when the frenzy state itself has not changed.
+        if active == self._frenzy_ambience_active and (not active or channel_busy):
             return
         self._frenzy_ambience_active = active
         try:
             if active:
+                self._frenzy_ambience_channel.set_volume(
+                    FRENZY_AMBIENCE_VOLUME * self.master_volume * self.ambient_volume)
                 self._frenzy_ambience_channel.play(
-                    self._frenzy_ambience_sound, loops=-1, fade_ms=1800)
-                self._frenzy_ambience_channel.set_volume(FRENZY_AMBIENCE_VOLUME * self.master_volume * self.ambient_volume)
+                    self._frenzy_ambience_sound, loops=-1, fade_ms=900)
+                print('[Audio] Frenzy Mode ambience started.')
             else:
                 self._frenzy_ambience_channel.fadeout(1200)
         except Exception as exc:
