@@ -14,7 +14,7 @@
   "enable_sanity": true,
   "enable_intro": true,
   "debug_overlay": false,
-  "quality_tier": "low",
+  "quality_tier": "medium",
   "vsync": true,
   "brightness": 1,
   "fov": 75,
@@ -68,5 +68,6 @@
   "interaction_prompts": true,
   "enemy_aggression": "high",
   "enemy_spawn_rate": "high",
-  "difficulty": "hard"
+  "difficulty": "hard",
+  "adaptive_perf": true
 }
