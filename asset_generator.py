@@ -625,6 +625,93 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             r = 20 + i * 4
             pygame.draw.circle(surf, (60, 10, 40, 30), (cx, trunk_top + 10), r, 1)
 
+    # --- Species-specific crown silhouettes (not just recoloured circles) ---
+    # These structural forms make each Philippine tree species readable at a
+    # distance. Every placement is seeded, so the same map remains deterministic.
+    if tree_type in ('balete', 'strangler'):
+        # Broad, irregular fig crown with layered drooping skirts.
+        for side in (-1, 1):
+            sx = cx + side * rng.randint(13, 20)
+            sy = canopy_bot - rng.randint(1, 12)
+            pygame.draw.ellipse(surf, (13, 31, 15), (sx - 13, sy - 2, 27, 24))
+            pygame.draw.ellipse(surf, rng.choice(((22, 48, 22), (29, 59, 27), (17, 39, 20))),
+                                (sx - 12, sy - 7, 24, 18))
+        if tree_type == 'strangler':
+            # Hanging aerial roots visible below the crown.
+            for _ in range(rng.randint(5, 9)):
+                vx = cx + rng.randint(-22, 22)
+                vy = trunk_top + rng.randint(0, 13)
+                pygame.draw.line(surf, (35, 43, 25), (vx, vy),
+                                 (vx + rng.randint(-4, 4), min(height - 5, vy + rng.randint(28, 64))), 1)
+    elif tree_type in ('mahogany', 'akasya', 'narra'):
+        # Umbrella crowns: broad lateral shoulders and a raised, broken crown.
+        spread = 28 if tree_type == 'akasya' else (25 if tree_type == 'narra' else 19)
+        crown_y = canopy_top + max(4, (canopy_bot - canopy_top) // 3)
+        for side in (-1, 1):
+            lx = cx + side * spread
+            pygame.draw.ellipse(surf, (13, 30, 15),
+                                (lx - 17, crown_y - 4, 34, 22 if tree_type != 'mahogany' else 17))
+            pygame.draw.ellipse(surf, rng.choice(((25, 53, 24), (34, 67, 29), (19, 43, 20))),
+                                (lx - 14, crown_y - 8, 28, 17))
+        if tree_type == 'mahogany':
+            pygame.draw.ellipse(surf, (17, 38, 19), (cx - 17, canopy_top - 1, 34, 25))
+        else:
+            for _ in range(8):
+                lx = cx + rng.randint(-spread - 5, spread + 5)
+                ly = crown_y + rng.randint(-10, 8)
+                pygame.draw.ellipse(surf, rng.choice(((30, 61, 27), (42, 78, 34), (18, 43, 22))),
+                                    (lx, ly, rng.randint(5, 11), rng.randint(3, 7)))
+    elif tree_type == 'banana':
+        # Large paddle-shaped banana leaves with visible central ribs.
+        for i in range(5):
+            side = -1 if i % 2 else 1
+            start = (cx, canopy_bot - rng.randint(2, 12))
+            end_x = cx + side * rng.randint(15, 29)
+            end_y = canopy_top + rng.randint(-3, 13)
+            mid_x = (cx + end_x) // 2
+            mid_y = (start[1] + end_y) // 2 - rng.randint(2, 7)
+            leaf = [start, (cx + side * 4, start[1] - 7),
+                    (mid_x + side * 7, mid_y - 4), (end_x, end_y),
+                    (mid_x - side * 5, mid_y + 5)]
+            pygame.draw.polygon(surf, rng.choice(((28, 69, 31), (39, 87, 38), (22, 57, 29))), leaf)
+            pygame.draw.line(surf, (83, 112, 54), start, (end_x, end_y), 1)
+    elif tree_type == 'palm':
+        # Tall crown with long arching fronds rather than a round broadleaf canopy.
+        hub = (cx, canopy_top + 17)
+        for i in range(9):
+            ang = -math.pi / 2 + (i - 4) * 0.29
+            length = rng.randint(24, 38)
+            tip = (int(cx + math.cos(ang) * length), int(hub[1] + math.sin(ang) * length))
+            pygame.draw.line(surf, (37, 76, 32), hub, tip, 2)
+            for t in range(1, 6):
+                px = int(hub[0] + (tip[0] - hub[0]) * t / 6)
+                py = int(hub[1] + (tip[1] - hub[1]) * t / 6)
+                side = -1 if t % 2 else 1
+                pygame.draw.line(surf, (48, 103, 42), (px, py),
+                                 (px + side * 5, py + 3), 1)
+    elif tree_type == 'bamboo':
+        # A small clump of culms; each stalk has independent lean and node spacing.
+        for side in (-1, 1):
+            bx = cx + side * rng.randint(8, 13)
+            lean = rng.randint(-4, 4)
+            pygame.draw.line(surf, (55, 88, 48), (bx, trunk_base), (bx + lean, trunk_top + 8), 3)
+            for ny in range(trunk_top + 16, trunk_base, 18):
+                nx = bx + int(lean * (trunk_base - ny) / max(1, trunk_base - trunk_top))
+                pygame.draw.line(surf, (35, 63, 34), (nx - 2, ny), (nx + 2, ny), 1)
+    elif tree_type == 'tree_fern':
+        # Umbrella of long, feathered fern fronds.
+        hub = (cx, trunk_top + 7)
+        for i in range(7):
+            ang = -math.pi / 2 + (i - 3) * 0.42
+            length = rng.randint(19, 30)
+            tip = (int(cx + math.cos(ang) * length), int(hub[1] + math.sin(ang) * length))
+            pygame.draw.line(surf, (42, 83, 39), hub, tip, 2)
+            for t in range(1, 6):
+                px = int(hub[0] + (tip[0] - hub[0]) * t / 6)
+                py = int(hub[1] + (tip[1] - hub[1]) * t / 6)
+                pygame.draw.line(surf, (54, 103, 47), (px, py), (px - 4, py - 3), 1)
+                pygame.draw.line(surf, (54, 103, 47), (px, py), (px + 4, py - 3), 1)
+
     # Preserve intentional soft moss/aura pixels, but ensure all fully drawn
     # bark and foliage pixels are truly opaque after conversion/scaling.
     alpha = pygame.surfarray.pixels_alpha(surf)
