@@ -15,6 +15,10 @@ except Exception:
 class ShaderRenderer:
     """Manages ModernGL context with bloom, god-ray, and tone-mapping passes."""
 
+    # Set True by the game when the OpenGL window (gl_present.py) does this work on the GPU
+    # without a readback; this class then stays inert and opens no second GL context.
+    SKIP = False
+
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -30,6 +34,8 @@ class ShaderRenderer:
         self.feature_flags = {}
         self._fail_count = 0
         self._logged_fail = False
+        if ShaderRenderer.SKIP:
+            return
         if not MODERNGL_AVAILABLE:
             print("[SHADERS] ModernGL not available. Using software fallback.")
             return

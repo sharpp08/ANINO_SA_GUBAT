@@ -18,6 +18,8 @@ from enemies import EnemyManager
 from renderer import Renderer
 import renderer as _renderer_mod
 from perf_governor import PerfGovernor
+from gl_present import GLPresenter
+import shader_renderer as _shader_mod
 from time import perf_counter as _perf_counter
 from radar import Radar
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
@@ -393,6 +395,9 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
 
 
 # ─── Startup Loading Animation ───────────────────────────────────────────────
+_GL_PRESENT_HOOK = None   # set by Game when the OpenGL window is active (see Game._install_present_hook)
+
+
 def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
     """Render a brief animated ritual-style loading scene."""
     sw, sh = screen.get_size()
@@ -517,6 +522,8 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
         warning = font_sm.render("DO NOT ANSWER WHEN IT CALLS YOUR NAME", True, (105, 91, 79))
         screen.blit(warning, (panel_x+25, panel_y+panel_h-30))
 
+        if _GL_PRESENT_HOOK is not None:
+            _GL_PRESENT_HOOK(screen)      # GPU presentation path: upload this frame to the GL window
         pygame.display.flip()
         clock.tick(30)
 
@@ -544,7 +551,9 @@ class Game:
         print(f"[DIAGNOSTICS] Trees Generated (Chapter 1): {len(test_gm.trees)}")
         print(f"[DIAGNOSTICS] Undergrowth Generated: {len(test_gm.undergrowth)}")
 
+        self.gl_presenter = None
         self.screen = self._set_display_mode()
+        self._install_present_hook()
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
 
@@ -694,20 +703,79 @@ class Game:
                 _s.save_settings(_s.load_settings())
             except Exception:
                 pass
-    def _set_display_mode(self):
-        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
-
-        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
-        (no desktop mode switch).  vsync is only requested on ~60 Hz panels: with the
-        clock.tick(60) limiter on a 120/144 Hz panel it would lock to every 3rd refresh.
-        """
-        flags = pygame.FULLSCREEN if FULLSCREEN else 0
-        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
+    def _vsync_flag(self):
+        """vsync is only requested on ~60 Hz panels: with the clock.tick(60) limiter on a
+        120/144 Hz panel it would lock to every 3rd refresh."""
         try:
             rate = pygame.display.get_current_refresh_rate()
         except Exception:
             rate = 0
-        vsync = 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
+        return 1 if getattr(self, "vsync_enabled", True) and 55 <= rate <= 65 else 0
+
+    def _gpu_present_wanted(self):
+        env = os.environ.get('ANINO_GPU_PRESENT')
+        if env in ('0', '1'):
+            return env == '1'
+        return bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('gpu_present', True))
+
+    def _close_gl(self):
+        gp = getattr(self, 'gl_presenter', None)
+        if gp is not None:
+            gp.close()
+        self.gl_presenter = None
+
+    def _install_present_hook(self):
+        global _GL_PRESENT_HOOK
+        _GL_PRESENT_HOOK = self._present_raw
+
+    def _present_raw(self, surface):
+        """Used by loading screens that draw straight onto self.screen."""
+        gp = getattr(self, 'gl_presenter', None)
+        if gp is not None:
+            try:
+                gp.present(surface, post=False)
+            except Exception as exc:
+                print(f"[GPU] present failed during loading ({exc}); falling back to 2D.")
+                self._fallback_to_2d()
+
+    def _fallback_to_2d(self):
+        self._close_gl()
+        self._shader_skip(False)
+        self.screen = self._set_display_mode_2d()
+
+    @staticmethod
+    def _shader_skip(skip):
+        _shader_mod.ShaderRenderer.SKIP = bool(skip)
+
+    def _set_display_mode(self):
+        """Open the window: OpenGL presentation if it verifies, else the 2D SCALED window."""
+        self._close_gl()
+        if self._gpu_present_wanted():
+            try:
+                GLPresenter.open_window((SCREEN_WIDTH, SCREEN_HEIGHT), FULLSCREEN, self._vsync_flag())
+                presenter = GLPresenter()
+                if presenter.attach(pygame.display.get_surface()):
+                    self.gl_presenter = presenter
+                    # The old offscreen readback shader would duplicate the work (and open a
+                    # second GL context), so the GPU presenter replaces it.
+                    self._shader_skip(True)
+                    # Software canvas for loading screens (they draw straight to "screen").
+                    return pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert()
+                presenter.close()
+            except Exception as exc:
+                print(f"[GPU] could not open the OpenGL window ({type(exc).__name__}: {exc}).")
+        self._shader_skip(False)
+        return self._set_display_mode_2d()
+
+    def _set_display_mode_2d(self):
+        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
+
+        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
+        (no desktop mode switch).
+        """
+        flags = pygame.FULLSCREEN if FULLSCREEN else 0
+        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
+        vsync = self._vsync_flag()
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
         except Exception:
@@ -1289,24 +1357,39 @@ class Game:
         except Exception:
             pass
 
-        # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
-        # Only during gameplay, and the result is copied back into the SAME surface:
-        # the renderer and cinematic hold a reference to self.internal, so it must
-        # never be rebound to a new Surface object.
-        if (self.state in (STATE_PLAYING, STATE_PAUSED)
-                and hasattr(self.renderer, 'shader_renderer')
-                and self.renderer.shader_renderer.enabled):
-            time_sec = pygame.time.get_ticks() / 1000.0
-            fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
-            sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
-            shaded = self.renderer.shader_renderer.render(
-                self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
-            )
-            if shaded is not self.internal:
-                self.internal.blit(shaded, (0, 0))
+        gp = getattr(self, 'gl_presenter', None)
+        if gp is not None:
+            # GPU presentation: one upload, then the shader does grade/vignette/fog + upscale.
+            # No readback and no software scale (see gl_present.py).
+            try:
+                playing = self.state in (STATE_PLAYING, STATE_PAUSED)
+                fl_on = 1 if (playing and self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
+                sup_int = 1.0 if (playing and (self.player.damage_flash > 0 or self.player.sanity < 30)) else 0.0
+                gp.present(self.internal, pygame.time.get_ticks() / 1000.0, flashlight_on=fl_on,
+                           supernatural=sup_int, fog_density=1.0, post=playing)
+            except Exception as exc:
+                print(f"[GPU] present failed ({type(exc).__name__}: {exc}); falling back to the 2D window.")
+                self._fallback_to_2d()
+                gp = None
+        if gp is None:
+            # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
+            # Only during gameplay, and the result is copied back into the SAME surface:
+            # the renderer and cinematic hold a reference to self.internal, so it must
+            # never be rebound to a new Surface object.
+            if (self.state in (STATE_PLAYING, STATE_PAUSED)
+                    and hasattr(self.renderer, 'shader_renderer')
+                    and self.renderer.shader_renderer.enabled):
+                time_sec = pygame.time.get_ticks() / 1000.0
+                fl_on = 1 if (self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
+                sup_int = 1.0 if (self.player.damage_flash > 0 or self.player.sanity < 30) else 0.0
+                shaded = self.renderer.shader_renderer.render(
+                    self.internal, time_sec, flashlight_on=fl_on, supernatural_intensity=sup_int, fog_density=1.0
+                )
+                if shaded is not self.internal:
+                    self.internal.blit(shaded, (0, 0))
 
-        # Scale to screen
-        pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
+            # Scale to screen
+            pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
         # Work time excludes the flip, which blocks on vsync and would look like load.
         self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
         pygame.display.flip()
@@ -1373,11 +1456,14 @@ class Game:
 
                 elif self.state == STATE_SETTINGS:
                     if event.type == pygame.MOUSEBUTTONDOWN:
-                        scaled_event = pygame.event.Event(event.type, {
-                            "pos": (int(event.pos[0] * self.internal.get_width() / max(1, self.screen.get_width())),
-                                    int(event.pos[1] * self.internal.get_height() / max(1, self.screen.get_height()))),
-                            "button": event.button
-                        })
+                        if self.gl_presenter is not None:
+                            # OpenGL window: undo the letterbox/scale from window pixels.
+                            mapped = self.gl_presenter.map_mouse(
+                                event.pos, self.internal.get_width(), self.internal.get_height())
+                        else:
+                            mapped = (int(event.pos[0] * self.internal.get_width() / max(1, self.screen.get_width())),
+                                      int(event.pos[1] * self.internal.get_height() / max(1, self.screen.get_height())))
+                        scaled_event = pygame.event.Event(event.type, {"pos": mapped, "button": event.button})
                         action = self.settings_menu.handle_event(scaled_event)
                     else:
                         action = self.settings_menu.handle_event(event)

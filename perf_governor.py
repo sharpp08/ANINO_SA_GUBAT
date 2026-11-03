@@ -85,14 +85,20 @@ class PerfGovernor:
         self.avg_ms = sum(self._samples) / len(self._samples)
 
         if self.avg_ms > self.BUDGET_MS and self.level < MAX_LEVEL and self._cooldown <= 0:
+            target = self.level + 1
+            if target == 1 and not self._shader_was_on:
+                target = 2           # nothing to switch off at level 1 (e.g. GPU presenter active)
             if self._last_action == 'restore':
-                self.floor = self.level + 1      # restoring didn't hold; stop trying it
-            self._set_level(self.level + 1, f"avg work {self.avg_ms:.1f} ms > {self.BUDGET_MS} ms")
+                self.floor = target  # restoring didn't hold; stop trying it
+            self._set_level(target, f"avg work {self.avg_ms:.1f} ms > {self.BUDGET_MS} ms")
             self._last_action = 'shed'
         elif self.avg_ms < self.RESTORE_MS and self.level > self.floor:
             self._idle += 1
             if self._idle >= self.RESTORE_AFTER and self._cooldown <= 0:
-                self._set_level(self.level - 1, f"avg work {self.avg_ms:.1f} ms, headroom")
+                target = self.level - 1
+                if target == 1 and not self._shader_was_on:
+                    target = 0
+                self._set_level(target, f"avg work {self.avg_ms:.1f} ms, headroom")
                 self._last_action = 'restore'
         else:
             self._idle = 0
