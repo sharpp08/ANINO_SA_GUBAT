@@ -603,6 +603,17 @@ class Game:
         self.enemy_manager = EnemyManager()
         self.player        = Player()
         self.renderer      = Renderer(self.internal, textures, weapon_spr, enemy_spr, pickup_spr)
+        # Live GPU wall rendering is an explicit opt-in while the migration bridge is validated.
+        _gpu_world_cfg = (getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('gpu_world_rendering', False)
+        _gpu_world_env = os.environ.get('ANINO_GPU_WALLS')
+        if _gpu_world_env in ('0', '1'):
+            _gpu_world_cfg = (_gpu_world_env == '1')
+        if _gpu_world_cfg:
+            _presenter = getattr(self, 'gl_presenter', None)
+            if _presenter is not None and getattr(_presenter, 'ctx', None) is not None:
+                self.renderer.attach_gpu_wall_pass(_presenter.ctx)
+            else:
+                print("[GPU WORLD] Requested but OpenGL presentation is unavailable; CPU walls remain active.")
         self.renderer.crosshair = crosshair_spr
         self.renderer.clock = self.clock
         # Adaptive 60 FPS governor: sheds optional effects if frame work time stays over budget.
@@ -722,6 +733,9 @@ class Game:
         return bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('gpu_present', True))
 
     def _close_gl(self):
+        renderer = getattr(self, 'renderer', None)
+        if renderer is not None and hasattr(renderer, 'close_gpu_wall_pass'):
+            renderer.close_gpu_wall_pass()
         gp = getattr(self, 'gl_presenter', None)
         if gp is not None:
             gp.close()
