@@ -293,21 +293,21 @@ FRENZY_AMBIENCE_VOLUME = 0.10  # source MP3 is already attenuated; keep playback
 
 class SoundManager:
     def __init__(self):
-        # If something already started the mixer with driver defaults (small buffer,
-        # format negotiation), restart it with our settings.
+        # Re-open an incompatible pre-existing mixer before creating game sounds.
         try:
             cur = pygame.mixer.get_init()
-            if cur and (cur[0] != 44100 or cur[1] != -16 or cur[2] != 2):
+            if cur and (cur[1] != -16 or cur[2] != 2):
                 pygame.mixer.quit()
         except Exception:
             pass
-        # allowedchanges=0 stops SDL from silently switching the sample format /
-        # rate to whatever the Windows driver prefers (a source of resampling noise).
+        # Prefer the common Windows device rate and a larger callback buffer.
+        # Larger buffers trade a little latency for more protection against underruns.
         for kwargs in (
-            dict(frequency=44100, size=-16, channels=2, buffer=1024, allowedchanges=0),
+            dict(frequency=48000, size=-16, channels=2, buffer=2048,
+                 allowedchanges=pygame.mixer.ALLOW_FREQUENCY_CHANGE),
             dict(frequency=44100, size=-16, channels=2, buffer=2048, allowedchanges=0),
-            dict(frequency=44100, size=-16, channels=2, buffer=2048),
-            dict(frequency=22050, size=-16, channels=2, buffer=1024),
+            dict(frequency=44100, size=-16, channels=2, buffer=4096),
+            dict(frequency=22050, size=-16, channels=2, buffer=2048),
         ):
             try:
                 pygame.mixer.init(**kwargs)
