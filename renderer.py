@@ -321,6 +321,11 @@ class Renderer:
         # float64 copies for the wall raycaster (same precision as the old scalar loop)
         self._ray_ang64 = np.asarray(self.ray_angles, dtype=np.float64)
         self._ray_cos64 = np.cos(self._ray_ang64)
+        self._ray_sin64 = np.sin(self._ray_ang64)
+        # Reusable world-space ray directions. Updated once per frame and shared
+        # by floor projection and wall casting to avoid duplicate trig/array work.
+        self._frame_ray_dx = np.empty(self.num_rays, dtype=np.float64)
+        self._frame_ray_dy = np.empty(self.num_rays, dtype=np.float64)
 
         # Coarse spatial buckets avoid scanning the entire forest each frame.
         self._sprite_bucket_size = 8.0
@@ -721,6 +726,17 @@ class Renderer:
         half_h = self.h // 2
         horizon_y = max(0, half_h + pitch_offset)
 
+        # Calculate the rotated ray directions once. Both floor projection and
+        # wall casting consume these same arrays; avoid per-frame np.cos/np.sin
+        # over a newly allocated angle array in _cast_rays().
+        cos_pa = math.cos(player.angle)
+        sin_pa = math.sin(player.angle)
+        np.multiply(self._ray_cos64, cos_pa, out=self._frame_ray_dx)
+        np.multiply(self._ray_sin64, sin_pa, out=self._frame_ray_dy)
+        self._frame_ray_dx -= self._frame_ray_dy
+        np.multiply(self._ray_sin64, cos_pa, out=self._frame_ray_dy)
+        self._frame_ray_dy += self._ray_cos64 * sin_pa
+
         # 1. Sky Gradient (SKY_COLOR to blue-green haze (24,34,42))
         # One vectorised write instead of ~180 draw.line calls per frame.
         sky_rows = min(horizon_y, self.h)
@@ -794,10 +810,8 @@ class Renderer:
             arr_3d = pygame.surfarray.pixels3d(self.surface)
             px, py, pa = player.x, player.y, player.angle
 
-            cos_pa = math.cos(pa)
-            sin_pa = math.sin(pa)
-            ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
-            ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
+            ray_dx = self._frame_ray_dx
+            ray_dy = self._frame_ray_dy
 
             # Whole floor in one vectorised pass (see floor_fast.py).
             if self._enhanced_terrain_ready(game_map):
@@ -1101,10 +1115,9 @@ class Renderer:
         far = float(MAX_DEPTH) + 1.0
         h = self.h
 
-        ang = player.angle + self._ray_ang64
         dist, tile, frac, side, hit = cast_rays(
             self._grid_array(game_map), game_map.width, game_map.height,
-            px, py, np.cos(ang), np.sin(ang), MAX_DEPTH, EMPTY)
+            px, py, self._frame_ray_dx, self._frame_ray_dy, MAX_DEPTH, EMPTY)
 
         # Fish-eye correction + z-buffer. Rays that hit nothing within MAX_DEPTH
         # draw no wall and never hide a sprite.
