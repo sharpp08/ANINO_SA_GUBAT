@@ -773,6 +773,14 @@ class Game:
                 presenter = GLPresenter()
                 if presenter.attach(pygame.display.get_surface()):
                     self.gl_presenter = presenter
+                    # Reattach the opt-in world pass when the display/context is recreated.
+                    _gpu_world_cfg = (getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('gpu_world_rendering', False)
+                    _gpu_world_env = os.environ.get('ANINO_GPU_WALLS')
+                    if _gpu_world_env in ('0', '1'):
+                        _gpu_world_cfg = (_gpu_world_env == '1')
+                    _renderer = getattr(self, 'renderer', None)
+                    if _gpu_world_cfg and _renderer is not None:
+                        _renderer.attach_gpu_wall_pass(presenter.ctx)
                     # The old offscreen readback shader would duplicate the work (and open a
                     # second GL context), so the GPU presenter replaces it.
                     self._shader_skip(True)
