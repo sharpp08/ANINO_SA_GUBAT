@@ -8,14 +8,50 @@ import math
 import random
 import pygame
 
-# Configure SDL_mixer before pygame.init() starts its audio callback thread.
-# A 4096-sample callback buffer adds modest latency but improves underrun
-# tolerance when the uncapped/high-FPS render loop is competing for CPU time.
+# Initialize video/font separately, then select a Windows audio backend explicitly.
+# The default SDL backend can behave differently when OBS opens audio capture.
+# Try WASAPI first, then DirectSound and WinMM; keep a safe SDL default fallback.
 try:
-    pygame.mixer.pre_init(frequency=48000, size=-16, channels=2, buffer=4096)
+    pygame.display.init()
+    pygame.font.init()
 except Exception:
     pass
-pygame.init()  # Initialize SDL before the audio manager
+
+_audio_initialized = False
+_audio_driver_override = os.environ.get("ANINO_AUDIO_DRIVER", "").strip().lower()
+_audio_drivers = [_audio_driver_override] if _audio_driver_override else ["wasapi", "directsound", "winmm"]
+for _driver in _audio_drivers:
+    if not _driver:
+        continue
+    try:
+        os.environ["SDL_AUDIODRIVER"] = _driver
+        pygame.mixer.init(frequency=48000, size=-16, channels=2, buffer=2048)
+        _audio_initialized = bool(pygame.mixer.get_init())
+        if _audio_initialized:
+            print(f"[Audio] SDL driver={pygame.mixer.get_driver()} format={pygame.mixer.get_init()} buffer=2048")
+            break
+    except Exception as _audio_error:
+        print(f"[Audio] SDL driver {_driver} unavailable: {_audio_error}")
+        try:
+            pygame.mixer.quit()
+        except Exception:
+            pass
+
+if not _audio_initialized:
+    try:
+        os.environ.pop("SDL_AUDIODRIVER", None)
+        pygame.mixer.init(frequency=48000, size=-16, channels=2, buffer=4096)
+        _audio_initialized = bool(pygame.mixer.get_init())
+    except Exception as _audio_error:
+        print(f"[Audio] Explicit mixer initialization failed; using pygame default: {_audio_error}")
+
+# Initialize any remaining SDL subsystems without restarting an active mixer.
+pygame.init()
+if pygame.mixer.get_init():
+    try:
+        print(f"[Audio] Active driver={pygame.mixer.get_driver()} format={pygame.mixer.get_init()}")
+    except Exception:
+        pass
 
 import settings as _settings_mod
 # Apply the quality preset from settings.json before any module copies resolution-dependent values
