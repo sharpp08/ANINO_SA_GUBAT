@@ -39,16 +39,32 @@ uniform int u_flashlight_on;
 uniform float u_fog_density;
 uniform float u_supernatural_intensity;
 uniform int u_post;
+uniform float u_bloom_strength;
 in vec2 v_uv;
 out vec4 fragColor;
 float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453); }
+vec3 bright_pass(vec3 c) {
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float knee = max(l - 0.72, 0.0);
+    return c * (knee / max(l, 0.001));
+}
 void main() {
     vec2 uv = v_uv;
     if (u_post == 0) { fragColor = vec4(texture(u_texture, uv).rgb, 1.0); return; }
     if (u_supernatural_intensity > 0.0) uv.x += sin(uv.y * 25.0 + u_time * 6.0) * 0.006 * u_supernatural_intensity;
     vec4 col = texture(u_texture, uv);
-    vec3 grade = vec3(0.08, 0.13, 0.24);
-    col.rgb = mix(col.rgb, col.rgb * grade * 2.2, 0.35);
+    // Five-tap threshold bloom: one inexpensive pass, no framebuffer readback.
+    if (u_bloom_strength > 0.0) {
+        vec2 px = 1.0 / vec2(textureSize(u_texture, 0));
+        vec3 glow = bright_pass(col.rgb) * 0.40;
+        glow += bright_pass(texture(u_texture, uv + vec2(px.x, 0.0)).rgb) * 0.15;
+        glow += bright_pass(texture(u_texture, uv - vec2(px.x, 0.0)).rgb) * 0.15;
+        glow += bright_pass(texture(u_texture, uv + vec2(0.0, px.y)).rgb) * 0.15;
+        glow += bright_pass(texture(u_texture, uv - vec2(0.0, px.y)).rgb) * 0.15;
+        col.rgb += glow * u_bloom_strength;
+    }
+    vec3 grade = vec3(0.82, 0.91, 1.0);
+    col.rgb = mix(col.rgb, col.rgb * grade, 0.18);
     col.rgb = pow(max(col.rgb, 0.0), vec3(1.12));
     if (u_flashlight_on == 1) {
         float beam = smoothstep(0.48, 0.05, distance(uv, vec2(0.5)));
@@ -209,7 +225,7 @@ class GLPresenter:
         self._tex_key = key
 
     def present(self, surface, time_sec=0.0, flashlight_on=1, supernatural=0.0,
-                fog_density=1.0, post=True):
+                fog_density=1.0, post=True, bloom_strength=0.12):
         """Upload ``surface`` and draw it to the window (call pygame.display.flip() after)."""
         import pygame
         self._ensure_texture(surface)
@@ -238,6 +254,7 @@ class GLPresenter:
         prog['u_flashlight_on'].value = int(flashlight_on)
         prog['u_fog_density'].value = float(fog_density)
         prog['u_supernatural_intensity'].value = float(supernatural)
+        prog['u_bloom_strength'].value = float(bloom_strength) if post else 0.0
         self.vao.render(self._moderngl.TRIANGLE_STRIP)
 
     def map_mouse(self, pos, src_w, src_h):
