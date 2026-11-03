@@ -17,7 +17,7 @@ def test_shader_contract():
     for uniform in (
         "u_map", "u_wall_textures", "u_map_size", "u_view_size",
         "u_tile_layers", "u_camera_pos", "u_camera_angle", "u_fov",
-        "u_max_depth", "u_wall_height_scale", "u_tile_size",
+        "u_max_depth", "u_wall_height_scale", "u_tile_size", "u_pitch_offset",
     ):
         assert uniform in FRAGMENT_SHADER
     assert "usampler2D" in FRAGMENT_SHADER
