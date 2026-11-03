@@ -8,7 +8,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from gl_present import compute_swizzle, letterbox, map_to_surface
+from gl_present import (compute_swizzle, letterbox, map_to_surface,
+                        VERTEX_SHADER, FRAGMENT_SHADER)
 
 
 def test_swizzle_matches_pixel_layout():
@@ -39,8 +40,25 @@ def test_mouse_mapping_round_trips():
     assert map_to_surface((960, 540), 1920, 1080, 640, 360) == (320, 180)
 
 
+def test_shader_targets_opengl_33_core():
+    # Intel UHD's Windows driver supports this GLSL baseline; keep the presenter
+    # independent of newer desktop-only shader features.
+    assert VERTEX_SHADER.startswith("#version 330 core")
+    assert FRAGMENT_SHADER.startswith("#version 330 core")
+    assert "in vec2 in_position" in VERTEX_SHADER
+    assert "in vec2 in_uv" in VERTEX_SHADER
+    for uniform in ("u_texture", "u_time", "u_flashlight_on",
+                    "u_fog_density", "u_supernatural_intensity",
+                    "u_post", "u_bloom_strength"):
+        assert f"uniform " in FRAGMENT_SHADER and uniform in FRAGMENT_SHADER
+    # smoothstep edges must be ascending; reversed edges are undefined in GLSL.
+    assert "smoothstep(0.48, 0.05" not in FRAGMENT_SHADER
+    assert "smoothstep(0.05, 0.48" not in FRAGMENT_SHADER
+
+
 if __name__ == '__main__':
     test_swizzle_matches_pixel_layout()
     test_letterbox_keeps_aspect()
     test_mouse_mapping_round_trips()
+    test_shader_targets_opengl_33_core()
     print("All GL presenter helper tests passed.")
