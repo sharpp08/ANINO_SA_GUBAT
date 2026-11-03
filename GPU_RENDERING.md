@@ -12,9 +12,7 @@ The project currently uses a **hybrid renderer**, not a fully GPU-rendered world
 
 Stage 1 now has an **experimental GPU wall-raycasting pass** in `gpu_wall_raycast.py`.
 It uploads the existing tile grid and wall textures, runs GLSL 330 DDA, and
-produces GPU color/depth attachments. It is not yet connected to the live scene
-compositor, so the game still uses the CPU wall renderer by default. The full
-GPU world migration remains incomplete.
+produces GPU color/depth attachments. It is now wired into the live gameplay render sequence as an opt-in wall pass. The bridge reads the GPU wall color attachment back to Pygame and retains the CPU z-buffer for existing sprite occlusion, so it is a transitional integration rather than a performance optimization. It remains disabled by default pending Intel UHD validation. The full GPU world migration remains incomplete.
 
 ## Target architecture
 
@@ -49,9 +47,9 @@ wall texture arrays, GLSL 330 per-fragment DDA, pitch-aware wall projection,
 and color/depth attachments. Contract tests are in
 `tests/test_gpu_wall_raycast.py`. See `GPU_WALL_RAYCAST_STAGE1.md`.
 
-**Remaining before gameplay rollout:** connect this pass to a GPU compositor,
-match the CPU renderer's wall output pixel-for-pixel, and batch sprites against
-the GPU depth attachment. Until then, the CPU renderer remains active.
+**Live integration added:** opt-in GLSL wall rendering is called between the CPU floor and Python sprite passes. Enable with `ANINO_GPU_WALLS=1` in PowerShell. The CPU raycaster still builds sprite depth, and a temporary GPU-to-CPU color readback is used to preserve render order. The default remains CPU walls until output and performance are validated.
+
+**Remaining:** remove the readback with a GPU-native compositor, render sprites against GPU depth, and compare output against the CPU reference.
 
 Upload the map as a GPU texture. Implement per-column DDA in a GLSL 330 fragment shader and sample wall textures from an atlas. Produce depth data for later sprite occlusion. Match the existing FOV, wall hit-side shading, texture coordinates, distance fog, and clipping. Keep a feature flag and CPU fallback until image comparisons pass.
 
@@ -94,6 +92,8 @@ Install dependencies from the project directory:
 ```powershell
 python -m pip install -r requirements.txt
 ```
+
+The existing presentation shader message is separate from world rendering. With the opt-in bridge enabled, successful initialization also prints `[GPU WORLD] GLSL wall raycasting connected to live gameplay (readback bridge enabled).`
 
 The current optional shader initialization message is:
 
