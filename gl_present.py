@@ -279,6 +279,18 @@ class GLPresenter:
             self.overlay_tex.swizzle = compute_swizzle(surface.get_shifts(), preserve_alpha=True)
             self._overlay_key = key
 
+    def begin_scene(self, surface, clear_color=(0.0, 0.0, 0.0, 0.0)):
+        """Bind and clear the persistent GPU scene target for native world passes.
+
+        Call after the presenter has been attached and while its GL context is current.
+        The returned framebuffer shares the presenter's color and depth attachments.
+        """
+        self._ensure_texture(surface)
+        self.scene_fbo.use()
+        self.scene_fbo.viewport = (0, 0, *surface.get_size())
+        self.scene_fbo.clear(*clear_color, depth=1.0)
+        return self.scene_fbo
+
     @staticmethod
     def _upload_surface(texture, surface):
         buf = surface.get_buffer()
@@ -291,11 +303,16 @@ class GLPresenter:
             del buf
 
     def present(self, surface, time_sec=0.0, flashlight_on=1, supernatural=0.0,
-                fog_density=1.0, post=True, bloom_strength=0.12, overlay_surface=None):
-        """Upload ``surface`` and draw it to the window (call pygame.display.flip() after)."""
+                fog_density=1.0, post=True, bloom_strength=0.12, overlay_surface=None,
+                scene_is_gpu=False):
+        """Present a GPU scene or upload the legacy Pygame scene during migration.
+
+        Set scene_is_gpu=True after native world passes have rendered into begin_scene().
+        """
         import pygame
         self._ensure_texture(surface)
-        self._upload_surface(self.tex, surface)
+        if not scene_is_gpu:
+            self._upload_surface(self.tex, surface)
         has_overlay = overlay_surface is not None
         if has_overlay:
             self._ensure_overlay_texture(overlay_surface)
@@ -346,3 +363,4 @@ class GLPresenter:
                 pass
         self.ctx = None
         self._tex_key = None
+        self._overlay_key = None
