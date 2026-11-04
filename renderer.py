@@ -1221,6 +1221,7 @@ class Renderer:
                 (player.x, player.y), player.angle, self.fov_rad,
                 WALL_HEIGHT_SCALE, tile_size=TILE_SIZE, max_depth=MAX_DEPTH,
                 pitch_offset=int(player.pitch * self.h),
+                trees=getattr(game_map, 'trees', ()),
             )
             raw = color_tex.read(alignment=1)
             rgba = np.frombuffer(raw, dtype=np.uint8).reshape((self.h, self.w, 4))[::-1]
