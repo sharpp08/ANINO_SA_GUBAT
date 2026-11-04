@@ -23,6 +23,7 @@ import shader_renderer as _shader_mod
 from time import perf_counter as _perf_counter
 from radar import Radar
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
+from menu_music import MenuMusic
 from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from objective import next_objective, nearest_page, relative_bearing, direction_word
@@ -297,7 +298,6 @@ def draw_win(surf, font_lg, font_sm, chapter, final=False):
 
 def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     """Compact top-centre panel: Bible pages, sunrise clock and a compass arrow to the next goal.
-
     The arrow points at the nearest uncollected Bible page (the exit once enough pages are
     held): up = straight ahead, right = the target is on your right.
     Returns the y of the panel's bottom edge so notifications can sit just below it.
@@ -588,6 +588,7 @@ class Game:
         self._try_init_graphics_manager()
         self.settings_menu = SettingsMenu()
         self.settings_return_state = STATE_MENU
+        self.menu_music = MenuMusic()
         self.target_fps = FPS
 
     def _apply_settings(self, values):
@@ -597,8 +598,7 @@ class Game:
         try:
             SCREEN_WIDTH, SCREEN_HEIGHT = [int(part.strip()) for part in resolution.split("x")]
         except (ValueError, AttributeError):
-            SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
-        requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
+            SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720        requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
                            or bool(values.get("vsync", False)) != getattr(self, "vsync_enabled", False))
         FULLSCREEN = requested_fullscreen
@@ -631,6 +631,7 @@ class Game:
             audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
             audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
             pygame.mixer.music.set_volume(master * music)
+            self.menu_music.set_volume(master * music)
             for channel_index in range(4, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
         except Exception:
@@ -897,8 +898,7 @@ class Game:
                         ny = e.y + math.sin(a) * 4.0
                         if not self.game_map.is_solid(nx, ny):
                             p.x, p.y = nx, ny
-                            p.angle = math.atan2(e.y - ny, e.x - nx)
-                            self.notify(f"DEBUG: teleported near {e.type}")
+                            p.angle = math.atan2(e.y - ny, e.x - nx)                            self.notify(f"DEBUG: teleported near {e.type}")
                             break
             elif k == pygame.K_r:
                 # Play reload recordings only when the corresponding reload can start.
@@ -1198,7 +1198,6 @@ class Game:
                 except Exception as exc:
                     print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
                     enemy._chase_scream_timer = 2.0
-
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
         attackers = self.enemy_manager.last_attackers
@@ -1497,8 +1496,7 @@ class Game:
                         self.settings_menu.apply(self._apply_settings)
 
                 elif self.state == STATE_GAMEOVER:
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
-                        self.state = STATE_MENU
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:                        self.state = STATE_MENU
                         safe_set_relative_mouse(False)
 
                 elif self.state == STATE_WIN:
@@ -1554,6 +1552,13 @@ class Game:
                     audio_mgr.update_ambience(dt)
             except Exception:
                 pass
+
+            # Keep the title soundtrack active on the main menu and its settings screen.
+            menu_music_active = (
+                self.state == STATE_MENU
+                or (self.state == STATE_SETTINGS and self.settings_return_state == STATE_MENU)
+            )
+            self.menu_music.set_active(menu_music_active)
 
             self.render(dt)
             self.perf.update(self._work_ms, self.state == STATE_PLAYING)
