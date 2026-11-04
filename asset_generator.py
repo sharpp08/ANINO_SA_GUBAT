@@ -1172,7 +1172,7 @@ def generate_all_enemies():
     if USE_CUSTOM_ENEMY_SPRITES and os.path.exists(pack_dir):
         print(f'[ASSETS] Attempting to load enemy animation pack from: {pack_dir}')
         if anim_sys.load_from_pack(pack_dir, target_size=64):
-            print('[ASSETS] ✓ Loaded animated enemy sprite sheets successfully!')
+            print('[ASSETS] [OK] Loaded animated enemy sprite sheets successfully!')
             # Return a compatible dict structure using the first frame of each animation
             enemies = {}
             for etype in anim_sys.frames:

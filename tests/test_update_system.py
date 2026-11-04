@@ -36,7 +36,7 @@ def test_manifest_generation_and_verification():
         report_bad = verify_manifest(tmp)
         assert report_bad['ok'] is False
         assert 'main.py' in report_bad['mismatches']
-        print("✓ Manifest generation and verification test passed")
+        print("[OK] Manifest generation and verification test passed")
 
 
 def test_patcher_parsing_and_application():

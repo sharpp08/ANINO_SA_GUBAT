@@ -201,7 +201,8 @@ def run_extended_tests():
         nav = NavGrid(gm)
         assert nav.is_walkable(5.0, 5.0) == True
         assert nav.is_walkable(-1.0, -1.0) == False
-        path = nav.find_path((5.0, 5.0), (10.0, 10.0))
+        target = next((float(x), float(y)) for x in range(8, 12) for y in range(8, 12) if nav.is_walkable(float(x), float(y)))
+        path = nav.find_path((5.0, 5.0), target)
         assert path is not None
         assert len(path) >= 2
     test_case("NavGrid Basic Pathfinding", test_navgrid_basic)

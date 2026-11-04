@@ -579,6 +579,10 @@ class Game:
         self.effects = []
         self.notif   = ''
         self.notif_t = 0.0
+        self.survival_spawn_timer = 18.0
+        self.survival_spawn_count = 0
+        self.pages_complete_notified = False
+        self.sunrise_missed_notified = False
         # Graphics quality manager for runtime switching
         self._graphics_mgr = None
         self._try_init_graphics_manager()
@@ -1248,6 +1252,23 @@ class Game:
                 pickup['active'] = False
                 audio_mgr.play('pickup')
                 self.notify(f"Picked up {pickup['type'].replace('_', ' ').title()}")
+
+        # Check level completion: reaching exit with required pages advances chapter
+        if getattr(self.game_map, 'exit_pos', None):
+            ex, ey = self.game_map.exit_pos
+            if math.hypot(ex - p.x, ey - p.y) < 2.0:
+                pages_needed = PAGES_REQUIRED_CH1 if self.chapter == 1 else PAGES_REQUIRED_CH2
+                pages_have = getattr(p, 'pages_this_chapter', p.bible_pages)
+                if pages_have >= pages_needed or pages_have >= 3:
+                    self.notify(f"CHAPTER {self.chapter} CLEARED!", 3.0)
+                    self.advance_chapter()
+                    return
+                else:
+                    if not getattr(self, '_exit_sealed_notified', False):
+                        self._exit_sealed_notified = True
+                        self.notify(f"The way is sealed. Find all {pages_needed} Bible pages!", 3.0)
+            else:
+                self._exit_sealed_notified = False
 
         # Survival objective: collect all five pages, then endure the night until 7 AM.
         self.player.survival_time_left = max(0.0, self.player.survival_time_left - dt)

@@ -68,6 +68,7 @@ class Player:
         self.cross_cooldown = 0
         self.bible_pages = 0
         self.pages_this_chapter = 0
+        self.survival_time_left = 7 * 60.0
         self.wards_unlocked = [True, False, False, False, False]
         self.selected_ward = 0
         self.ward_cooldowns = [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -235,9 +236,9 @@ class Player:
             # cycle after starting to move, then one per half cycle, so sprinting (faster bob)
             # steps faster than walking and the sound stays locked to the animation.
             phase = int((self.bob_timer + math.pi / 2.0) // math.pi)
-            if phase != self._step_phase:
+            if phase != getattr(self, '_step_phase', 0):
                 self._step_phase = phase
-                self.step_side = -self.step_side
+                self.step_side = -getattr(self, 'step_side', 1)
                 self.step_event = True
             if self.is_sprinting:
                 self.noise_level = max(self.noise_level, 3.5)
