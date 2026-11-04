@@ -767,11 +767,17 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
         crown_alpha[crown_mask] = 255
         del crown_rgb, crown_alpha, crown_x, crown_y
 
-    # Preserve intentionally translucent moss/aura pixels, but make all solid
-    # trunk, branch, and foliage strokes fully opaque.
+    # Build a clean alpha-cutout silhouette for the tree billboard. Every
+    # visible trunk, branch, root and foliage pixel becomes fully opaque, while
+    # the pixels outside the actual tree silhouette stay fully transparent.
+    # This avoids semi-transparent tree surfaces and gives a future GPU depth
+    # pass a stable alpha mask to test (u_alphaThreshold can start at 0.5).
+    # Very faint supernatural aura / antialias fringe is deliberately discarded
+    # rather than turning into a large, soft rectangular shadow.
     alpha = pygame.surfarray.pixels_alpha(surf)
-    alpha[alpha >= 200] = 255
-    del alpha
+    solid_silhouette = alpha >= 96
+    alpha[:, :] = np.where(solid_silhouette, 255, 0).astype(np.uint8)
+    del alpha, solid_silhouette
     return surf
 
 def generate_undergrowth_sprite(plant_type='fern', width=32, height=32, seed=42):
