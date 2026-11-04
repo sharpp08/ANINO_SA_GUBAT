@@ -1345,7 +1345,7 @@ class Game:
             from jumpscare import get_jumpscare_manager
             jumpscare_mgr = get_jumpscare_manager()
             if jumpscare_mgr.is_playing():
-                jumpscare_mgr.render(self.internal)
+                jumpscare_mgr.render(overlay if overlay is not None else self.internal)
         except Exception:
             pass
 
