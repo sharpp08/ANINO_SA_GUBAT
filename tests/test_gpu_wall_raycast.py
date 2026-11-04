@@ -20,6 +20,7 @@ def test_shader_contract():
         "u_map", "u_wall_textures", "u_map_size", "u_view_size",
         "u_tile_layers", "u_camera_pos", "u_camera_angle", "u_fov",
         "u_max_depth", "u_wall_height_scale", "u_tile_size", "u_pitch_offset",
+        "u_light_dir", "u_shadow_strength", "wall_shadow",
     ):
         assert uniform in FRAGMENT_SHADER
     assert "usampler2D" in FRAGMENT_SHADER
@@ -45,3 +46,10 @@ if __name__ == "__main__":
     test_render_api_exposes_pitch_offset()
     test_existing_wall_tile_mapping()
     print("[PASS] GPU wall raycaster shader contract")
+
+
+def test_directional_shadow_shader_uses_map_occlusion():
+    assert "float wall_shadow" in FRAGMENT_SHADER
+    assert "u_shadow_strength" in FRAGMENT_SHADER
+    assert "surface_normal" in FRAGMENT_SHADER
+    assert "max(0.34, shadow)" in FRAGMENT_SHADER
