@@ -53,3 +53,9 @@ def test_directional_shadow_shader_uses_map_occlusion():
     assert "u_shadow_strength" in FRAGMENT_SHADER
     assert "surface_normal" in FRAGMENT_SHADER
     assert "max(0.34, shadow)" in FRAGMENT_SHADER
+
+
+def test_tree_shadow_texture_is_bound_to_gpu_pass():
+    assert "u_tree_map" in FRAGMENT_SHADER
+    assert "upload_tree_occluders" in inspect.getsource(GPUWallRaycaster)
+    assert "self.tree_texture.use(location=1)" in inspect.getsource(GPUWallRaycaster.render)
