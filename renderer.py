@@ -221,6 +221,9 @@ class Renderer:
 
     def __init__(self, internal_surface, textures, weapon_sprites, enemy_sprites, pickup_sprites):
         self.surface = internal_surface
+        # Independent transparent screen-space layer for viewmodel and crosshair.
+        self.overlay_surface = pygame.Surface(
+            internal_surface.get_size(), pygame.SRCALPHA, 32).convert_alpha()
         # Optional live GPU wall pass. It is deliberately opt-in until validated on target hardware.
         self.gpu_wall_pass = None
         self.gpu_wall_enabled = False
@@ -698,6 +701,7 @@ class Renderer:
         self.timings['animation'] = (time.perf_counter() - t_anim_start) * 1000.0
 
         self.surface.fill(SKY_COLOR)
+        self.overlay_surface.fill((0, 0, 0, 0))
         self.frame_counter += 1
         self._emissive = []
         # Single time query per frame; reused everywhere instead of 15+ calls.
@@ -926,11 +930,15 @@ class Renderer:
         self.timings['fx_weather'] = (time.perf_counter() - t_fx_weather) * 1000.0
         t_fx_weapon = time.perf_counter()
 
-        # Draw player viewmodel (hands, sleeves, weapon)
-        self._draw_player_viewmodel(player, dt)
-
-        # Lightning lights up everything, hands and weapon included, so it goes on last.
-        self.weather.draw_flash(self.surface)
+        # Draw the first-person viewmodel on its own transparent layer.
+        _scene_surface = self.surface
+        self.surface = self.overlay_surface
+        try:
+            self._draw_player_viewmodel(player, dt)
+            # Lightning flash also covers the first-person viewmodel.
+            self.weather.draw_flash(self.surface)
+        finally:
+            self.surface = _scene_surface
 
         self.timings['fx_weapon'] = (time.perf_counter() - t_fx_weapon) * 1000.0
         t_fx_grade = time.perf_counter()
@@ -942,11 +950,11 @@ class Renderer:
 
         self.timings['fx_grade'] = (time.perf_counter() - t_fx_grade) * 1000.0
 
-        # Draw crosshair
+        # Crosshair is screen-space UI, not part of the world color target.
         if self.crosshair:
             cx = self.w // 2 - self.crosshair.get_width() // 2
             cy = self.h // 2 - self.crosshair.get_height() // 2
-            self.surface.blit(self.crosshair, (cx, cy))
+            self.overlay_surface.blit(self.crosshair, (cx, cy))
 
         self.timings['effects'] = (time.perf_counter() - t_effects) * 1000.0
         self.timings['post'] = self.timings['effects']
@@ -959,7 +967,9 @@ class Renderer:
         if self.screen_shake > 0.3:
             s = int(self.screen_shake)
             if s > 0 and self.w > s * 2 and self.h > s * 2:
-                self.surface.scroll(random.randint(-s, s), random.randint(-s, s))
+                shake_x, shake_y = random.randint(-s, s), random.randint(-s, s)
+                self.surface.scroll(shake_x, shake_y)
+                self.overlay_surface.scroll(shake_x, shake_y)
             self.screen_shake = max(0.0, self.screen_shake - dt * 20)
 
     def update_weather(self, player, dt, sunrise_progress):
