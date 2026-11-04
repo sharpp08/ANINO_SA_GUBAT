@@ -719,7 +719,10 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
     if not is_dead and not is_bam:
         foliage_rgb = pygame.surfarray.pixels3d(surf)
         foliage_alpha = pygame.surfarray.pixels_alpha(surf)
-        yy, xx = np.mgrid[0:height, 0:width]
+        # pygame.surfarray uses (width, height) ordering. Build coordinate
+        # grids in that same orientation so every mask/light array broadcasts
+        # directly against the (width, height) alpha and RGB views.
+        xx, yy = np.indices((width, height), dtype=np.float32)
         canopy_mask = (
             (foliage_alpha >= 180)
             & (yy >= max(0, canopy_top - 2))
@@ -729,11 +732,11 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
         detail_rng = np.random.RandomState(int(seed) ^ 0x5A17)
         mottling = detail_rng.uniform(0.88, 1.13, (width, height)).astype(np.float32)
         upper_light = 1.0 + 0.12 * np.clip(
-            1.0 - (yy.T.astype(np.float32) - canopy_top) /
+            1.0 - (yy - canopy_top) /
             max(1.0, float(canopy_bot - canopy_top)), 0.0, 1.0
         )
         side_light = 1.0 + 0.045 * np.clip(
-            1.0 - np.abs(xx.T.astype(np.float32) - cx) / max(1.0, width * 0.5), 0.0, 1.0
+            1.0 - np.abs(xx - cx) / max(1.0, width * 0.5), 0.0, 1.0
         )
         light = np.clip(mottling * upper_light * side_light, 0.78, 1.28)
         for channel, tint in ((0, 1.5), (1, 7.0), (2, -1.5)):
