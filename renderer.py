@@ -800,6 +800,8 @@ class Renderer:
             self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
                                           0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
+        self._shadow_sunrise_progress = max(0.0, min(1.0, float(sunrise_progress)))
+
         # 3. Cast rays and draw walls (also fills the z-buffer)
         t_rays = pygame.time.get_ticks()
         gpu_walls_requested = self.gpu_wall_enabled and self.gpu_wall_pass is not None
@@ -1222,6 +1224,10 @@ class Renderer:
                 WALL_HEIGHT_SCALE, tile_size=TILE_SIZE, max_depth=MAX_DEPTH,
                 pitch_offset=int(player.pitch * self.h),
                 trees=getattr(game_map, 'trees', ()),
+                sunrise_progress=getattr(self, '_shadow_sunrise_progress', 0.0),
+                flashlight_on=bool(getattr(player, 'flashlight_on', False)
+                                   and getattr(player, 'flashlight_battery', 0) > 0),
+                flashlight_range=float(getattr(_settings_mod, 'FLASHLIGHT_RANGE', 12.0)),
             )
             raw = color_tex.read(alignment=1)
             rgba = np.frombuffer(raw, dtype=np.uint8).reshape((self.h, self.w, 4))[::-1]
