@@ -34,6 +34,8 @@ void main() { v_uv = in_uv; gl_Position = vec4(in_position, 0.0, 1.0); }
 # u_post == 0 giving a plain upscale (menus, loading screens).
 FRAGMENT_SHADER = """#version 330 core
 uniform sampler2D u_texture;
+uniform sampler2D u_overlay;
+uniform int u_has_overlay;
 uniform float u_time;
 uniform int u_flashlight_on;
 uniform float u_fog_density;
@@ -50,9 +52,18 @@ vec3 bright_pass(vec3 c) {
 }
 void main() {
     vec2 uv = v_uv;
-    if (u_post == 0) { fragColor = vec4(texture(u_texture, uv).rgb, 1.0); return; }
-    if (u_supernatural_intensity > 0.0) uv.x += sin(uv.y * 25.0 + u_time * 6.0) * 0.006 * u_supernatural_intensity;
+    if (u_supernatural_intensity > 0.0 && u_post != 0)
+        uv.x += sin(uv.y * 25.0 + u_time * 6.0) * 0.006 * u_supernatural_intensity;
     vec4 col = texture(u_texture, uv);
+    // Menus/loading screens skip scene post-processing but still composite UI.
+    if (u_post == 0) {
+        if (u_has_overlay == 1) {
+            vec4 over = texture(u_overlay, v_uv);
+            col.rgb = over.rgb * over.a + col.rgb * (1.0 - over.a);
+        }
+        fragColor = vec4(col.rgb, 1.0);
+        return;
+    }
     // Five-tap threshold bloom: one inexpensive pass, no framebuffer readback.
     if (u_bloom_strength > 0.0) {
         vec2 px = 1.0 / vec2(textureSize(u_texture, 0));
@@ -123,7 +134,12 @@ class GLPresenter:
         self.vbo = None
         self.vao = None
         self.tex = None
+        self.overlay_tex = None
+        self.scene_depth = None
+        self.scene_fbo = None
         self._tex_key = None
+        self._overlay_key = None
+        self._overlay_key = None
         self._rect = None
         self._moderngl = None
 
@@ -217,29 +233,67 @@ class GLPresenter:
         key = (w, h, tuple(surface.get_shifts()))
         if key == self._tex_key:
             return
-        if self.tex is not None:
-            self.tex.release()
+        # Release the old framebuffer before its attachments when the render size
+        # or source pixel layout changes.
+        for resource_name in ("scene_fbo", "scene_depth", "tex"):
+            resource = getattr(self, resource_name, None)
+            if resource is not None:
+                resource.release()
+                setattr(self, resource_name, None)
         mgl = self._moderngl
         self.tex = self.ctx.texture((w, h), 4, dtype='f1')
         self.tex.filter = (mgl.NEAREST, mgl.NEAREST)
         self.tex.repeat_x = False
         self.tex.repeat_y = False
         self.tex.swizzle = compute_swizzle(surface.get_shifts())
+        # Persistent scene color/depth attachments. Until each world pass is migrated,
+        # the legacy renderer uploads its color into this GPU-owned target. Native passes
+        # can progressively render into this FBO and share its depth attachment.
+        self.scene_depth = self.ctx.depth_texture((w, h))
+        self.scene_fbo = self.ctx.framebuffer(
+            color_attachments=[self.tex], depth_attachment=self.scene_depth)
+        self.scene_fbo.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
         self._tex_key = key
 
-    def present(self, surface, time_sec=0.0, flashlight_on=1, supernatural=0.0,
-                fog_density=1.0, post=True, bloom_strength=0.12):
-        """Upload ``surface`` and draw it to the window (call pygame.display.flip() after)."""
-        import pygame
-        self._ensure_texture(surface)
+    def _ensure_overlay_texture(self, surface):
+        if sys.byteorder != 'little':
+            raise ValueError("big-endian pixel layout unsupported")
+        w, h = surface.get_size()
+        if surface.get_bitsize() != 32 or surface.get_pitch() != w * 4:
+            raise ValueError(f"overlay needs tightly packed 32-bit pixels (bits={surface.get_bitsize()}, "
+                             f"pitch={surface.get_pitch()}, width={w})")
+        key = (w, h, tuple(surface.get_shifts()))
+        if key != self._overlay_key:
+            if self.overlay_tex is not None:
+                self.overlay_tex.release()
+            self.overlay_tex = self.ctx.texture((w, h), 4, dtype='f1')
+            self.overlay_tex.filter = (self._moderngl.NEAREST, self._moderngl.NEAREST)
+            self.overlay_tex.repeat_x = False
+            self.overlay_tex.repeat_y = False
+            self.overlay_tex.swizzle = compute_swizzle(surface.get_shifts())
+            self._overlay_key = key
+
+    @staticmethod
+    def _upload_surface(texture, surface):
         buf = surface.get_buffer()
         try:
             try:
-                self.tex.write(memoryview(buf))
+                texture.write(memoryview(buf))
             except Exception:
-                self.tex.write(buf.raw)
+                texture.write(buf.raw)
         finally:
-            del buf                                   # releases the surface lock
+            del buf
+
+    def present(self, surface, time_sec=0.0, flashlight_on=1, supernatural=0.0,
+                fog_density=1.0, post=True, bloom_strength=0.12, overlay_surface=None):
+        """Upload ``surface`` and draw it to the window (call pygame.display.flip() after)."""
+        import pygame
+        self._ensure_texture(surface)
+        self._upload_surface(self.tex, surface)
+        has_overlay = overlay_surface is not None
+        if has_overlay:
+            self._ensure_overlay_texture(overlay_surface)
+            self._upload_surface(self.overlay_tex, overlay_surface)
         ww, wh = pygame.display.get_window_size()
         sw, sh = surface.get_size()
         x, y, rw, rh = letterbox(ww, wh, sw, sh)
@@ -250,8 +304,12 @@ class GLPresenter:
         screen.clear(0.0, 0.0, 0.0, 1.0)
         screen.viewport = (x, y, rw, rh)
         self.tex.use(0)
+        if has_overlay:
+            self.overlay_tex.use(1)
         prog = self.prog
         prog['u_texture'].value = 0
+        prog['u_overlay'].value = 1
+        prog['u_has_overlay'].value = 1 if has_overlay else 0
         prog['u_post'].value = 1 if post else 0
         prog['u_time'].value = float(time_sec)
         prog['u_flashlight_on'].value = int(flashlight_on)
@@ -267,7 +325,7 @@ class GLPresenter:
         return map_to_surface(pos, ww, wh, src_w, src_h)
 
     def close(self):
-        for name in ('vao', 'vbo', 'tex', 'prog'):
+        for name in ('vao', 'vbo', 'scene_fbo', 'scene_depth', 'tex', 'overlay_tex', 'prog'):
             obj = getattr(self, name, None)
             if obj is not None:
                 try:
