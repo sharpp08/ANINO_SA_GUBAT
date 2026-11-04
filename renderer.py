@@ -709,10 +709,17 @@ class Renderer:
                 self.physics_particles.update(dt)
             except Exception:
                 pass
+        frenzy_active = bool(
+            ENABLE_SANITY
+            and getattr(player, 'sanity', SANITY_MAX) < SANITY_FRENZY_THRESHOLD
+        )
         if ENABLE_ANIMATIONS and ENABLE_CAMERA_SHAKE:
             shx, shy = self.camera_shake.update(dt)
-            if shx != 0 or shy != 0:
+            if not frenzy_active and (shx != 0 or shy != 0):
                 self.screen_shake = max(self.screen_shake, max(abs(shx), abs(shy)))
+        # Frenzy uses breathing zoom + heartbeat pulse, never camera waving.
+        if frenzy_active:
+            self.screen_shake = 0.0
         if ENABLE_ANIMATIONS and getattr(self, 'enemy_animator', None) is not None:
             self.enemy_animator.update_all(enemies, dt)
         
@@ -1094,7 +1101,13 @@ class Renderer:
         a = int(255 * self.danger * (0.35 + 0.65 * pulse))
         self.red_vig.set_alpha(max(0, min(255, a)))
         self.surface.blit(self.red_vig, (0, 0))
-        if self.danger > 0.6:
+        # Enemy proximity still drives the danger vignette, but Frenzy's
+        # audiovisual feedback replaces the old proximity-driven screen shake.
+        frenzy_active = bool(
+            ENABLE_SANITY
+            and getattr(player, 'sanity', SANITY_MAX) < SANITY_FRENZY_THRESHOLD
+        )
+        if self.danger > 0.6 and not frenzy_active:
             self.screen_shake = max(self.screen_shake, 1.0 + 1.5 * (self.danger - 0.6))
 
     def _draw_emissive(self):
