@@ -1675,16 +1675,13 @@ class Renderer:
         return nearby_trees, nearby_plants
 
     def _draw_environment_shadows(self, player, game_map, sunrise_progress=0.0):
-        """Project soft, directional tree shadows onto the raycast ground plane.
-
-        Moonlight uses a stable world-space direction. The flashlight uses the
-        live player position, so its shadow direction follows both movement and
-        camera rotation. This is a lightweight 2.5D shadow pass for the current
-        billboard renderer; it deliberately leaves wall/sprite depth and gameplay
-        untouched. A future mesh shadow-map pass can replace this without changing
-        the call site or light inputs.
-        """
+        """Project soft, directional tree shadows onto the raycast ground plane."""
         layer = self._world_shadow_surf
+        state_key = (round(player.x, 1), round(player.y, 1), round(player.angle, 1), round(player.pitch, 1), round(sunrise_progress, 2))
+        if getattr(self, '_cached_shadow_state', None) == state_key and hasattr(self, '_cached_shadow_surf'):
+            layer.blit(self._cached_shadow_surf, (0, 0))
+            return
+
         layer.fill((0, 0, 0, 0))
         trees, _plants = self._get_sprite_candidates(
             game_map, player.x, player.y, min(MAX_DEPTH, 22.0))
@@ -1770,7 +1767,7 @@ class Renderer:
         # Select by squared distance (no square roots in the selection pass).
         # 64 nearest visible trees preserve a dense, convincing foreground shadow field.
         shadow_trees = heapq.nsmallest(
-            64,
+            32,
             (candidate for tree in trees
              if (candidate := shadow_candidate(tree)) is not None),
             key=lambda item: item[0])
@@ -1794,6 +1791,8 @@ class Renderer:
                                 falloff * cone_falloff * 1.15,
                                 min(5.0, shadow_length * 1.25))
 
+        self._cached_shadow_state = state_key
+        self._cached_shadow_surf = layer.copy()
         self.surface.blit(layer, (0, 0))
 
     def _draw_world_sprites(self, player, enemies, game_map):
