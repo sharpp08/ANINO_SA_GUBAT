@@ -25,6 +25,7 @@ import os
 import math
 import random
 import heapq
+import time
 import pygame
 import numpy as np
 from settings import *
@@ -472,7 +473,8 @@ class Renderer:
         self.debug_mode = 1   # 0 = off, 1 = compact (default), 2 = full; F3 cycles
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
-        self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0}
+        self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0,
+                         'floor': 0.0, 'shadows': 0.0, 'fog': 0.0, 'lighting': 0.0, 'effects': 0.0}
         self.dbg_font = pygame.font.SysFont('consolas', 10)
 
         self.debug_f4 = False          # raw scene: no darkness + markers on every entity
@@ -666,7 +668,8 @@ class Renderer:
     # ─── Frame ────────────────────────────────────────────────────────────
     def render_frame(self, player, game_map, enemies, effects, dt, sunrise_progress=0.0):
         """Render a complete frame with correct pipeline order."""
-        t_anim_start = pygame.time.get_ticks()
+        t_frame_start = time.perf_counter()
+        t_anim_start = time.perf_counter()
         
         # Update animation systems
         if ENABLE_ANIMATIONS and ENABLE_PARTICLE_PHYSICS:
@@ -689,7 +692,7 @@ class Renderer:
                 self.wind_gust_timer = random.uniform(3.0, 8.0)
                 self.wind_strength = random.uniform(0.2, 0.6)
         
-        self.timings['animation'] = pygame.time.get_ticks() - t_anim_start
+        self.timings['animation'] = (time.perf_counter() - t_anim_start) * 1000.0
 
         self.surface.fill(SKY_COLOR)
         self.frame_counter += 1
@@ -768,6 +771,7 @@ class Renderer:
         self.weather.draw_sky(self.surface, player.angle, horizon_y)
 
         # 2. Floor with perspective texture mapping of self.world_ground_tex and exp-squared fog
+        t_floor = time.perf_counter()
         floor_h = self.h - horizon_y
         if floor_h > 0 and hasattr(self, '_ground_arr'):
             mist_phase = t_ticks * 0.0003
@@ -800,25 +804,32 @@ class Renderer:
             self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
                                           0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
+        self.timings['floor'] = (time.perf_counter() - t_floor) * 1000.0
+
         # 3. Cast rays and draw walls (also fills the z-buffer)
-        t_rays = pygame.time.get_ticks()
+        t_rays = time.perf_counter()
         gpu_walls_requested = self.gpu_wall_enabled and self.gpu_wall_pass is not None
         self._cast_rays(player, game_map, draw_walls=not gpu_walls_requested)
         if gpu_walls_requested and not self._draw_gpu_walls(player, game_map):
             # If the shader/context fails, restore the reference wall image immediately.
             self._cast_rays(player, game_map, draw_walls=True)
-        self.timings['rays'] = pygame.time.get_ticks() - t_rays
+        self.timings['rays'] = (time.perf_counter() - t_rays) * 1000.0
 
         # 4. World-space ground shadows from moonlight and the player's moving flashlight.
         # Keep this before sprites so the tree silhouettes naturally cover their roots.
+        t_shadows = time.perf_counter()
         if not self.debug_f4:
             self._draw_environment_shadows(player, game_map, sunrise_progress)
+        self.timings['shadows'] = (time.perf_counter() - t_shadows) * 1000.0
 
         # 5. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
+        t_sprites = time.perf_counter()
         self._draw_world_sprites(player, enemies, game_map)
+        self.timings['sprites'] = (time.perf_counter() - t_sprites) * 1000.0
 
         # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls
         # get hazed, but before the flashlight so the beam cuts through it.
+        t_fog = time.perf_counter()
         if not self.debug_f4:
             self._draw_depth_fog(player, game_map)
             self.photo_pass.draw_mist(
@@ -826,7 +837,10 @@ class Renderer:
                 0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0,
                 ambient=getattr(_settings_mod, 'AMBIENT', 0.4))
 
+        self.timings['fog'] = (time.perf_counter() - t_fog) * 1000.0
+
         # 5. Darkness + flashlight (ONCE).  F4 shows the raw, unlit scene.
+        t_lighting = time.perf_counter()
         self.flashlight.update(dt, abs(player.bob_amount) > 0.5, getattr(player, '_last_mouse_dx', 0.0), player.flashlight_battery)
         if not self.debug_f4:
             self.flashlight.draw(self.surface, player, sunrise_progress)
@@ -834,7 +848,9 @@ class Renderer:
         # 6. Glowing eyes / halos: drawn AFTER darkness so they show in the dark
         self._draw_emissive()
         self._update_draw_hit_fx(dt)
+        self.timings['lighting'] = (time.perf_counter() - t_lighting) * 1000.0
 
+        t_effects = time.perf_counter()
         # 7. Particles (fireflies / dust / spores)
         if ENABLE_PARTICLES:
             _particle_cache = self._particle_cache  # local ref avoids attribute lookups
@@ -909,6 +925,10 @@ class Renderer:
             cx = self.w // 2 - self.crosshair.get_width() // 2
             cy = self.h // 2 - self.crosshair.get_height() // 2
             self.surface.blit(self.crosshair, (cx, cy))
+
+        self.timings['effects'] = (time.perf_counter() - t_effects) * 1000.0
+        self.timings['post'] = self.timings['effects']
+        self.timings['total'] = (time.perf_counter() - t_frame_start) * 1000.0
 
         # F3 Debug Overlay
         self._draw_debug_overlay(player, game_map, enemies)
@@ -1033,7 +1053,9 @@ class Renderer:
             f"Pickups active: {pickups_active} | Trees: {len(getattr(game_map, 'trees', []))}",
             f"In view -> enemies:{self.stats['enemies_view']} pickups:{self.stats['pickups_view']} drawn:{self.stats['drawn']}",
             f"Danger: {self.danger:.2f}",
-            f"Anim timing: {self.timings.get('animation', 0.0):.1f}ms | Particles: {self.physics_particles.count}",
+            f"Anim timing: {self.timings.get('animation', 0.0):.2f}ms | Particles: {self.physics_particles.count}",
+            f"Render ms F:{self.timings.get('floor', 0.0):.1f} R:{self.timings.get('rays', 0.0):.1f} Sh:{self.timings.get('shadows', 0.0):.1f} Sp:{self.timings.get('sprites', 0.0):.1f}",
+            f"Fog:{self.timings.get('fog', 0.0):.1f} Light:{self.timings.get('lighting', 0.0):.1f} FX:{self.timings.get('effects', 0.0):.1f} Total:{self.timings.get('total', 0.0):.1f}",
             f"FPS (30f avg): {fps:.1f}",
         ]
         if hasattr(game_map, 'validation_errors') and game_map.validation_errors:
