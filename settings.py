@@ -85,7 +85,7 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': False,
         'enable_particles': True, 'enable_dynamic_lights': False,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'max_render_trees': 150, 'max_particles': 150, 'max_enemies': 6,
+        'max_render_trees': 175, 'max_particles': 150, 'max_enemies': 6,
         # Ground detail tiers
         'ground_grass_blade_layers': 4,
         'ground_enable_clover': True,
@@ -103,7 +103,7 @@ QUALITY_PRESETS = {
         'enable_ssao': False, 'enable_bloom': True, 'enable_god_rays': True,
         'enable_particles': True, 'enable_dynamic_lights': True,
         'enable_aurora': True, 'enable_enhanced_floor': True,
-        'max_render_trees': 220, 'max_particles': 300, 'max_enemies': 8,
+        'max_render_trees': 250, 'max_particles': 300, 'max_enemies': 8,
         # Ground detail tiers
         'ground_grass_blade_layers': 6,
         'ground_enable_clover': True,
