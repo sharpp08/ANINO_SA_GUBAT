@@ -397,7 +397,8 @@ class SoundManager:
             os.path.dirname(os.path.abspath(__file__)),
             'assets', 'audio', 'revolver_reload.mp3'
         )
-        if os.path.isfile(custom_revolver_reload):            try:
+        if os.path.isfile(custom_revolver_reload):
+            try:
                 self.sounds['revolver_reload'] = pygame.mixer.Sound(custom_revolver_reload)
                 print('[Audio] Loaded custom revolver reload sound.')
             except Exception as exc:
@@ -796,7 +797,8 @@ class SoundManager:
         h2 = _std1(fft_band(rng.standard_normal(n), r, 930, 0.45, pad=pad))
         hiss = _std1(fft_band(rng.standard_normal(n), r, 3200, 2.5, pad=pad))
         out = np.zeros((n, 2))
-        for c, shift in enumerate((0, int(0.37 * r))):            def sh(a):
+        for c, shift in enumerate((0, int(0.37 * r))):
+            def sh(a):
                 return np.roll(a, shift) if shift else a
             howl = sh(h1) * (1 - drift) + sh(h2) * drift
             out[:, c] = (0.9 * sh(low) * (0.4 + gust) + 0.6 * sh(mid) * gust
@@ -1195,7 +1197,8 @@ class SoundManager:
             if not raw or not mixer or mixer[1] != -16:
                 return []
             samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
-            channels = max(1, int(mixer[2]))            samples = samples[:(len(samples) // channels) * channels].reshape(-1, channels).mean(axis=1)
+            channels = max(1, int(mixer[2]))
+            samples = samples[:(len(samples) // channels) * channels].reshape(-1, channels).mean(axis=1)
             rate = int(mixer[0])
             hop = max(1, rate // 100)
             usable = (len(samples) // hop) * hop
