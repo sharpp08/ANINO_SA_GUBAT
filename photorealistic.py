@@ -37,10 +37,23 @@ class PhotorealisticPass:
         y = np.arange(self.height, dtype=np.float32)[None, :]
         self._x = x
         self._y = y
+        # Precompute the moving wet-ground wave as sin(a+b) = sin(a)cos(b)+cos(a)sin(b).
+        # This avoids evaluating a full floor-sized sine field every frame.
+        wave_phase = x * 0.075 + y * 0.11
+        self._wet_wave_sin = np.sin(wave_phase).astype(np.float32)
+        self._wet_wave_cos = np.cos(wave_phase).astype(np.float32)
         self._vignette = np.clip(
             1.0 - 0.12 * (((x - self.width * 0.5) / max(1, self.width * 0.72)) ** 2
                           + ((y - self.height * 0.52) / max(1, self.height * 0.72)) ** 2),
             0.82, 1.0).astype(np.float32)
+        # Integer vignette factors and one reusable work plane avoid repeated
+        # full-frame float32 conversions/allocations in apply_grade().
+        self._vignette_u8 = {
+            amount: np.rint((1.0 - amount * (1.0 - self._vignette)) * 255.0)
+                         .clip(0, 255).astype(np.uint16)
+            for amount in (1.0, 0.65)
+        }
+        self._grade_tmp = np.empty((self.width, self.height), dtype=np.uint16)
 
     def enhance_floor(self, surface, horizon_y, time_s=0.0, strength=1.0):
         """Add restrained wet-leaf / puddle glints to the exposed ground plane."""
@@ -51,10 +64,11 @@ class PhotorealisticPass:
         if amount <= 0.0:
             return
         rgb = pygame.surfarray.pixels3d(surface)
-        yy = self._y[:, horizon:]
-        xx = self._x
         noise = self._wet_noise[:, horizon:]
-        ripple = 0.5 + 0.5 * np.sin(xx * 0.075 + yy * 0.11 + float(time_s) * 0.7)
+        phase = float(time_s) * 0.7
+        wave = (self._wet_wave_sin[:, horizon:] * math.cos(phase)
+                + self._wet_wave_cos[:, horizon:] * math.sin(phase))
+        ripple = 0.5 + 0.5 * wave
         # Sparse, broken highlights avoid the appearance of a uniform glossy filter.
         glint = np.maximum(0.0, (noise * 0.58 + ripple * 0.42) - 0.79)
         glint *= amount * 13.0
@@ -96,9 +110,29 @@ class PhotorealisticPass:
         if amount <= 0.0:
             return
         rgb = pygame.surfarray.pixels3d(surface)
-        grade_rgb_array(rgb, daylight)
-        if amount < 1.0:
-            # Blend only the vignette portion back toward the unmodified image at low tier.
-            pass
-        rgb[:, :, :] = np.clip(rgb.astype(np.float32) * (1.0 - amount * (1.0 - self._vignette[:, :, None])), 0, 255).astype(np.uint8)
+
+        # Build tiny per-channel 256-entry LUTs for the contrast/tint/film curve.
+        # Applying them in-place avoids the several full-frame float32 arrays used
+        # by grade_rgb_array() on every frame.
+        day = max(0.0, min(1.0, float(daylight)))
+        night = (0.91, 0.985, 1.045)
+        dawn = (1.045, 1.015, 0.94)
+        lut_input = np.arange(256, dtype=np.float32)
+        factors = self._vignette_u8[1.0 if amount >= 0.999 else 0.65]
+        work = self._grade_tmp
+        for channel in range(3):
+            tint = night[channel] * (1.0 - day) + dawn[channel] * day
+            values = np.maximum(0.0, (lut_input - 18.0) * 1.055 + 18.0)
+            values *= tint
+            values = 255.0 * (values / (values + 230.0)) * 1.94
+            lut = np.clip(values, 0.0, 255.0).astype(np.uint8)
+            np.take(lut, rgb[:, :, channel], out=rgb[:, :, channel])
+
+            # Integer multiply/divide reproduces the vignette blend while using
+            # one reusable uint16 plane instead of a new float32 image per channel.
+            np.multiply(rgb[:, :, channel], factors, out=work, dtype=np.uint16)
+            work += 127
+            np.floor_divide(work, 255, out=work)
+            rgb[:, :, channel] = work
+
         del rgb
