@@ -338,6 +338,9 @@ class Renderer:
         self.z_buffer = np.zeros(self.num_rays, dtype=np.float64)
         # screen column -> z-buffer index, so sprite depth tests are one numpy lookup
         self._col_to_ray = (np.arange(self.w) * self.num_rays // self.w).astype(np.int64)
+        # Screen column sprite depth buffer: tracks the closest solid sprite (tree, enemy, pickup)
+        # so depth fog and post-processing preserve foreground objects without washing them out.
+        self.sprite_z_buffer = np.full(self.w, float(MAX_DEPTH + 1.0), dtype=np.float32)
         # numpy view of the tile grid for the vectorised raycaster (rebuilt when the map changes)
         self._grid_np = None
         self._grid_src = None
@@ -722,6 +725,7 @@ class Renderer:
 
         self.surface.fill(SKY_COLOR)
         self.overlay_surface.fill((0, 0, 0, 0))
+        self.sprite_z_buffer.fill(float(MAX_DEPTH + 1.0))
         self.frame_counter += 1
         self._emissive = []
         # Single time query per frame; reused everywhere instead of 15+ calls.
@@ -1365,10 +1369,9 @@ class Renderer:
         pitch_offset = int(player.pitch * h)
         horizon = h // 2 + pitch_offset
 
-        # ── Per-column fog alpha from the z-buffer ────────────────────────
-        # z_buffer has one entry per ray; map screen columns to ray indices.
+        # ── Per-column fog alpha from the combined wall & sprite depth buffers ──
         zb = self.z_buffer
-        col_depth = zb[self._col_to_ray]      # (w,) float64 in tile units
+        col_depth = np.minimum(zb[self._col_to_ray], self.sprite_z_buffer)      # (w,) float64 in tile units
 
         # Normalise to [0, 1]:  0 at FOG_NEAR (clear), 1 at FOG_FAR (max fog).
         # Columns where no wall was hit (z == MAX_DEPTH+1) map to 1.0.
@@ -1528,11 +1531,21 @@ class Renderer:
         if not runs:
             return 0
         surface = self.surface
+        core_pad = max(1, int((x1 - x0) * 0.14))
         if len(runs) == 1:
             a, b = runs[0]
             surface.blit(img, (a, y), (a - x, 0, b - a, ih))
+            c_a = max(a, x0 + core_pad)
+            c_b = min(b, x1 - core_pad)
+            if c_b > c_a:
+                self.sprite_z_buffer[c_a:c_b] = np.minimum(self.sprite_z_buffer[c_a:c_b], dist)
             return b - a
         surface.blits([(img, (a, y), (a - x, 0, b - a, ih)) for a, b in runs], False)
+        for a, b in runs:
+            c_a = max(a, x0 + core_pad)
+            c_b = min(b, x1 - core_pad)
+            if c_b > c_a:
+                self.sprite_z_buffer[c_a:c_b] = np.minimum(self.sprite_z_buffer[c_a:c_b], dist)
         return sum(b - a for a, b in runs)
 
     def _col_visible(self, col, dist):
@@ -1555,7 +1568,7 @@ class Renderer:
         key = (ttype, variant_idx)
         img = self._tree_sprite_cache.get(key)
         if img is None:
-            img = self._generate_tree_billboard(ttype, 96, 320, seed=42 + variant_idx * 997)
+            img = self._generate_tree_billboard(ttype, 128, 384, seed=42 + variant_idx * 997)
             img = img.convert_alpha()  # display-format for fast per-frame blits
             self._tree_sprite_cache[key] = img
             while len(self._tree_sprite_cache) > self._TREE_CACHE_LIMIT:
@@ -1573,19 +1586,16 @@ class Renderer:
         shadow = self._tree_shadow_cache.get(key)
         if shadow is None:
             shadow = pygame.Surface((sw, sh), pygame.SRCALPHA)
-            # Three nested low-alpha ellipses approximate a soft penumbra while
-            # keeping the pass cheap and independent of the number of foliage pixels.
-            # Layered contact occlusion: soft outer penumbra plus a denser
-            # centre keeps objects grounded without a hard black decal.
-            pygame.draw.ellipse(shadow, (1, 3, 2, 46), (0, 0, sw, sh))
-            inset_x = max(1, sw // 12)
+            # Three-tier soft ambient occlusion penumbra: anchors tree base firmly into soil
+            pygame.draw.ellipse(shadow, (1, 3, 2, 55), (0, 0, sw, sh))
+            inset_x = max(1, sw // 10)
             inset_y = max(1, sh // 5)
-            pygame.draw.ellipse(shadow, (1, 2, 1, 58),
+            pygame.draw.ellipse(shadow, (1, 2, 1, 90),
                                 (inset_x, inset_y, max(1, sw - 2 * inset_x),
                                  max(1, sh - 2 * inset_y)))
-            core_x = max(2, sw // 5)
+            core_x = max(2, sw // 4)
             core_y = max(1, sh // 3)
-            pygame.draw.ellipse(shadow, (0, 1, 0, 42),
+            pygame.draw.ellipse(shadow, (0, 1, 0, 140),
                                 (core_x, core_y, max(1, sw - 2 * core_x),
                                  max(1, sh - 2 * core_y)))
             shadow = shadow.convert_alpha()
