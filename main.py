@@ -1284,6 +1284,9 @@ class Game:
 
     # ── Render ────────────────────────────────────────────────────────────
     def render(self, dt):
+        overlay = getattr(self.renderer, 'overlay_surface', None)
+        if overlay is not None:
+            overlay.fill((0, 0, 0, 0))
         alive_enemies = self.enemy_manager.get_alive_enemies()
         # the renderer also draws enemies that are still playing their death animation
         render_enemies = self.enemy_manager.get_renderable_enemies()
@@ -1295,10 +1298,10 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(self.internal, self.player, self.font_sm, self.font_hud)
-            panel_bottom = draw_top_hud(self.internal, self.player, self.game_map,
+            draw_hud(overlay or self.internal, self.player, self.font_sm, self.font_hud)
+            panel_bottom = draw_top_hud(overlay or self.internal, self.player, self.game_map,
                                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+            self.radar.draw(overlay or self.internal, self.player, alive_enemies, self.game_map,
                             self.font_micro, pygame.time.get_ticks())
 
             # Notification: centred just under the top panel (the top-left corner is the debug text)
@@ -1307,8 +1310,8 @@ class Game:
                 nx = self.internal.get_width() // 2 - nt.get_width() // 2
                 nbg = pygame.Surface((nt.get_width() + 8, nt.get_height() + 4), pygame.SRCALPHA)
                 nbg.fill((10, 10, 15, 150))
-                self.internal.blit(nbg, (nx - 4, panel_bottom + 3))
-                self.internal.blit(nt, (nx, panel_bottom + 5))
+                (overlay or self.internal).blit(nbg, (nx - 4, panel_bottom + 3))
+                (overlay or self.internal).blit(nt, (nx, panel_bottom + 5))
 
         elif self.state == STATE_PAUSED:
             sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
@@ -1320,7 +1323,7 @@ class Game:
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
             self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
                             self.font_micro, pygame.time.get_ticks())
-            draw_paused(self.internal, self.font_lg, self.font_sm)
+            draw_paused(overlay or self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:
             draw_menu(self.internal, self.font_lg, self.font_sm, self.font_tiny)
@@ -1355,12 +1358,17 @@ class Game:
                 fl_on = 1 if (playing and self.player.flashlight_on and self.player.flashlight_battery > 0) else 0
                 sup_int = 1.0 if (playing and (self.player.damage_flash > 0 or self.player.sanity < 30)) else 0.0
                 gp.present(self.internal, pygame.time.get_ticks() / 1000.0, flashlight_on=fl_on,
-                           supernatural=sup_int, fog_density=1.0, post=playing)
+                           supernatural=sup_int, fog_density=1.0, post=playing,
+                           overlay_surface=overlay)
             except Exception as exc:
                 print(f"[GPU] present failed ({type(exc).__name__}: {exc}); falling back to the 2D window.")
                 self._fallback_to_2d()
                 gp = None
         if gp is None:
+            # Pygame fallback composites the transparent UI/viewmodel layer into the
+            # stable internal surface; the existing CPU renderer remains fully usable.
+            if overlay is not None:
+                self.internal.blit(overlay, (0, 0))
             # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
             # Only during gameplay, and the result is copied back into the SAME surface:
             # the renderer and cinematic hold a reference to self.internal, so it must
