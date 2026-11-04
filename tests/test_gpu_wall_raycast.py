@@ -59,3 +59,9 @@ def test_tree_shadow_texture_is_bound_to_gpu_pass():
     assert "u_tree_map" in FRAGMENT_SHADER
     assert "upload_tree_occluders" in inspect.getsource(GPUWallRaycaster)
     assert "self.tree_texture.use(location=1)" in inspect.getsource(GPUWallRaycaster.render)
+
+
+def test_tree_shadow_texture_is_bound_to_gpu_pass():
+    assert "u_tree_map" in FRAGMENT_SHADER
+    assert "upload_tree_occluders" in inspect.getsource(GPUWallRaycaster)
+    assert "self.tree_texture.use(location=1)" in inspect.getsource(GPUWallRaycaster.render)
