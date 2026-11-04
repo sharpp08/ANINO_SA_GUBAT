@@ -68,6 +68,26 @@ PICKUP_GLOW = {
 }
 
 
+def enemy_debug_counts(enemies, chapter_total=0):
+    """Return (alive, total) from one de-duplicated enemy population snapshot.
+
+    The total is at least the chapter's cumulative spawn count, so enemies
+    removed from the live manager after death do not make the denominator shrink.
+    Duplicate references are counted once. This helper is diagnostic-only and
+    never mutates enemy objects or the manager's collection.
+    """
+    unique = {}
+    for enemy in enemies or ():
+        if enemy is not None:
+            unique.setdefault(id(enemy), enemy)
+    alive = sum(1 for enemy in unique.values() if bool(getattr(enemy, "alive", True)))
+    try:
+        baseline = max(0, int(chapter_total))
+    except (TypeError, ValueError):
+        baseline = 0
+    return alive, max(baseline, len(unique))
+
+
 class Flashlight:
     """Flashlight: one cached darkness overlay with a soft hole + warm additive glow."""
 
@@ -1063,8 +1083,13 @@ class Renderer:
                 pass
         pickups = getattr(game_map, 'pickups', [])
         pickups_active = sum(1 for p in pickups if p.get('active', True))
+        # Snapshot and de-duplicate before filtering living enemies. The chapter
+        # total is cumulative because survival mode can append new hunters later.
+        enemy_population = list({id(e): e for e in (enemies or ()) if e is not None}.values())
+        alive_count, total_count = enemy_debug_counts(
+            enemy_population, self.level_enemy_total)
         nearest = None
-        enemies = [e for e in enemies if e.alive]
+        enemies = [e for e in enemy_population if getattr(e, 'alive', True)]
         for e in enemies:
             d = math.hypot(e.x - player.x, e.y - player.y)
             if nearest is None or d < nearest:
@@ -1076,7 +1101,7 @@ class Renderer:
             near = f" near {nearest:.0f}" if nearest is not None else ""
             lines = [
                 f"{BUILD_VERSION.replace('BUILD ', '')}  {fps:.0f}fps",
-                f"({int(player.x)},{int(player.y)}) EN {len(enemies)}/{self.level_enemy_total}{near}"
+                f"({int(player.x)},{int(player.y)}) EN {alive_count}/{total_count}{near}"
                 f"  DNG {self.danger:.1f}" + ("  MAP WARN" if has_warn else ""),
             ]
             self._blit_debug_lines(lines, font, warn_idx=1 if has_warn else None)
@@ -1087,7 +1112,7 @@ class Renderer:
             f"{BUILD_VERSION}",
             f"Chapter: {getattr(game_map, 'chapter_num', 1)}",
             f"Player Tile: ({int(player.x)}, {int(player.y)}) | Pos: ({player.x:.2f}, {player.y:.2f})",
-            f"Enemies alive/total: {len(enemies)}/{self.level_enemy_total}"
+            f"Enemies alive/total: {alive_count}/{total_count}"
             + (f" | nearest {nearest:.1f}" if nearest is not None else ""),
             f"Pickups active: {pickups_active} | Trees: {len(getattr(game_map, 'trees', []))}",
             f"In view -> enemies:{self.stats['enemies_view']} pickups:{self.stats['pickups_view']} drawn:{self.stats['drawn']}",
