@@ -417,16 +417,38 @@ class SoundManager:
             except Exception as exc:
                 print(f'[Audio] Could not load custom shotgun reload sound: {exc}')
 
-        # Optional supplied background track for Frenzy Mode.
+        # Frenzy background track. If the optional MP3 is absent, empty, or
+        # unsupported by the local SDL_mixer build, synthesize a seamless dark
+        # rumble so Frenzy always has an audible background layer.
         frenzy_track = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     'assets', 'audio', 'frenzy_mode_ambience.mp3')
-        if os.path.isfile(frenzy_track):
+        if os.path.isfile(frenzy_track) and os.path.getsize(frenzy_track) > 0:
             try:
                 self._frenzy_ambience_sound = pygame.mixer.Sound(frenzy_track)
                 self._frenzy_ambience_sound.set_volume(1.0)
                 print('[Audio] Loaded Frenzy Mode ambience.')
             except Exception as exc:
-                print(f'[Audio] Could not load Frenzy Mode ambience: {exc}')
+                print(f'[Audio] Could not load Frenzy Mode ambience ({exc}); using procedural fallback.')
+        else:
+            print('[Audio] Frenzy ambience MP3 is missing or empty; using procedural fallback.')
+
+        if self._frenzy_ambience_sound is None and pygame.mixer.get_init():
+            try:
+                rate = self.sample_rate
+                duration = 8.0
+                t = np.arange(int(rate * duration), dtype=np.float64) / rate
+                slow_breath = 0.78 + 0.22 * np.sin(2.0 * np.pi * 0.125 * t)
+                low = (0.19 * np.sin(2.0 * np.pi * 42.0 * t)
+                       + 0.12 * np.sin(2.0 * np.pi * 55.0 * t)
+                       + 0.065 * np.sin(2.0 * np.pi * 83.0 * t))
+                rumble = low * slow_breath
+                stereo = np.column_stack((rumble, rumble * 0.96))
+                self._frenzy_ambience_sound = self._generate_sound(stereo)
+                if self._frenzy_ambience_sound is not None:
+                    self._frenzy_ambience_sound.set_volume(1.0)
+                    print('[Audio] Generated procedural Frenzy background loop.')
+            except Exception as exc:
+                print(f'[Audio] Procedural Frenzy background generation failed: {exc}')
 
         # Optional user-supplied Frenzy heartbeat and breathing recordings.
         audio_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
