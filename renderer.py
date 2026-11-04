@@ -523,6 +523,9 @@ class Renderer:
         # Heartbeat / danger
         self.heart_phase = 0.0
         self.danger = 0.0
+        # Frenzy feedback has its own breath oscillator; heartbeat timing comes from audio playback.
+        self.frenzy_breath_phase = 0.0
+        self.frenzy_feedback_active = False
 
         # Asset load failure / zero alpha / fully black warnings
         all_assets = []
@@ -920,6 +923,7 @@ class Renderer:
         # 8. Vignette, low-HP / sanity blood vignette, enemy-proximity horror
         self.surface.blit(self.vignette, (0, 0))
         self._danger_effects(player, enemies, dt)
+        self._frenzy_feedback(player, dt)
         if player.health < 35 or (ENABLE_SANITY and player.sanity < 30):
             urgency = max((35 - player.health) / 35.0, (30 - player.sanity) / 30.0)
             urgency = max(0.0, min(1.0, urgency))
@@ -1031,6 +1035,41 @@ class Renderer:
             dawn_alpha = int(185 * (progress ** 1.35))
             self.sunrise_surf.fill((255, 190, 125, dawn_alpha))
             self.surface.blit(self.sunrise_surf, (0, 0))
+
+    def _frenzy_feedback(self, player, dt):
+        """Layer a forceful inhale/exhale zoom with a heartbeat-sample-locked red pulse."""
+        frenzy = bool(ENABLE_SANITY and getattr(player, 'sanity', SANITY_MAX) < SANITY_FRENZY_THRESHOLD)
+        if not frenzy:
+            self.frenzy_feedback_active = False
+            return
+
+        self.frenzy_feedback_active = True
+        # One deliberate inhale/exhale cycle, independent of frame rate.
+        self.frenzy_breath_phase = (self.frenzy_breath_phase + dt * (2.0 * math.pi / 2.25)) % (2.0 * math.pi)
+        inhale = (0.5 - 0.5 * math.cos(self.frenzy_breath_phase))
+        breath = inhale * inhale * (3.0 - 2.0 * inhale)
+
+        # The audio manager derives this envelope from the currently playing MP3's
+        # decoded waveform and channel position, so the visual hit follows the real sample.
+        try:
+            from audio_synth import audio_mgr
+            heartbeat = max(0.0, min(1.0, audio_mgr.get_frenzy_pulse()))
+        except Exception:
+            heartbeat = 0.0
+
+        # Strong breathing push/pull, with a short additional expansion on each heartbeat.
+        zoom = 1.0 + 0.032 * breath + 0.020 * heartbeat
+        if abs(zoom - 1.0) > 0.001:
+            target_size = (max(1, int(self.w * zoom)), max(1, int(self.h * zoom)))
+            frame = pygame.transform.scale(self.surface, target_size)
+            self.surface.fill((0, 0, 0))
+            self.surface.blit(frame, ((self.w - target_size[0]) // 2,
+                                      (self.h - target_size[1]) // 2))
+
+        # A second, tighter pulse layer adds a red pressure bloom without camera waving.
+        alpha = int(24 + 88 * breath + 118 * heartbeat)
+        self.red_vig.set_alpha(max(0, min(190, alpha)))
+        self.surface.blit(self.red_vig, (0, 0))
 
     # ─── Horror feedback ──────────────────────────────────────────────────
     def _danger_effects(self, player, enemies, dt):
