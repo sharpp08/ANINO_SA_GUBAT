@@ -23,6 +23,7 @@ import shader_renderer as _shader_mod
 from time import perf_counter as _perf_counter
 from radar import Radar
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
+from menu_music import MenuMusic
 from enemy_audio import enemy_audio_mgr
 from cinematic import Cinematic
 from objective import next_objective, nearest_page, relative_bearing, direction_word
@@ -197,7 +198,6 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
         pygame.draw.ellipse(fog, (115, 126, 119, alpha),
                             (int(sw * (-.12 + i * .08)), y, int(sw * 1.15), max(8, int(sh * .10))))
     surf.blit(fog, (0, 0))
-
     pygame.draw.polygon(surf, (3, 6, 7), [
         (0, int(sh * .88)), (int(sw * .18), int(sh * .82)),
         (int(sw * .36), int(sh * .91)), (int(sw * .58), int(sh * .84)),
@@ -588,6 +588,7 @@ class Game:
         self._try_init_graphics_manager()
         self.settings_menu = SettingsMenu()
         self.settings_return_state = STATE_MENU
+        self.menu_music = MenuMusic()
         self.target_fps = FPS
 
     def _apply_settings(self, values):
@@ -631,6 +632,7 @@ class Game:
             audio_mgr.ambient_volume = max(0.0, min(1.0, float(values.get("ambient_volume", 0.7))))
             audio_mgr.enemy_volume = max(0.0, min(1.0, float(values.get("enemy_volume", 0.8))))
             pygame.mixer.music.set_volume(master * music)
+            self.menu_music.set_volume(master * music)
             for channel_index in range(4, pygame.mixer.get_num_channels()):
                 pygame.mixer.Channel(channel_index).set_volume(master * sfx)
         except Exception:
@@ -997,7 +999,6 @@ class Game:
                         base_volume=0.9,
                         max_dist=20.0,
                     )
-
     def _use_salt(self):
         if self.player.use_salt():
             self.enemy_manager.add_salt_zone(self.player.x, self.player.y)
@@ -1555,6 +1556,13 @@ class Game:
             except Exception:
                 pass
 
+            # Keep the title soundtrack active on the main menu and its settings screen.
+            menu_music_active = (
+                self.state == STATE_MENU
+                or (self.state == STATE_SETTINGS and self.settings_return_state == STATE_MENU)
+            )
+            self.menu_music.set_active(menu_music_active)
+
             self.render(dt)
             self.perf.update(self._work_ms, self.state == STATE_PLAYING)
 
@@ -1587,3 +1595,4 @@ if __name__ == '__main__':
         except Exception:
             pass
         sys.exit(1)
+
