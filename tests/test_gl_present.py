@@ -59,7 +59,21 @@ def test_shader_targets_opengl_33_core():
     assert "smoothstep(0.05, 0.48" not in FRAGMENT_SHADER
 
 
+def test_overlay_is_composited_on_the_post_processed_path():
+    # Regression: PLAYING/PAUSED present with post=True. The overlay (HUD, hands, weapons,
+    # crosshair) used to be composited only inside the `u_post == 0` early-return branch, so
+    # it vanished in-game. It must also be sampled after the post-processing stages.
+    src = FRAGMENT_SHADER
+    assert src.count("texture(u_overlay") >= 2
+    post_branch_end = src.index("fragColor = vec4(col.rgb, 1.0);\n        return;")
+    last_overlay = src.rindex("texture(u_overlay")
+    last_effect = max(src.rindex("rand(uv"), src.rindex("smoothstep(0.25, 0.95"))
+    assert post_branch_end < last_overlay, "overlay must be composited on the post path"
+    assert last_overlay > last_effect, "overlay must be composited after grade/vignette/grain"
+
+
 if __name__ == '__main__':
+    test_overlay_is_composited_on_the_post_processed_path()
     test_swizzle_matches_pixel_layout()
     test_letterbox_keeps_aspect()
     test_mouse_mapping_round_trips()

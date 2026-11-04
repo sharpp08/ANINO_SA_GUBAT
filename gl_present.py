@@ -91,6 +91,14 @@ void main() {
     col.rgb *= clamp(1.0 - dot(cc, cc) * 0.38, 0.24, 1.0);
     // Fine grain: keep it subtle to avoid noisy dark gradients.
     col.rgb += vec3((rand(uv * mod(u_time, 100.0)) - 0.5) * 0.018);
+    // Composite the UI/viewmodel layer LAST so the HUD, hands, weapon and crosshair stay crisp
+    // (no bloom, grade, vignette or grain on them). Sample with the undistorted v_uv so the
+    // supernatural ripple only affects the world. Without this, every frame rendered with
+    // post == 1 (PLAYING / PAUSED) dropped the overlay layer entirely.
+    if (u_has_overlay == 1) {
+        vec4 over = texture(u_overlay, v_uv);
+        col.rgb = over.rgb * over.a + col.rgb * (1.0 - over.a);
+    }
     fragColor = vec4(col.rgb, 1.0);
 }
 """
