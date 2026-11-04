@@ -143,10 +143,6 @@ class PostProcessingPipeline:
                 grain = np.random.randn(*arr.shape) * (255 * self.settings['grain_amount'])
                 arr = np.clip(arr.astype(np.float32) + grain, 0, 255).astype(np.uint8)
             
-            # Fear distortion
-            if self.fear_intensity > 0.0:
-                arr = self._apply_distortion(arr, self.fear_intensity)
-            
             # Convert back to surface
             arr = np.transpose(arr, (1, 2, 0))
             result = pygame.surfarray.make_surface(arr)
@@ -173,7 +169,7 @@ class PostProcessingPipeline:
         
         return distorted
     
-    def set_fear(self, level: float):
+self, level: float):
         """Set fear intensity (0.0-1.0)."""
         self.fear_intensity = max(0.0, min(1.0, level))
     
