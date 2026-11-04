@@ -1478,16 +1478,17 @@ class Renderer:
             shadow = pygame.Surface((sw, sh), pygame.SRCALPHA)
             # Three nested low-alpha ellipses approximate a soft penumbra while
             # keeping the pass cheap and independent of the number of foliage pixels.
-            pygame.draw.ellipse(shadow, (2, 5, 3, 28),
-                                (0, 0, sw, sh))
+            # Layered contact occlusion: soft outer penumbra plus a denser
+            # centre keeps objects grounded without a hard black decal.
+            pygame.draw.ellipse(shadow, (1, 3, 2, 46), (0, 0, sw, sh))
             inset_x = max(1, sw // 12)
             inset_y = max(1, sh // 5)
-            pygame.draw.ellipse(shadow, (2, 4, 2, 34),
+            pygame.draw.ellipse(shadow, (1, 2, 1, 58),
                                 (inset_x, inset_y, max(1, sw - 2 * inset_x),
                                  max(1, sh - 2 * inset_y)))
             core_x = max(2, sw // 5)
             core_y = max(1, sh // 3)
-            pygame.draw.ellipse(shadow, (1, 3, 2, 24),
+            pygame.draw.ellipse(shadow, (0, 1, 0, 42),
                                 (core_x, core_y, max(1, sw - 2 * core_x),
                                  max(1, sh - 2 * core_y)))
             shadow = shadow.convert_alpha()
@@ -1669,6 +1670,11 @@ class Renderer:
                         push_amount = (2.0 - dist_to_player) * 3.0
                         screen_x += math.cos(push_dir) * push_amount
                 
+                plant_shadow = self._tree_ground_shadow(
+                    max(8, int(sw * 0.95)), max(3, int(unit * 0.055)))
+                self.surface.blit(plant_shadow, (
+                    int(screen_x - plant_shadow.get_width() * 0.5),
+                    int(floor_y - plant_shadow.get_height() * 0.55)))
                 self._draw_one(img, screen_x, floor_y, sw, sh, dist, stats)
 
             elif kind == 'pickup':
@@ -1682,6 +1688,11 @@ class Renderer:
                 bob = math.sin(t_ticks * 0.004 + obj['x'] * 3.1 + obj['y']) * unit * 0.03
                 lift = unit * 0.07 + bob
                 bottom = floor_y - lift
+                pickup_shadow = self._tree_ground_shadow(
+                    max(6, int(sw * 0.75)), max(3, int(unit * 0.035)))
+                self.surface.blit(pickup_shadow, (
+                    int(screen_x - pickup_shadow.get_width() * 0.5),
+                    int(floor_y - pickup_shadow.get_height() * 0.55)))
                 drawn = self._draw_one(img, screen_x, bottom, sw, sh, dist, stats)
                 # soft halo so pickups can be found in the dark
                 gcol = PICKUP_GLOW.get(ptype, (110, 110, 60))
@@ -1694,6 +1705,12 @@ class Renderer:
                     self._debug_marker(screen_x, cy, (255, 255, 0), f"{ptype} {dist:.1f}")
 
             elif kind == 'enemy':
+                enemy_shadow = self._tree_ground_shadow(
+                    max(10, int(unit * (0.30 if obj.type in ('kapre', 'tikbalang') else 0.22))),
+                    max(3, int(unit * 0.045)))
+                self.surface.blit(enemy_shadow, (
+                    int(screen_x - enemy_shadow.get_width() * 0.5),
+                    int(floor_y - enemy_shadow.get_height() * 0.55)))
                 self._draw_enemy(obj, screen_x, floor_y, unit, dist, t_ticks, stats)
 
         self.stats = stats
