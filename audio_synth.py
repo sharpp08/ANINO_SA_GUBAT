@@ -430,8 +430,8 @@ class SoundManager:
 
         # Optional user-supplied Frenzy heartbeat and breathing recordings.
         audio_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
-        heartbeat_path = os.path.join(audio_root, 'frenzy_heartbeat.mp3')
-        breathing_path = os.path.join(audio_root, 'frenzy_breathing.mp3')
+        heartbeat_path = os.path.join(audio_root, 'heartbeat.mp3')
+        breathing_path = os.path.join(audio_root, 'heavy-breathing-sound.mp3')
         if os.path.isfile(heartbeat_path):
             try:
                 self._frenzy_heartbeat_sound = pygame.mixer.Sound(heartbeat_path)
