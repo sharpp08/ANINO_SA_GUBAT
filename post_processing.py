@@ -150,26 +150,7 @@ class PostProcessingPipeline:
         except Exception:
             return surface
     
-    def _apply_distortion(self, arr: np.ndarray, intensity: float) -> np.ndarray:
-        """Apply screen distortion based on fear."""
-        h, w = arr.shape[1], arr.shape[2]
-        distorted = arr.copy()
-        
-        # Create displacement map
-        y_coords = np.arange(h)
-        x_coords = np.arange(w)
-        yy, xx = np.meshgrid(y_coords, x_coords, indexing='ij')
-        
-        # Wave distortion
-        wave = np.sin((xx + self.time_elapsed * 100) * 0.02) * intensity * 3
-        xx_distort = np.clip(xx + wave.astype(np.int32), 0, w - 1)
-        
-        for c in range(3):
-            distorted[c] = arr[c, yy, xx_distort]
-        
-        return distorted
-    
-self, level: float):
+    def set_fear(
         """Set fear intensity (0.0-1.0)."""
         self.fear_intensity = max(0.0, min(1.0, level))
     
