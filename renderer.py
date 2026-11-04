@@ -932,11 +932,18 @@ class Renderer:
 
         # Draw the first-person viewmodel on its own transparent layer.
         _scene_surface = self.surface
+        # Preserve the original additive lightning wash on the world, then add a
+        # translucent cold flash to the viewmodel layer so the weapon is illuminated too.
+        self.weather.draw_flash(_scene_surface)
         self.surface = self.overlay_surface
         try:
             self._draw_player_viewmodel(player, dt)
-            # Lightning flash also covers the first-person viewmodel.
-            self.weather.draw_flash(self.surface)
+            if self.weather.lightning_on and self.weather.flash_strength > 0.0:
+                flash_add = int(150 * self.weather.storm.flash * self.weather.flash_strength)
+                if flash_add >= 3:
+                    flash_alpha = min(150, flash_add)
+                    self.surface.fill((220, 232, 255, flash_alpha),
+                                      special_flags=pygame.BLEND_RGBA_ADD)
         finally:
             self.surface = _scene_surface
 
