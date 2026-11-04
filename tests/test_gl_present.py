@@ -15,7 +15,9 @@ from gl_present import (compute_swizzle, letterbox, map_to_surface,
 def test_swizzle_matches_pixel_layout():
     assert compute_swizzle((16, 8, 0, 0)) == 'BGR1'    # pygame default: stored B,G,R,X
     assert compute_swizzle((16, 8, 0, 24)) == 'BGR1'
-    assert compute_swizzle((0, 8, 16, 24)) == 'RGB1'   # stored R,G,B,A
+    assert compute_swizzle((0, 8, 16, 24)) == 'RGB1'   # opaque scene upload
+    assert compute_swizzle((16, 8, 0, 24), preserve_alpha=True) == 'BGRA'
+    assert compute_swizzle((0, 8, 16, 24), preserve_alpha=True) == 'RGBA'
     for bad in ((16, 16, 0, 0), (5, 8, 0, 0), (40, 8, 0, 0)):
         try:
             compute_swizzle(bad)
@@ -47,10 +49,11 @@ def test_shader_targets_opengl_33_core():
     assert FRAGMENT_SHADER.startswith("#version 330 core")
     assert "in vec2 in_position" in VERTEX_SHADER
     assert "in vec2 in_uv" in VERTEX_SHADER
-    for uniform in ("u_texture", "u_time", "u_flashlight_on",
+    for uniform in ("u_texture", "u_overlay", "u_has_overlay", "u_time", "u_flashlight_on",
                     "u_fog_density", "u_supernatural_intensity",
                     "u_post", "u_bloom_strength"):
         assert f"uniform " in FRAGMENT_SHADER and uniform in FRAGMENT_SHADER
+    assert "over.rgb * over.a + col.rgb * (1.0 - over.a)" in FRAGMENT_SHADER
     # smoothstep edges must be ascending; reversed edges are undefined in GLSL.
     assert "smoothstep(0.48, 0.05" not in FRAGMENT_SHADER
     assert "smoothstep(0.05, 0.48" not in FRAGMENT_SHADER
