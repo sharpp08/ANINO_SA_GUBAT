@@ -216,7 +216,7 @@ ENABLE_RAIN = True
 ENABLE_LIGHTNING = True          # lightning flashes + bolts + thunder
 RAIN_DENSITY = 1.0               # multiplier on the number of drops (0.5 = light rain); 'low' tier uses 60%
 LIGHTNING_FLASH_STRENGTH = 1.0   # screen-flash brightness; 0 turns the flash off (thunder still plays)
-THUNDER_VOLUME = 1.0             # multiplier on the thunder claps
+THUNDER_VOLUME = 2.0             # multiplier on the thunder claps
 
 
 UNDERGROWTH_DENSITY = 1300
@@ -314,7 +314,7 @@ KAPRE_SPEED = 1.2
 
 WHITE_LADY_HEALTH = 60
 WHITE_LADY_DAMAGE = 10
-WHITE_LADY_SPEED = 1.5
+WHITE_LADY_SPEED = 2.5
 
 MULTO_HEALTH = 50
 MULTO_DAMAGE = 12
@@ -322,7 +322,7 @@ MULTO_SPEED = 2.0
 
 SIGBIN_HEALTH = 70
 SIGBIN_DAMAGE = 18
-SIGBIN_SPEED = 3.5
+SIGBIN_SPEED = 4
 
 # Colors
 BLACK = (0, 0, 0)
