@@ -150,7 +150,7 @@ class PostProcessingPipeline:
         except Exception:
             return surface
     
-    def set_fear(
+    def set_fear(self, level: float):
         """Set fear intensity (0.0-1.0)."""
         self.fear_intensity = max(0.0, min(1.0, level))
     
