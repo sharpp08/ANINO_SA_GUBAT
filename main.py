@@ -198,7 +198,6 @@ def draw_menu(surf, font_lg, font_sm, font_tiny):
         pygame.draw.ellipse(fog, (115, 126, 119, alpha),
                             (int(sw * (-.12 + i * .08)), y, int(sw * 1.15), max(8, int(sh * .10))))
     surf.blit(fog, (0, 0))
-
     pygame.draw.polygon(surf, (3, 6, 7), [
         (0, int(sh * .88)), (int(sw * .18), int(sh * .82)),
         (int(sw * .36), int(sh * .91)), (int(sw * .58), int(sh * .84)),
@@ -298,6 +297,7 @@ def draw_win(surf, font_lg, font_sm, chapter, final=False):
 
 def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     """Compact top-centre panel: Bible pages, sunrise clock and a compass arrow to the next goal.
+
     The arrow points at the nearest uncollected Bible page (the exit once enough pages are
     held): up = straight ahead, right = the target is on your right.
     Returns the y of the panel's bottom edge so notifications can sit just below it.
@@ -598,7 +598,8 @@ class Game:
         try:
             SCREEN_WIDTH, SCREEN_HEIGHT = [int(part.strip()) for part in resolution.split("x")]
         except (ValueError, AttributeError):
-            SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720        requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
+            SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
+        requested_fullscreen = bool(values.get("fullscreen", FULLSCREEN))
         display_changed = (requested_fullscreen != FULLSCREEN or self.screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT)
                            or bool(values.get("vsync", False)) != getattr(self, "vsync_enabled", False))
         FULLSCREEN = requested_fullscreen
@@ -898,7 +899,8 @@ class Game:
                         ny = e.y + math.sin(a) * 4.0
                         if not self.game_map.is_solid(nx, ny):
                             p.x, p.y = nx, ny
-                            p.angle = math.atan2(e.y - ny, e.x - nx)                            self.notify(f"DEBUG: teleported near {e.type}")
+                            p.angle = math.atan2(e.y - ny, e.x - nx)
+                            self.notify(f"DEBUG: teleported near {e.type}")
                             break
             elif k == pygame.K_r:
                 # Play reload recordings only when the corresponding reload can start.
@@ -997,7 +999,6 @@ class Game:
                         base_volume=0.9,
                         max_dist=20.0,
                     )
-
     def _use_salt(self):
         if self.player.use_salt():
             self.enemy_manager.add_salt_zone(self.player.x, self.player.y)
@@ -1198,6 +1199,7 @@ class Game:
                 except Exception as exc:
                     print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
                     enemy._chase_scream_timer = 2.0
+
         # Enemy attacks
         dmg = self.enemy_manager.check_attacks(p.x, p.y)
         attackers = self.enemy_manager.last_attackers
@@ -1496,7 +1498,8 @@ class Game:
                         self.settings_menu.apply(self._apply_settings)
 
                 elif self.state == STATE_GAMEOVER:
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:                        self.state = STATE_MENU
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                        self.state = STATE_MENU
                         safe_set_relative_mouse(False)
 
                 elif self.state == STATE_WIN:
@@ -1592,3 +1595,4 @@ if __name__ == '__main__':
         except Exception:
             pass
         sys.exit(1)
+
