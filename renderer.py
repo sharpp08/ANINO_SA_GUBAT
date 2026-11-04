@@ -718,9 +718,8 @@ class Renderer:
             shx, shy = self.camera_shake.update(dt)
             if not frenzy_active and (shx != 0 or shy != 0):
                 self.screen_shake = max(self.screen_shake, max(abs(shx), abs(shy)))
-        # Frenzy uses breathing zoom + heartbeat pulse, never camera waving.
-        if frenzy_active:
-            self.screen_shake = 0.0
+        # Frenzy screen shake is triggered separately on each heartbeat edge
+        # in _frenzy_feedback(); do not clear that pulse before it is rendered.
         if ENABLE_ANIMATIONS and getattr(self, 'enemy_animator', None) is not None:
             self.enemy_animator.update_all(enemies, dt)
         
