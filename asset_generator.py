@@ -747,10 +747,30 @@ def generate_tree_billboard(tree_type='balete', width=64, height=256, seed=42):
             foliage_rgb[:, :, channel] = plane.astype(np.uint8)
         del foliage_rgb, foliage_alpha
 
-    # Preserve intentional soft moss/aura pixels, but ensure all fully drawn
-    # bark and foliage pixels are truly opaque after conversion/scaling.
+    # Broadleaf crowns must read as solid foliage at gameplay scale. Fill tiny
+    # gaps between procedural leaf clusters inside the intended crown silhouette;
+    # keep the outer silhouette and intentionally soft moss/aura pixels intact.
+    if not is_dead and not is_bam and not is_trop:
+        crown_x, crown_y = np.indices((width, height), dtype=np.float32)
+        crown_mask = (
+            (((crown_x - cx) / 35.0) ** 2 + ((crown_y - (canopy_top + canopy_bot) * 0.5) /
+              max(1.0, (canopy_bot - canopy_top) * 0.58)) ** 2 <= 1.0)
+            | (((crown_x - (cx - 13)) / 22.0) ** 2 + ((crown_y - (canopy_top + canopy_bot) * 0.52) /
+              max(1.0, (canopy_bot - canopy_top) * 0.48)) ** 2 <= 1.0)
+            | (((crown_x - (cx + 13)) / 22.0) ** 2 + ((crown_y - (canopy_top + canopy_bot) * 0.48) /
+              max(1.0, (canopy_bot - canopy_top) * 0.48)) ** 2 <= 1.0)
+        )
+        crown_alpha = pygame.surfarray.pixels_alpha(surf)
+        crown_rgb = pygame.surfarray.pixels3d(surf)
+        gaps = crown_mask & (crown_alpha < 240)
+        crown_rgb[gaps] = (12, 29, 14) if not is_sup else (9, 17, 16)
+        crown_alpha[crown_mask] = 255
+        del crown_rgb, crown_alpha, crown_x, crown_y
+
+    # Preserve intentionally translucent moss/aura pixels, but make all solid
+    # trunk, branch, and foliage strokes fully opaque.
     alpha = pygame.surfarray.pixels_alpha(surf)
-    alpha[alpha >= 240] = 255
+    alpha[alpha >= 200] = 255
     del alpha
     return surf
 
