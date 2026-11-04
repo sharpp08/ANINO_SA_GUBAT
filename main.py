@@ -705,12 +705,28 @@ class Game:
 
     def _fallback_to_2d(self):
         self._close_gl()
-        self._shader_skip(False)
+        self._use_legacy_gpu_post_fallback()
         self.screen = self._set_display_mode_2d()
 
     @staticmethod
     def _shader_skip(skip):
         _shader_mod.ShaderRenderer.SKIP = bool(skip)
+
+    @staticmethod
+    def _legacy_gpu_post_wanted():
+        """The old offscreen shader reads its framebuffer back to the CPU every frame.
+
+        Keep that expensive compatibility path opt-in. The normal OpenGL presenter is
+        readback-free; if it cannot initialize, the software renderer is the safe default.
+        Set ANINO_GPU_POST=1 only when deliberately testing the legacy post-process.
+        """
+        return os.environ.get('ANINO_GPU_POST') == '1'
+
+    def _use_legacy_gpu_post_fallback(self):
+        enabled = self._legacy_gpu_post_wanted()
+        self._shader_skip(not enabled)
+        if enabled:
+            print("[GPU] Legacy post-process enabled by ANINO_GPU_POST=1 (framebuffer readback may reduce FPS).")
 
     def _set_display_mode(self):
         """Open the window: OpenGL presentation if it verifies, else the 2D SCALED window."""
@@ -737,7 +753,7 @@ class Game:
                 presenter.close()
             except Exception as exc:
                 print(f"[GPU] could not open the OpenGL window ({type(exc).__name__}: {exc}).")
-        self._shader_skip(False)
+        self._use_legacy_gpu_post_fallback()
         return self._set_display_mode_2d()
 
     def _set_display_mode_2d(self):
