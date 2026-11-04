@@ -52,8 +52,6 @@ vec3 bright_pass(vec3 c) {
 }
 void main() {
     vec2 uv = v_uv;
-    if (u_supernatural_intensity > 0.0 && u_post != 0)
-        uv.x += sin(uv.y * 25.0 + u_time * 6.0) * 0.006 * u_supernatural_intensity;
     vec4 col = texture(u_texture, uv);
     // Menus/loading screens skip scene post-processing but still composite UI.
     if (u_post == 0) {
