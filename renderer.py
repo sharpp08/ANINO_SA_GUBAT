@@ -474,7 +474,10 @@ class Renderer:
         self.fps_history = []
         self.frame_times = []  # For percentile tracking
         self.timings = {'rays': 0.0, 'sprites': 0.0, 'darkness': 0.0, 'post': 0.0, 'total': 0.0, 'animation': 0.0,
-                         'floor': 0.0, 'shadows': 0.0, 'fog': 0.0, 'lighting': 0.0, 'effects': 0.0}
+                         'floor': 0.0, 'floor_fill': 0.0, 'floor_detail': 0.0,
+                         'shadows': 0.0, 'fog': 0.0, 'lighting': 0.0, 'effects': 0.0,
+                         'fx_particles': 0.0, 'fx_horror': 0.0, 'fx_weather': 0.0,
+                         'fx_weapon': 0.0, 'fx_grade': 0.0}
         self.dbg_font = pygame.font.SysFont('consolas', 10)
 
         self.debug_f4 = False          # raw scene: no darkness + markers on every entity
@@ -783,6 +786,7 @@ class Renderer:
             ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
             ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
 
+            t_floor_fill = time.perf_counter()
             # Whole floor in one vectorised pass (see floor_fast.py).
             if self._enhanced_terrain_ready(game_map):
                 fill_floor_terrain(arr_3d, self._terrain_atlas, self._terrain_far,
@@ -800,9 +804,12 @@ class Renderer:
                            px, py, ray_dx, ray_dy,
                            self.h, half_h, horizon_y, pitch_offset, mist_phase)
             del arr_3d
+            self.timings['floor_fill'] = (time.perf_counter() - t_floor_fill) * 1000.0
             # Low-cost wet leaf / puddle highlights on the floor plane only.
+            t_floor_detail = time.perf_counter()
             self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
                                           0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
+            self.timings['floor_detail'] = (time.perf_counter() - t_floor_detail) * 1000.0
 
         self.timings['floor'] = (time.perf_counter() - t_floor) * 1000.0
 
@@ -851,6 +858,7 @@ class Renderer:
         self.timings['lighting'] = (time.perf_counter() - t_lighting) * 1000.0
 
         t_effects = time.perf_counter()
+        t_fx_particles = time.perf_counter()
         # 7. Particles (fireflies / dust / spores)
         if ENABLE_PARTICLES:
             _particle_cache = self._particle_cache  # local ref avoids attribute lookups
@@ -877,6 +885,9 @@ class Renderer:
                 self.physics_particles.draw(self.surface)
             except Exception:
                 pass
+
+        self.timings['fx_particles'] = (time.perf_counter() - t_fx_particles) * 1000.0
+        t_fx_horror = time.perf_counter()
 
         # 8. Vignette, low-HP / sanity blood vignette, enemy-proximity horror
         self.surface.blit(self.vignette, (0, 0))
@@ -906,8 +917,14 @@ class Renderer:
             self._draw_muzzle_flash()
             self.muzzle_flash -= dt * 8
 
+        self.timings['fx_horror'] = (time.perf_counter() - t_fx_horror) * 1000.0
+        t_fx_weather = time.perf_counter()
+
         # Rain and sunrise are composited before the viewmodel so weapon/hands stay crisp.
         self._draw_rain_and_sunrise(dt, sunrise_progress, horizon_y)
+
+        self.timings['fx_weather'] = (time.perf_counter() - t_fx_weather) * 1000.0
+        t_fx_weapon = time.perf_counter()
 
         # Draw player viewmodel (hands, sleeves, weapon)
         self._draw_player_viewmodel(player, dt)
@@ -915,10 +932,15 @@ class Renderer:
         # Lightning lights up everything, hands and weapon included, so it goes on last.
         self.weather.draw_flash(self.surface)
 
+        self.timings['fx_weapon'] = (time.perf_counter() - t_fx_weapon) * 1000.0
+        t_fx_grade = time.perf_counter()
+
         # Restrained cold-night / warm-dawn grade; UI and crosshair remain untouched.
         if not self.debug_f4:
             self.photo_pass.apply_grade(self.surface, sunrise_progress,
                                         0.65 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
+
+        self.timings['fx_grade'] = (time.perf_counter() - t_fx_grade) * 1000.0
 
         # Draw crosshair
         if self.crosshair:
@@ -1054,8 +1076,10 @@ class Renderer:
             f"In view -> enemies:{self.stats['enemies_view']} pickups:{self.stats['pickups_view']} drawn:{self.stats['drawn']}",
             f"Danger: {self.danger:.2f}",
             f"Anim timing: {self.timings.get('animation', 0.0):.2f}ms | Particles: {self.physics_particles.count}",
-            f"Render ms F:{self.timings.get('floor', 0.0):.1f} R:{self.timings.get('rays', 0.0):.1f} Sh:{self.timings.get('shadows', 0.0):.1f} Sp:{self.timings.get('sprites', 0.0):.1f}",
-            f"Fog:{self.timings.get('fog', 0.0):.1f} Light:{self.timings.get('lighting', 0.0):.1f} FX:{self.timings.get('effects', 0.0):.1f} Total:{self.timings.get('total', 0.0):.1f}",
+            f"Render ms F:{self.timings.get('floor', 0.0):.1f} [fill {self.timings.get('floor_fill', 0.0):.1f} detail {self.timings.get('floor_detail', 0.0):.1f}]",
+            f"R:{self.timings.get('rays', 0.0):.1f} Sh:{self.timings.get('shadows', 0.0):.1f} Sp:{self.timings.get('sprites', 0.0):.1f} Fog:{self.timings.get('fog', 0.0):.1f}",
+            f"FX:{self.timings.get('effects', 0.0):.1f} P:{self.timings.get('fx_particles', 0.0):.1f} H:{self.timings.get('fx_horror', 0.0):.1f} W:{self.timings.get('fx_weather', 0.0):.1f}",
+            f"Weapon:{self.timings.get('fx_weapon', 0.0):.1f} Grade:{self.timings.get('fx_grade', 0.0):.1f} Light:{self.timings.get('lighting', 0.0):.1f} Total:{self.timings.get('total', 0.0):.1f}",
             f"FPS (30f avg): {fps:.1f}",
         ]
         if hasattr(game_map, 'validation_errors') and game_map.validation_errors:
