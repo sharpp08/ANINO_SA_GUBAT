@@ -526,6 +526,7 @@ class Renderer:
         # Frenzy feedback has its own breath oscillator; heartbeat timing comes from audio playback.
         self.frenzy_breath_phase = 0.0
         self.frenzy_feedback_active = False
+        self.frenzy_heartbeat_was_active = False
 
         # Asset load failure / zero alpha / fully black warnings
         all_assets = []
@@ -1048,6 +1049,7 @@ class Renderer:
         frenzy = bool(ENABLE_SANITY and getattr(player, 'sanity', SANITY_MAX) < SANITY_FRENZY_THRESHOLD)
         if not frenzy:
             self.frenzy_feedback_active = False
+            self.frenzy_heartbeat_was_active = False
             return
 
         self.frenzy_feedback_active = True
@@ -1063,6 +1065,13 @@ class Renderer:
             heartbeat = max(0.0, min(1.0, audio_mgr.get_frenzy_pulse()))
         except Exception:
             heartbeat = 0.0
+
+        # Fire one short screen jolt on the rising edge of each audio-locked beat.
+        # The edge check prevents continuous shaking while the pulse envelope decays.
+        heartbeat_hit = heartbeat >= 0.78
+        if heartbeat_hit and not self.frenzy_heartbeat_was_active:
+            self.screen_shake = max(self.screen_shake, 6.0)
+        self.frenzy_heartbeat_was_active = heartbeat_hit
 
         # Strong breathing push/pull, with a short additional expansion on each heartbeat.
         zoom = 1.0 + 0.032 * breath + 0.020 * heartbeat
