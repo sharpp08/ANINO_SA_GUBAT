@@ -320,6 +320,9 @@ class Renderer:
         self._grid_rev = -1
         # reusable full-screen overlay surfaces (allocated once, not every frame)
         self._flash_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
+        # Reused world-space projected shadow layer. It is composited before billboards,
+        # so trunks and foliage correctly cover the ground shadows at their bases.
+        self._world_shadow_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
         self._blood_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA).convert_alpha()
         # Depth-fog overlay: one pre-allocated alpha surface, reused every frame.
         # The fog colour comes from settings.FOG_COLOR; the alpha pattern is
@@ -806,7 +809,12 @@ class Renderer:
             self._cast_rays(player, game_map, draw_walls=True)
         self.timings['rays'] = pygame.time.get_ticks() - t_rays
 
-        # 4. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
+        # 4. World-space ground shadows from moonlight and the player's moving flashlight.
+        # Keep this before sprites so the tree silhouettes naturally cover their roots.
+        if not self.debug_f4:
+            self._draw_environment_shadows(player, game_map, sunrise_progress)
+
+        # 5. Trees + undergrowth + enemies + pickups: ONE depth-sorted pass
         self._draw_world_sprites(player, enemies, game_map)
 
         # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls
@@ -1566,6 +1574,110 @@ class Renderer:
                 nearby_trees.extend(self._tree_buckets.get(key, ()))
                 nearby_plants.extend(self._plant_buckets.get(key, ()))
         return nearby_trees, nearby_plants
+
+    def _draw_environment_shadows(self, player, game_map, sunrise_progress=0.0):
+        """Project soft, directional tree shadows onto the raycast ground plane.
+
+        Moonlight uses a stable world-space direction. The flashlight uses the
+        live player position, so its shadow direction follows both movement and
+        camera rotation. This is a lightweight 2.5D shadow pass for the current
+        billboard renderer; it deliberately leaves wall/sprite depth and gameplay
+        untouched. A future mesh shadow-map pass can replace this without changing
+        the call site or light inputs.
+        """
+        layer = self._world_shadow_surf
+        layer.fill((0, 0, 0, 0))
+        trees, _plants = self._get_sprite_candidates(
+            game_map, player.x, player.y, min(MAX_DEPTH, 22.0))
+        if not trees:
+            return
+
+        pitch_offset = int(player.pitch * self.h)
+        horizon = self.h // 2 + pitch_offset
+        dawn = max(0.0, min(1.0, float(sunrise_progress)))
+        moon_strength = 1.0 - dawn
+        flashlight_on = bool(getattr(player, 'flashlight_on', False)
+                              and getattr(player, 'flashlight_battery', 0) > 0)
+        flashlight_range = min(float(getattr(_settings_mod, 'FLASHLIGHT_RANGE', 18.0)), 18.0)
+        fwd_x, fwd_y = math.cos(player.angle), math.sin(player.angle)
+        # The moon is treated as a distant directional source; shadows point
+        # away from it and remain stable as the player turns.
+        moon_dx, moon_dy = 0.82, 0.57
+        moon_len = math.hypot(moon_dx, moon_dy)
+        moon_dx, moon_dy = moon_dx / moon_len, moon_dy / moon_len
+
+        def project(wx, wy):
+            dx, dy = wx - player.x, wy - player.y
+            dist = math.hypot(dx, dy)
+            if dist < 0.12 or dist > MAX_DEPTH:
+                return None
+            rel = self._norm_angle(math.atan2(dy, dx) - player.angle)
+            if abs(rel) > self.half_fov + 0.16:
+                return None
+            sx = (rel / self.fov_rad + 0.5) * self.w
+            sy = horizon + self._unit_h(dist) * 0.5
+            return sx, sy, dist, rel
+
+        def cast_shadow(tree, away_x, away_y, strength, length):
+            if strength <= 0.015:
+                return
+            tx, ty = float(tree['x']), float(tree['y'])
+            base = project(tx, ty)
+            tip = project(tx + away_x * length, ty + away_y * length)
+            if base is None or tip is None:
+                return
+            bx, by, dist, rel = base
+            ex, ey, end_dist, _ = tip
+            # Do not paint a shadow through a nearer wall.
+            if not self._col_visible(int(bx), dist):
+                return
+            tree_scale = max(0.55, min(2.6, float(tree.get('scale', 1.0))))
+            radius_world = max(0.12, float(tree.get('radius', 0.24)))
+            base_half = max(1.0, self._unit_h(dist) * radius_world * 0.72)
+            end_half = max(0.7, self._unit_h(end_dist) * radius_world * 0.34)
+            perp_x, perp_y = -away_y, away_x
+            left = project(tx + perp_x * radius_world, ty + perp_y * radius_world)
+            right = project(tx - perp_x * radius_world, ty - perp_y * radius_world)
+            if left is not None and right is not None:
+                base_half = max(1.0, min(base_half, abs(left[0] - right[0]) * 0.5))
+            # A soft penumbra is built from nested tapered polygons.
+            for spread, alpha in ((1.9, 13), (1.35, 20), (1.0, 27)):
+                points = [
+                    (int(bx - perp_x * base_half * spread), int(by),
+                    ),
+                    (int(bx + perp_x * base_half * spread), int(by)),
+                    (int(ex + perp_x * end_half * spread), int(ey)),
+                    (int(ex - perp_x * end_half * spread), int(ey)),
+                ]
+                pygame.draw.polygon(
+                    layer, (3, 5, 8, int(alpha * min(1.0, strength))), points)
+
+        for tree in trees:
+            dx, dy = float(tree['x']) - player.x, float(tree['y']) - player.y
+            dist = math.hypot(dx, dy)
+            if dist < 0.3 or dist > 20.0:
+                continue
+            rel = self._norm_angle(math.atan2(dy, dx) - player.angle)
+            if abs(rel) > self.half_fov + 0.10:
+                continue
+            tree_height = self._TREE_HEIGHT_MULT.get(tree.get('type'), 2.5) * float(tree.get('scale', 1.0))
+            shadow_length = max(0.8, min(4.5, tree_height * 0.52))
+            if moon_strength > 0.02:
+                cast_shadow(tree, moon_dx, moon_dy,
+                            moon_strength * max(0.25, 1.0 - dist / 30.0) * 0.78,
+                            shadow_length)
+            if flashlight_on and dist < flashlight_range:
+                # Only trees inside the forward beam receive flashlight shadows.
+                cone = (dx * fwd_x + dy * fwd_y) / max(0.001, dist)
+                if cone > 0.70:
+                    away_x, away_y = dx / dist, dy / dist
+                    falloff = (1.0 - dist / flashlight_range) ** 0.65
+                    cone_falloff = max(0.0, min(1.0, (cone - 0.70) / 0.30))
+                    cast_shadow(tree, away_x, away_y,
+                                falloff * cone_falloff * 1.15,
+                                min(5.0, shadow_length * 1.25))
+
+        self.surface.blit(layer, (0, 0))
 
     def _draw_world_sprites(self, player, enemies, game_map):
         """Collect nearby billboards, sort far -> near, and draw."""
