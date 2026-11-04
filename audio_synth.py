@@ -361,6 +361,12 @@ class SoundManager:
         self._muffle_keep = []
         self._frenzy_ambience_active = False
         self._frenzy_ambience_channel = pygame.mixer.Channel(FRENZY_AMBIENCE_CHANNEL)
+        self._frenzy_heartbeat_channel = pygame.mixer.Channel(7)
+        self._frenzy_breath_channel = pygame.mixer.Channel(8)
+        self._frenzy_heartbeat_sound = None
+        self._frenzy_breath_sound = None
+        self._frenzy_beat_times = []
+        self._frenzy_track_duration = 0.0
         self._intro_score_channel = pygame.mixer.Channel(INTRO_SCORE_CHANNEL)
         self._frenzy_ambience_sound = None
         self._amb_active = False
@@ -421,6 +427,25 @@ class SoundManager:
                 print('[Audio] Loaded Frenzy Mode ambience.')
             except Exception as exc:
                 print(f'[Audio] Could not load Frenzy Mode ambience: {exc}')
+
+        # Optional user-supplied Frenzy heartbeat and breathing recordings.
+        audio_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        heartbeat_path = os.path.join(audio_root, 'heartbeat.mp3')
+        breathing_path = os.path.join(audio_root, 'heavy-breathing-sound.mp3')
+        if os.path.isfile(heartbeat_path):
+            try:
+                self._frenzy_heartbeat_sound = pygame.mixer.Sound(heartbeat_path)
+                self._frenzy_track_duration = self._frenzy_heartbeat_sound.get_length()
+                self._frenzy_beat_times = self._extract_audio_beats(self._frenzy_heartbeat_sound)
+                print(f'[Audio] Loaded Frenzy heartbeat ({len(self._frenzy_beat_times)} detected beats).')
+            except Exception as exc:
+                print(f'[Audio] Could not load Frenzy heartbeat: {exc}')
+        if os.path.isfile(breathing_path):
+            try:
+                self._frenzy_breath_sound = pygame.mixer.Sound(breathing_path)
+                print('[Audio] Loaded Frenzy breathing loop.')
+            except Exception as exc:
+                print(f'[Audio] Could not load Frenzy breathing: {exc}')
 
         self._load_thunder()
         self._load_footsteps()
@@ -1163,10 +1188,51 @@ class SoundManager:
     # playback gain so they remain audible on laptop speakers at normal volume.
     _BEDS = (('wind_bed', 0, 0.32), ('crickets_bed', 1, 0.22))
 
+    @staticmethod
+    def _extract_audio_beats(sound):
+        """Detect transient peaks from the decoded heartbeat waveform (10 ms RMS envelope)."""
+        try:
+            raw = sound.get_raw()
+            mixer = pygame.mixer.get_init()
+            if not raw or not mixer or mixer[1] != -16:
+                return []
+            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+            channels = max(1, int(mixer[2]))
+            samples = samples[:(len(samples) // channels) * channels].reshape(-1, channels).mean(axis=1)
+            rate = int(mixer[0])
+            hop = max(1, rate // 100)
+            usable = (len(samples) // hop) * hop
+            if usable < hop * 10:
+                return []
+            envelope = np.sqrt(np.mean(samples[:usable].reshape(-1, hop) ** 2, axis=1))
+            threshold = max(float(np.percentile(envelope, 72)) * 0.72, float(envelope.max()) * 0.10)
+            peaks = []
+            last = -100
+            for i in range(1, len(envelope) - 1):
+                if envelope[i] >= threshold and envelope[i] >= envelope[i - 1] and envelope[i] > envelope[i + 1] and i - last >= 24:
+                    peaks.append(i * hop / rate)
+                    last = i
+            return peaks
+        except Exception:
+            return []
+
+    def get_frenzy_pulse(self):
+        """Return a 0..1 visual pulse locked to the currently playing heartbeat sample."""
+        if not self._frenzy_ambience_active or not self._frenzy_heartbeat_sound or not self._frenzy_beat_times:
+            return 0.0
+        position = self._frenzy_heartbeat_channel.get_pos() / 1000.0
+        if position < 0 or self._frenzy_track_duration <= 0:
+            return 0.0
+        position %= self._frenzy_track_duration
+        nearest = min((position - beat for beat in self._frenzy_beat_times if 0 <= position - beat < 0.42), default=None)
+        return 0.0 if nearest is None else max(0.0, 1.0 - nearest / 0.42) ** 2.2
+
     def set_frenzy_ambience(self, active):
-        """Loop the quiet Frenzy bed only while Frenzy is active during gameplay."""
-        active = bool(active and self._frenzy_ambience_sound is not None)
-        channel_busy = self._frenzy_ambience_channel.get_busy()
+        """Run Frenzy ambience, heartbeat and breathing together; pulse visuals read heartbeat playback time."""
+        active = bool(active and (self._frenzy_ambience_sound is not None or self._frenzy_heartbeat_sound is not None or self._frenzy_breath_sound is not None))
+        channel_busy = (self._frenzy_ambience_channel.get_busy()
+                        or self._frenzy_heartbeat_channel.get_busy()
+                        or self._frenzy_breath_channel.get_busy())
         # If another system stopped the reserved channel, restart the loop even
         # when the frenzy state itself has not changed.
         if active == self._frenzy_ambience_active and (not active or channel_busy):
@@ -1176,11 +1242,19 @@ class SoundManager:
             if active:
                 self._frenzy_ambience_channel.set_volume(
                     FRENZY_AMBIENCE_VOLUME * self.master_volume * self.ambient_volume)
-                self._frenzy_ambience_channel.play(
-                    self._frenzy_ambience_sound, loops=-1, fade_ms=900)
-                print('[Audio] Frenzy Mode ambience started.')
+                if self._frenzy_ambience_sound:
+                    self._frenzy_ambience_channel.play(self._frenzy_ambience_sound, loops=-1, fade_ms=900)
+                if self._frenzy_heartbeat_sound:
+                    self._frenzy_heartbeat_channel.set_volume(self.master_volume * self.ambient_volume)
+                    self._frenzy_heartbeat_channel.play(self._frenzy_heartbeat_sound, loops=-1, fade_ms=900)
+                if self._frenzy_breath_sound:
+                    self._frenzy_breath_channel.set_volume(0.42 * self.master_volume * self.ambient_volume)
+                    self._frenzy_breath_channel.play(self._frenzy_breath_sound, loops=-1, fade_ms=900)
+                print('[Audio] Frenzy audiovisual feedback started.')
             else:
                 self._frenzy_ambience_channel.fadeout(1200)
+                self._frenzy_heartbeat_channel.fadeout(900)
+                self._frenzy_breath_channel.fadeout(1200)
         except Exception as exc:
             self._frenzy_ambience_active = False
             print(f'[Audio] Frenzy ambience playback failed: {exc}')
