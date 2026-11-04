@@ -1298,10 +1298,10 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(overlay or self.internal, self.player, self.font_sm, self.font_hud)
-            panel_bottom = draw_top_hud(overlay or self.internal, self.player, self.game_map,
+            draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm, self.font_hud)
+            panel_bottom = draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
                                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(overlay or self.internal, self.player, alive_enemies, self.game_map,
+            self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
                             self.font_micro, pygame.time.get_ticks())
 
             # Notification: centred just under the top panel (the top-left corner is the debug text)
@@ -1310,20 +1310,20 @@ class Game:
                 nx = self.internal.get_width() // 2 - nt.get_width() // 2
                 nbg = pygame.Surface((nt.get_width() + 8, nt.get_height() + 4), pygame.SRCALPHA)
                 nbg.fill((10, 10, 15, 150))
-                (overlay or self.internal).blit(nbg, (nx - 4, panel_bottom + 3))
-                (overlay or self.internal).blit(nt, (nx, panel_bottom + 5))
+                (overlay if overlay is not None else self.internal).blit(nbg, (nx - 4, panel_bottom + 3))
+                (overlay if overlay is not None else self.internal).blit(nt, (nx, panel_bottom + 5))
 
         elif self.state == STATE_PAUSED:
             sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(self.internal, self.player, self.font_sm, self.font_hud)
-            draw_top_hud(self.internal, self.player, self.game_map,
+            draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm, self.font_hud)
+            draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
                          self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(self.internal, self.player, alive_enemies, self.game_map,
+            self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
                             self.font_micro, pygame.time.get_ticks())
-            draw_paused(overlay or self.internal, self.font_lg, self.font_sm)
+            draw_paused(overlay if overlay is not None else self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:
             draw_menu(self.internal, self.font_lg, self.font_sm, self.font_tiny)
