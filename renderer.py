@@ -1653,14 +1653,32 @@ class Renderer:
                 pygame.draw.polygon(
                     layer, (3, 5, 8, int(alpha * min(1.0, strength))), points)
 
-        for tree in trees:
-            dx, dy = float(tree['x']) - player.x, float(tree['y']) - player.y
-            dist = math.hypot(dx, dy)
-            if dist < 0.3 or dist > 20.0:
-                continue
+        # Billboard forests can contain hundreds of nearby trees. Casting moonlight
+        # and flashlight polygons for every candidate every frame is CPU-heavy on
+        # integrated-graphics laptops (the shadow pass is still a Pygame CPU pass).
+        # Keep the highest-quality dynamic shadows on the nearest visible trees;
+        # distant trees retain their sprite contact shadows and atmospheric shading.
+        def shadow_candidate(tree):
+            dx = float(tree['x']) - player.x
+            dy = float(tree['y']) - player.y
+            dist_sq = dx * dx + dy * dy
+            if dist_sq < 0.09 or dist_sq > 20.0 * 20.0:
+                return None
             rel = self._norm_angle(math.atan2(dy, dx) - player.angle)
             if abs(rel) > self.half_fov + 0.10:
-                continue
+                return None
+            return dist_sq, tree
+
+        # Select by squared distance (no square roots in the selection pass).
+        # 64 nearest visible trees preserve a dense, convincing foreground shadow field.
+        shadow_trees = heapq.nsmallest(
+            64,
+            (candidate for tree in trees
+             if (candidate := shadow_candidate(tree)) is not None),
+            key=lambda item: item[0])
+        for dist_sq, tree in shadow_trees:
+            dx, dy = float(tree['x']) - player.x, float(tree['y']) - player.y
+            dist = math.sqrt(dist_sq)
             tree_height = self._TREE_HEIGHT_MULT.get(tree.get('type'), 2.5) * float(tree.get('scale', 1.0))
             shadow_length = max(0.8, min(4.5, tree_height * 0.52))
             if moon_strength > 0.02:
