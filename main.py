@@ -1063,6 +1063,10 @@ class Game:
                 enemy = Enemy(random.choice(enemy_types), x, y)
                 self.enemy_manager.enemies.append(enemy)
                 self.survival_spawn_count += 1
+                # Keep the debug denominator aligned with the cumulative population:
+                # survival hunters are additional chapter spawns, not replacements.
+                self.level_enemy_total += 1
+                self.renderer.level_enemy_total = self.level_enemy_total
                 self.notify('Something is hunting you in the forest...', 2.0)
                 return True
         return False
