@@ -97,7 +97,7 @@ void main() {
 
 
 # ── pure helpers (no pygame / GL) ────────────────────────────────────────────
-def compute_swizzle(shifts):
+def compute_swizzle(shifts, preserve_alpha=False):
     """Texture swizzle that maps a little-endian 32-bit surface to RGB.
 
     ``shifts`` is pygame's (r, g, b, a) bit shifts. Byte i of a pixel lives at bits 8*i, and
@@ -107,7 +107,13 @@ def compute_swizzle(shifts):
     r, g, b = (shifts[0] // 8, shifts[1] // 8, shifts[2] // 8)
     if len({r, g, b}) != 3 or max(r, g, b) > 3 or any(sh % 8 for sh in shifts[:3]):
         raise ValueError(f"unsupported pixel layout {shifts}")
-    return 'RGBA'[r] + 'RGBA'[g] + 'RGBA'[b] + '1'
+    alpha = '1'
+    if preserve_alpha:
+        a = shifts[3] // 8
+        if shifts[3] % 8 or a < 0 or a > 3:
+            raise ValueError(f"surface has no usable alpha byte: {shifts}")
+        alpha = 'RGBA'[a]
+    return 'RGBA'[r] + 'RGBA'[g] + 'RGBA'[b] + alpha
 
 
 def letterbox(win_w, win_h, src_w, src_h):
@@ -270,7 +276,7 @@ class GLPresenter:
             self.overlay_tex.filter = (self._moderngl.NEAREST, self._moderngl.NEAREST)
             self.overlay_tex.repeat_x = False
             self.overlay_tex.repeat_y = False
-            self.overlay_tex.swizzle = compute_swizzle(surface.get_shifts())
+            self.overlay_tex.swizzle = compute_swizzle(surface.get_shifts(), preserve_alpha=True)
             self._overlay_key = key
 
     @staticmethod
