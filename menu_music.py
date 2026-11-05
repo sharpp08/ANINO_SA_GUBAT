@@ -8,6 +8,8 @@ import os
 
 import pygame
 
+from resource_paths import audio_file
+
 
 class MenuMusic:
     TRACK_NAME = "Hawig ng Buhay.mp3"
@@ -16,10 +18,7 @@ class MenuMusic:
     FADE_OUT_MS = 1200
 
     def __init__(self):
-        self.path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "assets", "audio", self.TRACK_NAME,
-        )
+        self.path = audio_file(self.TRACK_NAME)
         self._loaded = False
         self._active = False
         self._missing_logged = False

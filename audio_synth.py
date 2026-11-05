@@ -30,6 +30,8 @@ import os
 import numpy as np
 import pygame
 
+from resource_paths import audio_dir, audio_file, say
+
 # scipy's FFT is ~2x faster and multi-threaded; numpy's is the dependency-free fallback.
 try:
     import scipy.fft as _fftmod
@@ -373,64 +375,55 @@ class SoundManager:
         self._amb_timers = {}
         self._generate_sounds()
         # Prefer the supplied shotgun recording; keep the procedural fallback if absent.
-        custom_shotgun = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                      'assets', 'audio', 'shotgun_fire.mp3')
+        custom_shotgun = audio_file('shotgun_fire.mp3')
         if os.path.isfile(custom_shotgun):
             try:
                 self.sounds['shotgun'] = pygame.mixer.Sound(custom_shotgun)
                 self.sounds['shotgun'].set_volume(0.80)
-                print('[Audio] Loaded custom shotgun firing sound.')
+                say('[Audio] Loaded custom shotgun firing sound.')
             except Exception as exc:
-                print(f'[Audio] Could not load custom shotgun firing sound: {exc}')
+                say(f'[Audio] Could not load custom shotgun firing sound: {exc}')
         # Prefer the supplied real pistol recording; keep procedural fallback if absent.
-        custom_revolver = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                       'assets', 'audio', 'revolver_gunshot.mp3')
+        custom_revolver = audio_file('revolver_gunshot.mp3')
         if os.path.isfile(custom_revolver):
             try:
                 self.sounds['revolver'] = pygame.mixer.Sound(custom_revolver)
-                print('[Audio] Loaded custom revolver gunshot.')
+                say('[Audio] Loaded custom revolver gunshot.')
             except Exception as exc:
-                print(f'[Audio] Could not load custom revolver gunshot: {exc}')
+                say(f'[Audio] Could not load custom revolver gunshot: {exc}')
 
         # Recorded revolver reload sound (used only when a revolver reload starts).
-        custom_revolver_reload = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            'assets', 'audio', 'revolver_reload.mp3'
-        )
+        custom_revolver_reload = audio_file('revolver_reload.mp3')
         if os.path.isfile(custom_revolver_reload):
             try:
                 self.sounds['revolver_reload'] = pygame.mixer.Sound(custom_revolver_reload)
-                print('[Audio] Loaded custom revolver reload sound.')
+                say('[Audio] Loaded custom revolver reload sound.')
             except Exception as exc:
-                print(f'[Audio] Could not load custom revolver reload sound: {exc}')
+                say(f'[Audio] Could not load custom revolver reload sound: {exc}')
 
         # Load the supplied shotgun reload recording; retain the synthesized fallback.
-        custom_shotgun_reload = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            'assets', 'audio', 'shotgun_reload.mp3'
-        )
+        custom_shotgun_reload = audio_file('shotgun_reload.mp3')
         if os.path.isfile(custom_shotgun_reload):
             try:
                 self.sounds['shotgun_reload'] = pygame.mixer.Sound(custom_shotgun_reload)
                 self.sounds['shotgun_reload'].set_volume(0.80)
-                print('[Audio] Loaded custom shotgun reload sound.')
+                say('[Audio] Loaded custom shotgun reload sound.')
             except Exception as exc:
-                print(f'[Audio] Could not load custom shotgun reload sound: {exc}')
+                say(f'[Audio] Could not load custom shotgun reload sound: {exc}')
 
         # Frenzy background track. If the optional MP3 is absent, empty, or
         # unsupported by the local SDL_mixer build, synthesize a seamless dark
         # rumble so Frenzy always has an audible background layer.
-        frenzy_track = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                    'assets', 'audio', 'frenzy_mode_ambience.mp3')
+        frenzy_track = audio_file('frenzy_mode_ambience.mp3')
         if os.path.isfile(frenzy_track) and os.path.getsize(frenzy_track) > 0:
             try:
                 self._frenzy_ambience_sound = pygame.mixer.Sound(frenzy_track)
                 self._frenzy_ambience_sound.set_volume(1.0)
-                print('[Audio] Loaded Frenzy Mode ambience.')
+                say('[Audio] Loaded Frenzy Mode ambience.')
             except Exception as exc:
-                print(f'[Audio] Could not load Frenzy Mode ambience ({exc}); using procedural fallback.')
+                say(f'[Audio] Could not load Frenzy Mode ambience ({exc}); using procedural fallback.')
         else:
-            print('[Audio] Frenzy ambience MP3 is missing or empty; using procedural fallback.')
+            say('[Audio] Frenzy ambience MP3 is missing or empty; using procedural fallback.')
 
         if self._frenzy_ambience_sound is None and pygame.mixer.get_init():
             try:
@@ -446,12 +439,12 @@ class SoundManager:
                 self._frenzy_ambience_sound = self._generate_sound(stereo)
                 if self._frenzy_ambience_sound is not None:
                     self._frenzy_ambience_sound.set_volume(1.0)
-                    print('[Audio] Generated procedural Frenzy background loop.')
+                    say('[Audio] Generated procedural Frenzy background loop.')
             except Exception as exc:
-                print(f'[Audio] Procedural Frenzy background generation failed: {exc}')
+                say(f'[Audio] Procedural Frenzy background generation failed: {exc}')
 
         # Optional user-supplied Frenzy heartbeat and breathing recordings.
-        audio_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        audio_root = audio_dir()
         heartbeat_path = os.path.join(audio_root, 'heartbeat.mp3')
         breathing_path = os.path.join(audio_root, 'heavy-breathing-sound.mp3')
         if os.path.isfile(heartbeat_path):
@@ -459,29 +452,28 @@ class SoundManager:
                 self._frenzy_heartbeat_sound = pygame.mixer.Sound(heartbeat_path)
                 self._frenzy_track_duration = self._frenzy_heartbeat_sound.get_length()
                 self._frenzy_beat_times = self._extract_audio_beats(self._frenzy_heartbeat_sound)
-                print(f'[Audio] Loaded Frenzy heartbeat ({len(self._frenzy_beat_times)} detected beats).')
+                say(f'[Audio] Loaded Frenzy heartbeat ({len(self._frenzy_beat_times)} detected beats).')
             except Exception as exc:
-                print(f'[Audio] Could not load Frenzy heartbeat: {exc}')
+                say(f'[Audio] Could not load Frenzy heartbeat: {exc}')
         if os.path.isfile(breathing_path):
             try:
                 self._frenzy_breath_sound = pygame.mixer.Sound(breathing_path)
-                print('[Audio] Loaded Frenzy breathing loop.')
+                say('[Audio] Loaded Frenzy breathing loop.')
             except Exception as exc:
-                print(f'[Audio] Could not load Frenzy breathing: {exc}')
+                say(f'[Audio] Could not load Frenzy breathing: {exc}')
 
         self._load_thunder()
         self._load_footsteps()
 
         # Optional recorded rain loop supplied in assets/audio.
         self._rain_ambience_sound = None
-        rain_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 'assets', 'audio', 'rain_ambience.mp3')
+        rain_path = audio_file('rain_ambience.mp3')
         if os.path.isfile(rain_path):
             try:
                 self._rain_ambience_sound = pygame.mixer.Sound(rain_path)
-                print('[Audio] Loaded recorded rain ambience.')
+                say('[Audio] Loaded recorded rain ambience.')
             except Exception as exc:
-                print(f'[Audio] Could not load rain ambience: {exc}')
+                say(f'[Audio] Could not load rain ambience: {exc}')
 
     # ── recorded footsteps ───────────────────────────────────────────────────
     FOOTSTEP_PEAK = 0.85          # every recorded step is levelled to this peak so none stands out
@@ -493,7 +485,7 @@ class SoundManager:
         how the player moves (see play_footstep), never on which recording was picked.  If
         no file loads, the procedural footsteps built in _generate_sounds stay in place."""
         import glob
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        base = audio_dir()
         loaded = []
         for path in sorted(glob.glob(os.path.join(base, 'footstep_*.mp3'))):
             try:
@@ -507,12 +499,12 @@ class SoundManager:
                     snd = leveled or snd
                 loaded.append(snd)
             except Exception as exc:
-                print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
+                say(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
         self._footstep_last = None
         if loaded:
             self.variants['footstep'] = loaded
             self.sounds['footstep'] = loaded[0]
-            print(f'[Audio] Loaded {len(loaded)} recorded footstep clips.')
+            say(f'[Audio] Loaded {len(loaded)} recorded footstep clips.')
 
     def play_footstep(self, volume=0.4, pan=0.0):
         """One footfall: a random recorded step that never repeats the previous one, with a
@@ -529,7 +521,7 @@ class SoundManager:
         """Load assets/audio/thunder_near_*.mp3 (sharp, close claps) and thunder_far_*.mp3
         (muffled distant rumbles).  Missing files just mean no thunder."""
         import glob
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'audio')
+        base = audio_dir()
         self._thunder = {'near': [], 'far': []}
         self._thunder_last = {}
         for kind in ('near', 'far'):
@@ -537,10 +529,10 @@ class SoundManager:
                 try:
                     self._thunder[kind].append(pygame.mixer.Sound(path))
                 except Exception as exc:
-                    print(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
+                    say(f'[Audio] Could not load {os.path.basename(path)}: {exc}')
         total = len(self._thunder['near']) + len(self._thunder['far'])
         if total:
-            print(f'[Audio] Loaded {total} thunder clips.')
+            say(f'[Audio] Loaded {total} thunder clips.')
 
     def play_thunder(self, kind='near', volume=1.0, pan=0.0):
         """Play one recorded thunder clap.  kind: 'near' (sharp crack), 'mid', 'far' (dull rumble)."""
@@ -1039,8 +1031,7 @@ class SoundManager:
             return getattr(self, '_intro_score', None)
         self._intro_score_tried = True
         self._intro_score = None
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            'assets', 'audio', 'intro_score.wav')
+        path = audio_file('intro_score.wav')
         if os.path.isfile(path):
             try:
                 self._intro_score = pygame.mixer.Sound(path)
@@ -1058,9 +1049,9 @@ class SoundManager:
                     boosted = self._generate_sound(samples)
                     if boosted is not None:
                         self._intro_score = boosted
-                print('[Audio] Loaded intro score (level-normalized).')
+                say('[Audio] Loaded intro score (level-normalized).')
             except Exception as exc:
-                print(f'[Audio] Could not load intro score: {exc}')
+                say(f'[Audio] Could not load intro score: {exc}')
         return self._intro_score
 
     def start_intro_ambience(self):
@@ -1272,14 +1263,14 @@ class SoundManager:
                 if self._frenzy_breath_sound:
                     self._frenzy_breath_channel.set_volume(0.42 * self.master_volume * self.ambient_volume)
                     self._frenzy_breath_channel.play(self._frenzy_breath_sound, loops=-1, fade_ms=900)
-                print('[Audio] Frenzy audiovisual feedback started.')
+                say('[Audio] Frenzy audiovisual feedback started.')
             else:
                 self._frenzy_ambience_channel.fadeout(1200)
                 self._frenzy_heartbeat_channel.fadeout(900)
                 self._frenzy_breath_channel.fadeout(1200)
         except Exception as exc:
             self._frenzy_ambience_active = False
-            print(f'[Audio] Frenzy ambience playback failed: {exc}')
+            say(f'[Audio] Frenzy ambience playback failed: {exc}')
 
     def set_ambience_active(self, active):
         """Fade the forest wind + crickets in (gameplay) or out (menus, death)."""
@@ -1315,7 +1306,7 @@ class SoundManager:
             elif rain_channel.get_busy():
                 rain_channel.fadeout(1200)
         except Exception as exc:
-            print(f'[Audio] Forest ambience update failed: {exc}')
+            say(f'[Audio] Forest ambience update failed: {exc}')
 
     def update_ambience(self, dt):
         """Sparse forest one-shots (owl, leaves, distant twig snap)."""

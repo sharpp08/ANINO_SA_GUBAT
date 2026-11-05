@@ -22,3 +22,5 @@ screenshots/
 assets/cache/
 crash.log
 .vscode/
+
+asset_debug.log
