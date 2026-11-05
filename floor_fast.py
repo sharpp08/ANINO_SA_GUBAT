@@ -28,7 +28,8 @@ def _get_floor_constants(h, horizon_y, pitch_offset, mist_phase):
         dist = (h * 0.5) / row
         # Both floor paths use float32 world coordinates. Cache this conversion with
         # the pitch constants instead of allocating/casting the distance vector every frame.
-            fog = 1.0 - np.exp(-((dist * 0.07) ** 2))
+        dist_f32 = dist.astype(np.float32)
+        fog = 1.0 - np.exp(-((dist * 0.07) ** 2))
         fshade = np.maximum(0.08, 1.0 - fog).astype(np.float32)
         floor_t = (ys - horizon_y) / max(1, floor_h)
         mist_strength = np.clip((0.45 - floor_t) / 0.45, 0.0, None)
