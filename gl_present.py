@@ -151,7 +151,6 @@ class GLPresenter:
         self.scene_fbo = None
         self._tex_key = None
         self._overlay_key = None
-        self._overlay_key = None
         self._rect = None
         self._moderngl = None
 

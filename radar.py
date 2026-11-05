@@ -168,4 +168,13 @@ class Radar:
         else:
             col = (140, 200, 160)
         txt = font.render(label, True, col)
-        surf.blit(txt, (x + self.size // 2 - txt.get_width() // 2, y + self.size + 2))
+        lx = x + self.size // 2 - txt.get_width() // 2
+        ly = y + self.size + 2
+        # 1px dark outline keeps the readout legible over bright world pixels
+        # (the radar layer is composited after all post-processing, it is never blurred).
+        dark = font.render(label, True, (6, 8, 10, 235))
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx or dy:
+                    surf.blit(dark, (lx + dx, ly + dy))
+        surf.blit(txt, (lx, ly))

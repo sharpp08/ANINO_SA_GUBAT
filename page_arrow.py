@@ -53,6 +53,19 @@ class PageArrow:
         img = pygame.image.load(os.path.join(SPRITE_DIR, name))
         return img.convert_alpha() if pygame.display.get_surface() else img
 
+    @staticmethod
+    def _rimmed(img, size):
+        """Wrap the arrow art in a ~2px dark rim so it stays visible even when it
+        points at the bright sunrise sky (the HUD layer is never post-blurred, so a
+        plain gold arrow can vanish against a white horizon)."""
+        rim = pygame.transform.smoothscale(img, (size + 4, size + 4))
+        # Clamping RGB to a dark brown keeps the original alpha mask as a silhouette.
+        rim.fill((80, 58, 18, 255), special_flags=pygame.BLEND_RGBA_MIN)
+        framed = pygame.Surface((size, size), pygame.SRCALPHA)
+        framed.blit(rim, (-2, -2))
+        framed.blit(img, (0, 0))
+        return framed
+
     def _load_frames(self, size):
         try:
             base = self._load(BASE_FILE)
@@ -64,19 +77,18 @@ class PageArrow:
                 img = self._load(name)
                 canvas = pygame.Surface((half * 2, half * 2), pygame.SRCALPHA)
                 canvas.blit(img, (half - cx, half - cy))   # arrow centre -> canvas centre
-                frames.append(pygame.transform.smoothscale(canvas, (size, size)))
+                frames.append(self._rimmed(pygame.transform.smoothscale(canvas, (size, size)), size))
             return frames
         except (pygame.error, OSError):
             return []
 
-    @staticmethod
-    def _fallback(size):
+    def _fallback(self, size):
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
         s = size
         pts = [(s * 0.5, s * 0.06), (s * 0.88, s * 0.82), (s * 0.5, s * 0.62), (s * 0.12, s * 0.82)]
         pygame.draw.polygon(surf, (255, 215, 0), pts)
         pygame.draw.polygon(surf, (96, 64, 12), pts, 2)
-        return surf
+        return self._rimmed(surf, size)
 
     # ── drawing ───────────────────────────────────────────────────────────
     def get(self, rel, t_ms):

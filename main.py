@@ -60,8 +60,27 @@ def draw_bar(surf, x, y, w, h, value, max_val, fg, bg=(30, 30, 30)):
     pygame.draw.rect(surf, (80, 80, 80), (x, y, w, h), 1)
 
 
+def _outlined(surf, text, x, y, color, font, edge=1):
+    """Blit text with a 1px dark outline so it stays readable against the world,
+    rain, grade and bloom. The outline is alpha-blended onto the UI layer, so it
+    only touches pixels behind the glyph (no halos over other HUD panels)."""
+    img = font.render(text, True, color)
+    dark = font.render(text, True, (6, 8, 10, 235))
+    for dx in (-edge, 0, edge):
+        for dy in (-edge, 0, edge):
+            if dx or dy:
+                surf.blit(dark, (x + dx, y + dy))
+    surf.blit(img, (x, y))
+    return img
+
+
 def draw_hud(surf, player, font_sm, font_tiny):
-    """Compact edge HUD: two-row survival strip, concise inventory, weapon and ward chips."""
+    """Compact edge HUD: two-row survival strip, concise inventory, weapon and ward chips.
+
+    All text carries a subtle dark outline (see _outlined) so the panel is legible
+    over bright muzzle flashes, sunrise and the grade pass. The whole panel is drawn
+    onto the UI overlay layer, which the GPU presenter composites AFTER every
+    post-processing stage, so nothing here is ever blurred by the scene."""
     sw, sh = surf.get_size()
     font = font_tiny
     panel = pygame.Surface((210, 48), pygame.SRCALPHA)
@@ -73,8 +92,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
     def mini_stat(col, row, label, value, maximum, color):
         x = x0 + 7 + col * 67
         y = y0 + 4 + row * 21
-        txt = font.render(label, True, color)
-        surf.blit(txt, (x, y))
+        _outlined(surf, label, x, y, color, font)
         bw = 48
         pygame.draw.rect(surf, (24, 29, 29), (x, y + 11, bw, 4))
         ratio = max(0.0, min(1.0, float(value) / max(1.0, float(maximum))))
@@ -96,8 +114,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
     ros = f"{player.rosary_cooldown:.0f}s" if player.rosary_cooldown > 0 else "RDY"
     crs = f"{player.cross_cooldown:.0f}s" if player.cross_cooldown > 0 else "RDY"
     items = f"SALT {player.salt_count}  GAR {player.garlic_count}  PG {player.pages_this_chapter}/{pages_needed}  ROS {ros}  CRS {crs}"
-    item_img = font.render(items, True, (205, 205, 190))
-    surf.blit(item_img, (x0 + 2, sh - 65))
+    _outlined(surf, items, x0 + 2, sh - 65, (205, 205, 190), font)
 
     pw, ph = 104, 37
     px, py = sw - pw - 7, sh - ph - 7
@@ -105,16 +122,16 @@ def draw_hud(surf, player, font_sm, font_tiny):
     pygame.draw.rect(surf, (85, 78, 58), (px, py, pw, ph), 1, border_radius=3)
     weapon_names = ("BOLO", "SHOTGUN", "REVOLVER")
     wname = weapon_names[player.current_weapon] if 0 <= player.current_weapon < len(weapon_names) else "WEAPON"
-    surf.blit(font.render(wname, True, GOLD), (px + 6, py + 4))
+    _outlined(surf, wname, px + 6, py + 4, GOLD, font, edge=0)
     if player.current_weapon == 1:
         ammo = f"{player.shotgun_mag}/{SHOTGUN_MAG_SIZE}  +{player.ammo_shotgun}"
     elif player.current_weapon == 2:
         ammo = f"{player.revolver_mag}/{REVOLVER_MAG_SIZE}  +{player.ammo_revolver}"
     else:
         ammo = "DURABILITY 3/3"
-    surf.blit(font.render(ammo, True, AMMO_YELLOW), (px + 6, py + 18))
+    _outlined(surf, ammo, px + 6, py + 18, AMMO_YELLOW, font, edge=0)
     if player.reloading:
-        surf.blit(font.render("RELOAD", True, (255, 190, 65)), (px + 65, py + 4))
+        _outlined(surf, "RELOAD", px + 65, py + 4, (255, 190, 65), font, edge=0)
 
     labels = ("1 LIT", "2 SHD", "3 BAN", "4 BND", "5 FIN")
     slot_w, slot_h, gap = 29, 15, 3
@@ -260,21 +277,23 @@ def draw_paused(surf, font_lg, font_sm):
     overlay.fill((0, 0, 0, 140))
     surf.blit(overlay, (0, 0))
     sw, sh = surf.get_size()
-    t = font_lg.render("PAUSED", True, WHITE)
-    surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 80))
-    for i, line in enumerate(["ESC  -  Resume", "S  -  Settings", "F11  -  Toggle Fullscreen", "M  -  Main Menu"]):
-        lt = font_sm.render(line, True, (200, 200, 200))
-        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 - 20 + i * 32))
+    _lines = [("PAUSED", sh // 2 - 80, WHITE, font_lg)]
+    _lines += [(line, sh // 2 - 20 + i * 32, (200, 200, 200), font_sm)
+               for i, line in enumerate(["ESC  -  Resume", "S  -  Settings",
+                                         "F11  -  Toggle Fullscreen", "M  -  Main Menu"])]
+    for text, y, color, fnt in _lines:
+        _img = fnt.render(text, True, color)
+        _outlined(surf, text, sw // 2 - _img.get_width() // 2, y, color, fnt)
 
 
 def draw_gameover(surf, font_lg, font_sm):
     surf.fill((10, 0, 0))
     sw, sh = surf.get_size()
     t = font_lg.render("YOU DIED", True, BLOOD_RED)
-    surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 60))
+    _outlined(surf, "YOU DIED", sw // 2 - t.get_width() // 2, sh // 2 - 60, BLOOD_RED, font_lg)
     for i, line in enumerate(["M  -  Return to Main Menu"]):
         lt = font_sm.render(line, True, (200, 150, 150))
-        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + i * 40))
+        _outlined(surf, line, sw // 2 - lt.get_width() // 2, sh // 2 + i * 40, (200, 150, 150), font_sm)
 
 
 def draw_win(surf, font_lg, font_sm, chapter, final=False):
@@ -283,16 +302,17 @@ def draw_win(surf, font_lg, font_sm, chapter, final=False):
     if final:
         # Survival ending after collecting all five pages and reaching sunrise.
         t = font_lg.render("YOU SURVIVED UNTIL 7:00 AM", True, SACRED_GOLD)
-        surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 70))
+        _outlined(surf, "YOU SURVIVED UNTIL 7:00 AM", sw // 2 - t.get_width() // 2, sh // 2 - 70, SACRED_GOLD, font_lg)
         sub = font_sm.render("You found all five Bible pages and endured the night.", True, WHITE)
-        surf.blit(sub, (sw // 2 - sub.get_width() // 2, sh // 2 - 10))
+        _outlined(surf, "You found all five Bible pages and endured the night.",
+                  sw // 2 - sub.get_width() // 2, sh // 2 - 10, WHITE, font_sm)
         lt = font_sm.render("ENTER  -  Main Menu", True, (200, 200, 200))
-        surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 40))
+        _outlined(surf, "ENTER  -  Main Menu", sw // 2 - lt.get_width() // 2, sh // 2 + 40, (200, 200, 200), font_sm)
         return
     t = font_lg.render(f"CHAPTER {chapter} COMPLETE", True, SACRED_GOLD)
-    surf.blit(t, (sw // 2 - t.get_width() // 2, sh // 2 - 60))
+    _outlined(surf, f"CHAPTER {chapter} COMPLETE", sw // 2 - t.get_width() // 2, sh // 2 - 60, SACRED_GOLD, font_lg)
     lt = font_sm.render("ENTER  -  Continue   M  -  Menu", True, WHITE)
-    surf.blit(lt, (sw // 2 - lt.get_width() // 2, sh // 2 + 30))
+    _outlined(surf, "ENTER  -  Continue   M  -  Menu", sw // 2 - lt.get_width() // 2, sh // 2 + 30, WHITE, font_sm)
 
 
 def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
@@ -328,15 +348,18 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     x0 = sw // 2 - panel_w // 2
     y0 = 4
 
+    # Slightly deeper panel + 1px border so the objective strip stands out against
+    # the tree line at the top of the viewport.
     bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    bg.fill((10, 10, 15, 150))
+    bg.fill((10, 10, 15, 180))
+    pygame.draw.rect(bg, (90, 100, 95, 120), (0, 0, panel_w, panel_h), 1)
     surf.blit(bg, (x0, y0))
 
     tx = x0 + pad + arrow_w
     ty = y0 + (panel_h - (th * (2 if img2 else 1) + 2)) // 2
-    surf.blit(img1, (tx, ty))
+    _outlined(surf, line1, tx, ty, SACRED_GOLD, font, edge=0)
     if img2:
-        surf.blit(img2, (tx, ty + th + 2))
+        _outlined(surf, line2, tx, ty + th + 2, WHITE, font, edge=0)
         arrow.draw(surf, x0 + pad + arrow.size // 2, y0 + panel_h // 2, rel, t_ms)
     return y0 + panel_h
 
@@ -1391,11 +1414,10 @@ class Game:
                 self._fallback_to_2d()
                 gp = None
         if gp is None:
-            # Pygame fallback composites the transparent UI/viewmodel layer into the
-            # stable internal surface; the existing CPU renderer remains fully usable.
-            if overlay is not None:
-                self.internal.blit(overlay, (0, 0))
-            # GPU post-processing shaders (ModernGL horror lighting, fog, post-process)
+            # Opt-in legacy GPU post-processing (ANINO_GPU_POST=1). It runs on the scene
+            # surface BEFORE the UI layer is composited so the HUD, viewmodel, crosshair
+            # and jumpscare keep their sharpness, mirroring the GPU presenter's shader
+            # (which samples the overlay after every grade/bloom/vignette/grain stage).
             # Only during gameplay, and the result is copied back into the SAME surface:
             # the renderer and cinematic hold a reference to self.internal, so it must
             # never be rebound to a new Surface object.
@@ -1410,6 +1432,10 @@ class Game:
                 )
                 if shaded is not self.internal:
                     self.internal.blit(shaded, (0, 0))
+            # Pygame fallback composites the transparent UI/viewmodel layer into the
+            # stable internal surface; the existing CPU renderer remains fully usable.
+            if overlay is not None:
+                self.internal.blit(overlay, (0, 0))
 
             # Scale to screen
             pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)

@@ -72,8 +72,22 @@ def test_overlay_is_composited_on_the_post_processed_path():
     assert last_overlay > last_effect, "overlay must be composited after grade/vignette/grain"
 
 
+def test_hud_layer_is_never_distorted():
+    # Sharpness guarantee: every HUD/viewmodel pixel must reach the screen without any
+    # screen-space effect. The only place the overlay may be sampled is with the raw,
+    # undistorted `v_uv`; any future effect (ripples, motion blur, depth-of-field) that
+    # touches scene `uv` must not be reused for the overlay.
+    src = FRAGMENT_SHADER
+    import re
+    samples = re.findall(r"texture\(u_overlay[^\)]*\)", src)
+    assert samples, "the overlay texture must be used"
+    for s in samples:
+        assert s == "texture(u_overlay, v_uv)", f"overlay sampled with distorted coords: {s}"
+
+
 if __name__ == '__main__':
     test_overlay_is_composited_on_the_post_processed_path()
+    test_hud_layer_is_never_distorted()
     test_swizzle_matches_pixel_layout()
     test_letterbox_keeps_aspect()
     test_mouse_mapping_round_trips()
