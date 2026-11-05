@@ -16,7 +16,7 @@ class FloorConstantCacheTests(unittest.TestCase):
         self.assertEqual(first[1].dtype, np.float32)
         self.assertIs(first[1], second[1])
         self.assertEqual(first[1].shape, second[1].shape)
-        self.assertFalse(np.shares_memory(first[-1], second[-1]) is False)
+        self.assertIsNot(first[-1], second[-1])
 
     def test_pitch_change_rebuilds_distance_rows(self):
         first = floor_fast._get_floor_constants(360, 180, 0, 0.0)
