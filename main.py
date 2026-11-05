@@ -2,6 +2,7 @@
 ANINO SA GUBAT: Mga Bulong ng Dilim
 Main game loop and entry point.
 """
+import gc
 import os
 import sys
 import math
@@ -534,6 +535,10 @@ class Game:
         # without forcing the GPU to wait for every monitor refresh.
         self.vsync_enabled = bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('vsync', False))
         self.gl_presenter = None
+        # GC policy state: the cyclic collector is enabled by default (Python's normal
+        # state) until load_chapter() primes + disables it for gameplay.
+        self._gc_enabled_now = True
+        self._gc_menu_secs = 0.0
         self.screen = self._set_display_mode()
         self._install_present_hook()
         pygame.display.set_caption(TITLE)
@@ -886,11 +891,13 @@ class Game:
             print(f"[WARNING] Chapter {chapter_num} has NO enemies - it can only be completed by reaching the exit.")
         # The map, textures and caches are long-lived: move them out of the garbage
         # collector's tracking so gameplay GC passes stay short (fewer frame hitches).
+        # While PLAYING the cyclic collector is disabled outright; it re-enables on
+        # every transition out of gameplay (see run()), where its cost is invisible.
         try:
-            import gc
             gc.collect()
             gc.freeze()
             gc.set_threshold(10000, 20, 20)
+            gc.disable()
         except Exception:
             pass
         if hasattr(self, 'perf'):
@@ -1486,8 +1493,12 @@ class Game:
             if overlay is not None:
                 self.internal.blit(overlay, (0, 0))
 
-            # Scale to screen
-            pygame.transform.scale(self.internal, (SCREEN_WIDTH, SCREEN_HEIGHT), self.screen)
+            # Scale to screen. A blit with a dest rect triggers SDL_BlitScaled (GPU on an
+            # accelerated / SCALED window) instead of pygame's CPU transform.scale, which
+            # runs bilinear on the main thread every frame. The SCALED flag already takes
+            # the 1280x720 surface to the physical monitor, so we just need to stretch the
+            # internal canvas once per frame, cheaply.
+            self.screen.blit(self.internal, self.screen.get_rect())
         # Work time excludes the flip, which blocks on vsync and would look like load.
         self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
         pygame.display.flip()
@@ -1618,6 +1629,29 @@ class Game:
 
             elif self.state == STATE_PLAYING:
                 self.update_playing(dt, mouse_dx, mouse_dy)
+
+            # ── GC policy ──
+            # load_chapter() primes the collector: collect + gc.freeze() (long-lived map /
+            # sprite caches move into the permanent generation) and disable. Here we keep
+            # that policy steady-state: the cyclic collector is DISABLED while PLAYING (so
+            # no multi-millisecond GC pause ever lands on a gameplay frame - the main 1%
+            # low fix on weak CPUs) and re-enabled the instant we leave gameplay, with a
+            # periodic collect while idling on menus so the transient graph doesn't grow
+            # for minutes.
+            want_gc_enabled = (self.state != STATE_PLAYING)
+            if want_gc_enabled != self._gc_enabled_now:
+                if want_gc_enabled:
+                    gc.enable()
+                    gc.collect()      # tidy up now; we just came back from a long disabled stretch
+                else:
+                    gc.disable()
+                self._gc_enabled_now = want_gc_enabled
+                self._gc_menu_secs = 0.0
+            elif want_gc_enabled:
+                self._gc_menu_secs += dt
+                if self._gc_menu_secs >= 5.0:
+                    self._gc_menu_secs = 0.0
+                    gc.collect()
 
             # Forest ambience (wind, crickets, owl, rustling) only while actually playing
             try:

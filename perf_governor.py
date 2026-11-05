@@ -25,8 +25,10 @@ LEVEL_NAMES = {
     2: "particles + stars off",
     3: "wind sway off, fewer trees",
     4: "depth fog off, minimum trees",
+    5: "quarter of the trees, no photo grade",
+    6: "bare forest, all CPU post off",
 }
-MAX_LEVEL = 4
+MAX_LEVEL = 6
 
 
 class PerfGovernor:
@@ -127,10 +129,20 @@ class PerfGovernor:
         rm.ENABLE_PARTICLE_PHYSICS = o['ENABLE_PARTICLE_PHYSICS'] and not (level >= 2)
         self.renderer.perf_no_stars = level >= 2
         rm.ENABLE_ENV_ANIM = o['ENABLE_ENV_ANIM'] and not (level >= 3)
-        if level >= 4:
+        if level >= 6:
+            rm.MAX_RENDER_TREES = max(10, int(o['MAX_RENDER_TREES'] * 0.10))
+        elif level >= 5:
+            rm.MAX_RENDER_TREES = max(15, int(o['MAX_RENDER_TREES'] * 0.20))
+        elif level >= 4:
             rm.MAX_RENDER_TREES = max(20, int(o['MAX_RENDER_TREES'] * 0.35))
         elif level >= 3:
             rm.MAX_RENDER_TREES = max(30, int(o['MAX_RENDER_TREES'] * 0.6))
         else:
             rm.MAX_RENDER_TREES = o['MAX_RENDER_TREES']
         self.sm.ENABLE_FOG = o['ENABLE_FOG'] and not (level >= 4)
+        # Levels 5-6 shed the per-frame CPU photo-grade (vignette / mist / floor glints).
+        # The renderer checks this cheaply; the GPU shader path is unaffected.
+        try:
+            self.renderer.perf_no_grade = level >= 5
+        except Exception:
+            pass

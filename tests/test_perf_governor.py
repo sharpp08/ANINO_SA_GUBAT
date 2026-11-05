@@ -18,7 +18,7 @@ def make():
                                ENABLE_ENV_ANIM=True, MAX_RENDER_TREES=150)
     sm = types.SimpleNamespace(ENABLE_FOG=True)
     renderer = types.SimpleNamespace(shader_renderer=types.SimpleNamespace(enabled=True),
-                                     perf_no_stars=False)
+                                     perf_no_stars=False, perf_no_grade=False)
     return PerfGovernor(renderer, rm, sm), renderer, rm, sm
 
 
@@ -41,7 +41,8 @@ def test_sheds_levels_when_slow_and_reaches_max():
     assert gov.level == MAX_LEVEL
     assert rm.ENABLE_PARTICLES is False and rm.ENABLE_PARTICLE_PHYSICS is False
     assert renderer.perf_no_stars is True and rm.ENABLE_ENV_ANIM is False
-    assert sm.ENABLE_FOG is False and rm.MAX_RENDER_TREES == int(150 * 0.35)
+    assert sm.ENABLE_FOG is False and rm.MAX_RENDER_TREES == max(10, int(150 * 0.10))
+    assert renderer.perf_no_grade is True
 
 
 def test_restores_exactly_when_headroom_returns():
@@ -53,6 +54,7 @@ def test_restores_exactly_when_headroom_returns():
     assert renderer.shader_renderer.enabled is True and rm.ENABLE_PARTICLES is True
     assert rm.ENABLE_ENV_ANIM is True and rm.MAX_RENDER_TREES == 150 and sm.ENABLE_FOG is True
     assert renderer.perf_no_stars is False
+    assert renderer.perf_no_grade is False
 
 
 def test_ignores_hitches_and_non_gameplay():

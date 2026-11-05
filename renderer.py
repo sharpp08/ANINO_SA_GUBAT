@@ -297,6 +297,7 @@ class Renderer:
         # Wind system for tree/plant animation
         self.wind_time = 0.0
         self.perf_no_stars = False   # set by PerfGovernor when shedding load
+        self.perf_no_grade = False   # set by PerfGovernor levels 5-6 (shed per-frame CPU photo-grade)
         self.wind_strength = 0.3
         self.wind_gust_timer = 0.0
 
@@ -850,8 +851,9 @@ class Renderer:
             self.timings['floor_fill'] = (time.perf_counter() - t_floor_fill) * 1000.0
             # Low-cost wet leaf / puddle highlights on the floor plane only.
             t_floor_detail = time.perf_counter()
-            self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
-                                          0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
+            if not self.perf_no_grade:
+                self.photo_pass.enhance_floor(self.surface, horizon_y, t_ticks * 0.001,
+                                              0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
             self.timings['floor_detail'] = (time.perf_counter() - t_floor_detail) * 1000.0
 
         self.timings['floor'] = (time.perf_counter() - t_floor) * 1000.0
@@ -882,10 +884,11 @@ class Renderer:
         t_fog = time.perf_counter()
         if not self.debug_f4:
             self._draw_depth_fog(player, game_map)
-            self.photo_pass.draw_mist(
-                self.surface, horizon_y, t_ticks * 0.001, sunrise_progress,
-                0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0,
-                ambient=getattr(_settings_mod, 'AMBIENT', 0.4))
+            if not self.perf_no_grade:
+                self.photo_pass.draw_mist(
+                    self.surface, horizon_y, t_ticks * 0.001, sunrise_progress,
+                    0.55 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0,
+                    ambient=getattr(_settings_mod, 'AMBIENT', 0.4))
 
         self.timings['fog'] = (time.perf_counter() - t_fog) * 1000.0
 
@@ -991,7 +994,7 @@ class Renderer:
         t_fx_grade = time.perf_counter()
 
         # Restrained cold-night / warm-dawn grade; UI and crosshair remain untouched.
-        if not self.debug_f4:
+        if not self.debug_f4 and not self.perf_no_grade:
             self.photo_pass.apply_grade(self.surface, sunrise_progress,
                                         0.65 if getattr(_settings_mod, 'QUALITY_TIER', 'medium') == 'low' else 1.0)
 
