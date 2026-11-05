@@ -174,7 +174,6 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 | `Q` | Cast the currently selected Sacred Ward |
 | `I` | Replay Intro Cinematic (from main menu) |
 | `F3` | Toggle Debug Overlay |
-| `F4` | Snap camera toward moon azimuth |
 | `F11` | Toggle Fullscreen |
 | `Escape` | Pause Game / Return to Main Menu / Quit |
 
