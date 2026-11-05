@@ -464,8 +464,11 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
         pygame.draw.circle(screen, (flicker, 20, 17), (eye_x+13, eye_y), 3)
 
         # Dark parchment panel for readable loading text.
-        panel_x, panel_y = int(sw*.075), int(sh*.20)
-        panel_w, panel_h = int(sw*.54), int(sh*.52)
+        panel_x, panel_y = int(sw*.075), int(sh*.16)
+        # Give the progress description and bottom warning separate rows.
+        # At the old .52h panel height, both text baselines landed at almost
+        # the same y-coordinate on the 640x360 internal canvas.
+        panel_w, panel_h = int(sw*.54), int(sh*.64)
         panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
         panel.fill((2, 5, 8, 218))
         pygame.draw.rect(panel, (91, 54, 43, 170), (0, 0, panel_w, panel_h), 1)
@@ -479,7 +482,7 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
         screen.blit(subtitle, (panel_x+25, panel_y+58+title.get_height()+5))
 
         # Ritual progress track, segmented like sealed runes.
-        bar_x, bar_y = panel_x+25, panel_y+int(panel_h*.68)
+        bar_x, bar_y = panel_x+25, panel_y+int(panel_h*.62)
         bar_w, bar_h = panel_w-50, max(12, int(sh*.018))
         pygame.draw.rect(screen, (25, 23, 23), (bar_x, bar_y, bar_w, bar_h))
         pygame.draw.rect(screen, (105, 65, 54), (bar_x, bar_y, bar_w, bar_h), 1)
