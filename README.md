@@ -37,7 +37,7 @@ The game features:
 - 100% procedurally generated pixel-art assets and textures (no external texture files needed)
 - An atmospheric raycasting renderer with colored fog, vignette, particle systems, and flashlight effects
 - A readback-free **GPU compositor** that uploads the scene once and runs post-processing (bloom, grade, fog, grain) in-shader, keeping the HUD/UI on a separate always-sharp layer
-- **Adaptive performance scaling** that automatically sheds effects and geometry on the fly to hold a stable frame rate on any hardware
+- **Performance monitoring** that measures sustained frame work and reports bottlenecks without silently disabling visual effects or reducing forest density
 - Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver), switched with the scroll wheel
 - A unique **Sacred Ward** and faith system based on Filipino spiritual traditions (5 wards)
 - Multi-chapter progression with a standalone Windows executable build
@@ -50,7 +50,7 @@ The game features:
 |---|---|
 | 🎮 Raycasting 3D | Pseudo-3D first-person view at 640×360 internal resolution, presented on a SCALED 1280×720 window |
 | 🖥️ GPU Compositor | Scene is uploaded to the GPU once per frame; post-FX (bloom, color grade, depth fog, film grain) run in-shader — no CPU/GPU readback, HUD stays pixel-sharp |
-| ⚡ Adaptive Performance | A measured governor sheds particles, stars, wind, fog, tree count, and CPU photo-grades (7 levels) to hold a stable frame rate across weak and fast hardware |
+| ⚡ Performance Monitor | Measures sustained frame work and reports over-budget frames; it never disables shaders, particles, wind, fog, trees, or grading automatically |
 | 👹 7 Enemy Types | Each with unique AI states, stats, vulnerabilities, and resistances |
 | ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload; cycled with the mouse wheel |
 | ✝️ 5 Sacred Wards | Faith-powered abilities: repel, shield, banish, bind, and a final ultimate (The Final Benediction) |
@@ -283,8 +283,8 @@ Auto-created and updated when settings change. Notable keys:
 
 The scene is **CPU-bound, not GPU-bound**: the GPU only does one texture upload, one fullscreen shader, and one upscale per frame. Everything is tuned to hold a stable frame rate across the whole range of client hardware rather than just the dev machine.
 
-- **Adaptive governor (`perf_governor.py`):** when enabled (`adaptive_perf`), it measures average frame time over ~1.5 s windows (ignoring warmup and long hitches) and sheds quality across **7 levels** — off the legacy GPU post, then particles + stars, then wind sway + fewer trees, then depth fog + minimum trees, then a quarter of trees + no CPU photo-grade, down to a bare forest with all CPU post off. It restores quality step-by-step when headroom returns and uses a *floor* so it doesn't flap.
-- **Quality tiers (`graphics_manager.py` / `settings.py`):** `low` / `medium` / `high` presets are the single source of truth for renderer feature flags; the governor layers further shedding on top.
+- **Performance monitor (`perf_governor.py`):** when enabled (`adaptive_perf`), it measures gameplay frame work over rolling ~1.5 s windows, ignores warmup and long hitches, and reports sustained over-budget work. It is deliberately monitor-only: it never disables shaders, particles, stars, wind, fog, trees, or photo grading. Use the F3 stage timings to identify the actual bottleneck.
+- **Quality tiers (`graphics_manager.py` / `settings.py`):** `low` / `medium` / `high` presets remain the source of configured renderer feature flags. The performance monitor never overrides them.
 - **Cross-hardware targets (at 60 FPS):**
 
   | Device | Internal | Trees | Governor floor |
@@ -308,7 +308,7 @@ The project ships a headless test + benchmark suite in `tests/` (no display requ
 | `smoke_test.py` | End-to-end "does it run" sanity checks |
 | `test_gl_present.py` | GPU presenter: texture upload, shader post, **HUD layer never distorted** |
 | `test_weapon_hitscan.py` | Wall-aware hitscan, deterministic shotgun spread, distance falloff |
-| `test_perf_governor.py` | All 7 shedding levels + exact restore |
+| `test_perf_governor.py` | Confirms performance monitoring never changes configured visual effects |
 | `test_enemy_hit_reactions.py` / `test_enemy_drops.py` / `test_collision.py` | Combat, loot, and collision behavior |
 | `benchmark_profile.py` | Per-stage frame-time export for the F3 debug overlay |
 
