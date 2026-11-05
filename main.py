@@ -74,7 +74,7 @@ def _outlined(surf, text, x, y, color, font, edge=1):
     return img
 
 
-def draw_hud(surf, player, font_sm, font_tiny):
+def draw_hud(surf, player, font_sm, font_hud, font_items=None):
     """Compact edge HUD: two-row survival strip, concise inventory, weapon and ward chips.
 
     All text carries a subtle dark outline (see _outlined) so the panel is legible
@@ -82,10 +82,10 @@ def draw_hud(surf, player, font_sm, font_tiny):
     onto the UI overlay layer, which the GPU presenter composites AFTER every
     post-processing stage, so nothing here is ever blurred by the scene."""
     sw, sh = surf.get_size()
-    font = font_tiny
+    font = font_hud
     panel = pygame.Surface((210, 48), pygame.SRCALPHA)
-    panel.fill((5, 8, 11, 168))
-    pygame.draw.rect(panel, (70, 82, 78, 150), panel.get_rect(), 1, border_radius=3)
+    panel.fill((5, 8, 11, 225))          # deep panel: bold text needs contrast, not just outline
+    pygame.draw.rect(panel, (70, 82, 78, 190), panel.get_rect(), 1, border_radius=3)
     x0, y0 = 7, sh - 52
     surf.blit(panel, (x0, y0))
 
@@ -113,8 +113,15 @@ def draw_hud(surf, player, font_sm, font_tiny):
     pages_needed = PAGES_REQUIRED_CH1 if player.current_chapter == 1 else PAGES_REQUIRED_CH2
     ros = f"{player.rosary_cooldown:.0f}s" if player.rosary_cooldown > 0 else "RDY"
     crs = f"{player.cross_cooldown:.0f}s" if player.cross_cooldown > 0 else "RDY"
-    items = f"SALT {player.salt_count}  GAR {player.garlic_count}  PG {player.pages_this_chapter}/{pages_needed}  ROS {ros}  CRS {crs}"
-    _outlined(surf, items, x0 + 2, sh - 65, (205, 205, 190), font)
+    # Fixed label/value columns (monospace): two spaces between groups, one inside,
+    # zero-padded counts so every group parses as a fixed-width chunk.
+    items_font = font_items or font
+    groups = (("SALT", f"{player.salt_count:02d}"),
+              ("GAR", f"{player.garlic_count:02d}"),
+              ("PG", f"{player.pages_this_chapter}/{pages_needed}"),
+              ("ROS", ros), ("CRS", crs))
+    items = "  ".join(f"{label} {val}" for label, val in groups)
+    _outlined(surf, items, x0 + 2, sh - 65, (205, 205, 190), items_font)
 
     pw, ph = 104, 37
     px, py = sw - pw - 7, sh - ph - 7
@@ -134,7 +141,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
         _outlined(surf, "RELOAD", px + 65, py + 4, (255, 190, 65), font, edge=0)
 
     labels = ("1 LIT", "2 SHD", "3 BAN", "4 BND", "5 FIN")
-    slot_w, slot_h, gap = 29, 15, 3
+    slot_w, slot_h, gap = 32, 18, 3      # 2px+ padding around 11 px labels
     total = len(labels) * slot_w + (len(labels) - 1) * gap
     sx, sy = (sw - total) // 2, sh - slot_h - 3
     for i, label in enumerate(labels):
@@ -149,7 +156,7 @@ def draw_hud(surf, player, font_sm, font_tiny):
         pygame.draw.rect(surf, (145, 115, 65) if active_light else (65, 70, 68), rect, 1, border_radius=2)
         shown = f"{i+1} {int(player.ward_cooldowns[i])}" if cooldown else label
         img = font.render(shown, True, color)
-        surf.blit(img, (rect.x + (slot_w - img.get_width()) // 2, rect.y + 2))
+        surf.blit(img, (rect.x + (slot_w - img.get_width()) // 2, rect.y + (slot_h - img.get_height()) // 2))
 
 
 # ─── Menu screens ─────────────────────────────────────────────────────────────
@@ -343,23 +350,24 @@ def draw_top_hud(surf, player, game_map, font, arrow, t_ms):
     text_w = max(img1.get_width(), img2.get_width() if img2 else 0)
     th = img1.get_height()
     pad = 4
+    lead = 4  # roomier gap between the pages/sunrise line and the objective line
     panel_w = arrow_w + text_w + pad * 2
-    panel_h = max(arrow.size if line2 else 0, th * (2 if img2 else 1) + 2) + pad * 2
+    panel_h = max(arrow.size if line2 else 0, th * (2 if img2 else 1) + lead) + pad * 2
     x0 = sw // 2 - panel_w // 2
     y0 = 4
 
     # Slightly deeper panel + 1px border so the objective strip stands out against
     # the tree line at the top of the viewport.
     bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    bg.fill((10, 10, 15, 180))
-    pygame.draw.rect(bg, (90, 100, 95, 120), (0, 0, panel_w, panel_h), 1)
+    bg.fill((10, 10, 15, 220))
+    pygame.draw.rect(bg, (90, 100, 95, 150), (0, 0, panel_w, panel_h), 1)
     surf.blit(bg, (x0, y0))
 
     tx = x0 + pad + arrow_w
-    ty = y0 + (panel_h - (th * (2 if img2 else 1) + 2)) // 2
+    ty = y0 + (panel_h - (th * (2 if img2 else 1) + lead)) // 2
     _outlined(surf, line1, tx, ty, SACRED_GOLD, font, edge=0)
     if img2:
-        _outlined(surf, line2, tx, ty + th + 2, WHITE, font, edge=0)
+        _outlined(surf, line2, tx, ty + th + lead, WHITE, font, edge=0)
         arrow.draw(surf, x0 + pad + arrow.size // 2, y0 + panel_h // 2, rel, t_ms)
     return y0 + panel_h
 
@@ -539,12 +547,11 @@ class Game:
         except Exception:
             self.internal = pygame.Surface((INTERNAL_WIDTH, INTERNAL_HEIGHT))
 
-        self.font_lg   = pygame.font.SysFont('consolas', 32, bold=True)
-        self.font_sm   = pygame.font.SysFont('consolas', 18)
-        self.font_tiny = pygame.font.SysFont('consolas', 13)
-        self.font_micro = pygame.font.SysFont('consolas', 10)   # compact objective/radar text
-        self.font_hud = pygame.font.SysFont('consolas', 8)      # dense in-game status labels
-        self.page_arrow = PageArrow(24)                          # compass arrow to the next Bible page
+        _rt = (getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {})
+        self._ui_scale = self._read_ui_scale(_rt.get('ui_scale', '100%'))
+        self._high_contrast = bool(_rt.get('high_contrast_ui', False))
+        self._hud_visible = bool(_rt.get('hud_visible', True))
+        self._make_fonts()                                       # UI type scale (respects ui_scale / high_contrast_ui)
 
         draw_loading_step(self.screen, self.clock, self.font_lg, self.font_sm, "Initializing Display & Subsystems...", 0.1)
 
@@ -614,6 +621,33 @@ class Game:
         self.menu_music = MenuMusic()
         self.target_fps = FPS
 
+    @staticmethod
+    def _read_ui_scale(value):
+        """'90%'..'150%' (settings ui_scale) -> 0.9..1.5 multiplier; clamped and forgiving."""
+        try:
+            return max(0.9, min(1.5, float(str(value).strip().rstrip('%')) / 100.0))
+        except (ValueError, TypeError):
+            return 1.0
+
+    def _make_fonts(self):
+        """(Re)build the UI type scale.
+
+        ``ui_scale`` grows every size proportionally; ``high_contrast_ui`` adds bold
+        weight so text holds up over any scene lighting. Sizes are on the 640x360
+        internal canvas: 8-10 px glyphs were unreadable once upscaled 2x to 720p.
+        """
+        s = self._ui_scale
+
+        def f(size, bold=False):
+            return pygame.font.SysFont('consolas', max(6, int(round(size * s))), bold=bold or self._high_contrast)
+
+        self.font_lg = f(32, True)
+        self.font_sm = f(18)
+        self.font_tiny = f(13)
+        self.font_micro = f(12)        # objective / radar / notification / item row
+        self.font_hud = f(11, True)    # dense in-game status labels (bold tier)
+        self.page_arrow = PageArrow(max(16, int(round(24 * s))))
+
     def _apply_settings(self, values):
         """Apply settings that affect live game systems."""
         global FULLSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_ROT_SPEED
@@ -636,6 +670,12 @@ class Game:
                 self._graphics_mgr.apply_tier(tier)
             except Exception as exc:
                 print(f"[SETTINGS] Quality apply failed: {exc}")
+        new_scale = self._read_ui_scale(values.get("ui_scale", "100%"))
+        new_hc = bool(values.get("high_contrast_ui", False))
+        self._hud_visible = bool(values.get("hud_visible", True))
+        if new_scale != self._ui_scale or new_hc != self._high_contrast:
+            self._ui_scale, self._high_contrast = new_scale, new_hc
+            self._make_fonts()
         try:
             import player as player_module
             player_module.PLAYER_ROT_SPEED = float(values.get("mouse_sensitivity", 0.002))
@@ -1347,11 +1387,14 @@ class Game:
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm, self.font_hud)
-            panel_bottom = draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
-                                        self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_micro, pygame.time.get_ticks())
+            panel_bottom = 4
+            if self._hud_visible:
+                draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm,
+                         self.font_hud, self.font_micro)
+                panel_bottom = draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
+                                            self.font_micro, self.page_arrow, pygame.time.get_ticks())
+                self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
+                                self.font_micro, pygame.time.get_ticks())
 
             # Notification: centred just under the top panel (the top-left corner is the debug text)
             if self.notif_t > 0:
@@ -1367,11 +1410,13 @@ class Game:
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
                 self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
-            draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm, self.font_hud)
-            draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
-                         self.font_micro, self.page_arrow, pygame.time.get_ticks())
-            self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
-                            self.font_micro, pygame.time.get_ticks())
+            if self._hud_visible:
+                draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm,
+                         self.font_hud, self.font_micro)
+                draw_top_hud(overlay if overlay is not None else self.internal, self.player, self.game_map,
+                             self.font_micro, self.page_arrow, pygame.time.get_ticks())
+                self.radar.draw(overlay if overlay is not None else self.internal, self.player, alive_enemies, self.game_map,
+                                self.font_micro, pygame.time.get_ticks())
             draw_paused(overlay if overlay is not None else self.internal, self.font_lg, self.font_sm)
 
         elif self.state == STATE_MENU:

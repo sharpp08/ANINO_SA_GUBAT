@@ -35,6 +35,18 @@ def world_to_radar(dx, dy, angle, rng=RADAR_RANGE, radius=RADAR_RADIUS):
     return right * k, -forward * k
 
 
+def _blit_outlined(surf, text, x, y, font, color):
+    """Blit with a 1px dark outline so the radar readout holds over the wall-heavy
+    top-right of the scene (same trick the HUD text uses in main.py)."""
+    img = font.render(text, True, color)
+    dark = font.render(text, True, (6, 8, 10, 235))
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if dx or dy:
+                surf.blit(dark, (x + dx, y + dy))
+    surf.blit(img, (x, y))
+
+
 class Radar:
     def __init__(self):
         self.enabled = True
