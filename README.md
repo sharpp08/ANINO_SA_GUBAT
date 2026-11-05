@@ -23,8 +23,10 @@
 13. [Settings](#settings)
 14. [Architecture & Modules](#architecture--modules)
 15. [Technical Notes](#technical-notes)
-16. [Intro Cinematic](#intro-cinematic)
-17. [Lore](#lore)
+16. [Performance & Scaling](#performance--scaling)
+17. [Testing](#testing)
+18. [Intro Cinematic](#intro-cinematic)
+19. [Lore](#lore)
 
 ---
 
@@ -35,8 +37,10 @@
 The game features:
 - 100% procedurally generated pixel-art assets and textures (no external texture files needed)
 - An atmospheric raycasting renderer with colored fog, vignette, particle systems, and flashlight effects
-- Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver)
-- A unique **Sacred Ward** and faith system based on Filipino spiritual traditions
+- A readback-free **GPU compositor** that uploads the scene once and runs post-processing (bloom, grade, fog, grain) in-shader, keeping the HUD/UI on a separate always-sharp layer
+- **Adaptive performance scaling** that automatically sheds effects and geometry on the fly to hold a stable frame rate on any hardware
+- Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver), switched with the scroll wheel
+- A unique **Sacred Ward** and faith system based on Filipino spiritual traditions (5 wards)
 - Multi-chapter progression with JSON save/load support and standalone Windows executable build
 
 ---
@@ -45,14 +49,19 @@ The game features:
 
 | Feature | Details |
 |---|---|
-| 🎮 Raycasting 3D | Pseudo-3D first-person view at 640×360 internal resolution, scaled to 1280×720 |
+| 🎮 Raycasting 3D | Pseudo-3D first-person view at 640×360 internal resolution, presented on a SCALED 1280×720 window |
+| 🖥️ GPU Compositor | Scene is uploaded to the GPU once per frame; post-FX (bloom, color grade, depth fog, film grain) run in-shader — no CPU/GPU readback, HUD stays pixel-sharp |
+| ⚡ Adaptive Performance | A measured governor sheds particles, stars, wind, fog, tree count, and CPU photo-grades (7 levels) to hold a stable frame rate across weak and fast hardware |
 | 👹 7 Enemy Types | Each with unique AI states, stats, vulnerabilities, and resistances |
-| ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload |
-| ✝️ 5 Sacred Wards | Special faith-powered abilities to repel, shield, banish, bind, and purge |
+| ⚔️ 3 Weapons | Bolo (melee), Shotgun, Revolver — with ammo, magazines, and reload; cycled with the mouse wheel |
+| ✝️ 5 Sacred Wards | Faith-powered abilities: repel, shield, banish, bind, and a final ultimate (The Final Benediction) |
+| 🧭 Compass & Radar | A page-arrow compass points toward your objective and a top-right radar shows nearby enemies |
 | 🔦 Flashlight | Battery-powered; drains over time |
+| 🧠 Sanity / Frenzy | Darkness and nearby enemies drain sanity; low sanity triggers a high-aggression frenzy |
+| 🎬 Intro Cinematic | A skippable animated title sequence with menu music |
 | 🗺️ 2 Chapters | Hand-crafted outdoor forest maps with trees, debris, checkpoints, and exits |
 | 💾 Save/Load | JSON-based save files stored in a `saves/` directory |
-| 🎲 Procedural Art | All textures and sprites are generated at runtime — no asset files required |
+| 🎲 Procedural Art & Audio | All textures, sprites, and most SFX are synthesized at runtime — no asset files required |
 
 ---
 ## Project Structure
@@ -60,21 +69,37 @@ The game features:
 ```
 ANINO_SA_GUBAT/
 │
-├── main.py              # Game loop, states, HUD drawing, save/load logic
-├── player.py            # Player class: movement, stamina, sanity, noise, weapons, items
-├── enemies.py           # Enemy AI state machine, noise investigation, proximity sanity drain
-├── map_system.py        # Map grid data for Chapter 1 & 2, tile queries, pickups
-├── renderer.py          # Raycasting renderer, colored fog, parallax sky, particles, post-fx
-├── asset_generator.py   # Procedural pixel-art generator (fBm noise textures, sprites)
-├── audio_synth.py       # Procedural audio generator (NumPy sound synthesis)
-├── settings.py          # All game constants, colors, controls, save/load settings
-├── requirements.txt     # Python dependencies
-├── ANINO_SA_GUBAT.spec  # PyInstaller build specification
-├── settings.json        # User configuration file (auto-created/updated)
+├── main.py                # Game loop, states, HUD drawing, save/load, input, present hook
+├── player.py              # Player class: movement, stamina, sanity, noise, weapons, items, wards
+├── enemies.py             # Enemy AI state machine, noise investigation, sanity drain, hitscan resolution
+├── map_system.py          # Map grid data, tile queries, pickups, checkpoints, doors
+├── renderer.py            # Raycasting renderer, sky, particles, depth fog, viewmodel, sprite billboards
+├── gl_present.py          # Readback-free GPU presenter: single texture upload + in-shader post-FX
+├── graphics_manager.py    # Quality-tier presets, window/display setup, GPU feature negotiation
+├── shader_renderer.py     # Legacy (readback) shader path, used only when ANINO_GPU_POST=1
+├── photorealistic.py      # CPU photo-grade pass (vignette / mist / floor glints) for the 2D fallback
+├── perf_governor.py       # Adaptive performance governor (7 shedding levels)
+├── radar.py               # Top-right enemy radar widget
+├── page_arrow.py          # Compass page-arrow pointing at the active objective
+├── cinematic.py           # Intro cinematic scenes
+├── jumpscare.py           # Jumpscare presentation layer (renders into the UI overlay)
+├── animation_core.py      # Sprite-sheet prescaling + enemy animation frames
+├── anim_integration.py    # Ties enemy animator frames into the sprite renderer
+├── asset_generator.py     # Procedural pixel-art generator (fBm noise textures, sprites)
+├── audio_synth.py         # Procedural audio generator (NumPy sound synthesis)
+├── enemy_audio.py         # Spatial enemy audio (per-enemy panned/attenuated SFX)
+├── menu_music.py          # Menu/title soundtrack player
+├── floor_fast.py          # Vectorised floor-texture mapping helper
+├── settings.py            # All game constants, colors, controls, quality tiers
+├── requirements.txt       # Python dependencies
+├── ANINO_SA_GUBAT.spec    # PyInstaller build specification
+├── settings.json          # User configuration file (auto-created/updated)
 │
-├── saves/               # (auto-created) JSON save files
-├── dist/                # (auto-created) PyInstaller build output
-└── assets/              # (auto-created) Cached asset directories
+├── tests/                 # Headless unit + integration tests and performance benchmarks
+├── docs/                  # Design notes (GPU compositor migration, model/sprite prompts)
+├── saves/                 # (auto-created) JSON save files
+├── dist/                  # (auto-created) PyInstaller build output
+└── assets/                # (auto-created) Cached asset directories
     ├── textures/
     └── sprites/
 ```
@@ -84,7 +109,7 @@ ANINO_SA_GUBAT/
 ## Requirements & Installation
 
 - **Python:** 3.10 or higher (Python 3.12 recommended)
-- **Dependencies:** `pygame-ce` (Community Edition), `numpy`
+- **Dependencies:** `pygame-ce` (Community Edition), `numpy`, `moderngl`, `glcontext` (the latter two power the readback-free GPU compositor; if they can't initialize, the game falls back to a pure-2D software path automatically)
 
 ### Installation Steps
 
@@ -105,7 +130,12 @@ pip install -r requirements.txt
 python -B main.py
 ```
 
-The game launches at **1280×720** (windowed by default, with an internal 640×360 raycasting buffer).
+The game renders at an internal **640×360** raycasting buffer and presents it on a SCALED **1280×720** window (fullscreen by default; toggle with `F11`).
+
+**Display back-end selection:**
+- **Default (GPU compositor):** the scene is drawn to a small CPU buffer, uploaded to the GPU once, and post-processed (bloom / grade / fog / grain) in-shader via `moderngl`. The HUD/UI is composited last on a separate layer so it stays pixel-sharp — no CPU↔GPU readback.
+- **2D fallback:** if the GPU can't initialize, or you force it with `ANINO_GPU_POST=1`, the game uses a software/legacy path and keeps the same look.
+- **Headless (CI / self-test):** `SDL_VIDEODRIVER=dummy python _hud_verify.py` (or the tests in `tests/`) run the full render pipeline without a display.
 
 ---
 ## Standalone Executable Build
@@ -130,15 +160,21 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 | `W`, `A`, `S`, `D` / Arrow Keys | Move Forward, Strafe Left, Move Backward, Strafe Right |
 | `Shift` (Hold) | Sprint (consumes stamina) |
 | `Space` | Jump / Skip Cinematic |
-| Left Mouse Click | Attack / Shoot active weapon |
-| Right Mouse Click | Alt Fire / Secondary Weapon Action (Unused) |
+| `Left Mouse Click` | Fire the active weapon |
+| `Mouse Wheel` | Cycle weapon: Bolo → Shotgun → Revolver (applies the equip delay, cancels an in-progress reload) |
 | `R` | Reload active weapon |
-| `1`, `2`, `3` | Switch Weapon (1: Bolo, 2: Shotgun, 3: Revolver) |
-| `4`, `5`, `6`, `7`, `8` | Cast Sacred Wards (1: Light/Repel, 2: Shield, 3: Banish, 4: Bind, 5: Purge) |
 | `E` | Interact (pickups, doors, checkpoints, exits) |
-| `F` | Toggle Flashlight |
-| `Q` | Throw Salt (creates repelling/slowing zone) |
-| `C` | Place Garlic (creates barrier zone against vampires/aswang) |
+| `F` / `1` | Toggle flashlight (`1` checks the battery first) |
+| `G` | Place Salt — a repelling / slowing circle |
+| `H` | Throw Garlic — a barrier zone vs. aswang & vampires |
+| `V` | Pray with the Rosary — restores sanity |
+| `C` | Hold the Cross — a radiance pulse that repels nearby creatures |
+| `2` | Cast Ward — Shield of Faith |
+| `3` | Cast Ward — Banishment of Darkness |
+| `4` | Cast Ward — Binding of the Shadow |
+| `5` | Cast Ward — The Final Benediction (ultimate) |
+| `Tab` | Cycle the selected Sacred Ward |
+| `Q` | Cast the currently selected Sacred Ward |
 | `S` | Save Game (when paused) |
 | `L` | Load Game (from main menu) |
 | `I` | Replay Intro Cinematic (from main menu) |
@@ -147,13 +183,15 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 | `F11` | Toggle Fullscreen |
 | `Escape` | Pause Game / Return to Main Menu / Quit |
 
+> Note: the base repel ward *Light of the Almighty* is reached by cycling with `Tab` (it is ward index 0; `2`–`5` map to the remaining four wards). All bindings live under `settings.json → controls`, though a few keys (number-ward hotkeys, `Tab`, `Q`, `F`/`1`) are fixed in code.
+
 ---
 
 ## Gameplay Guide
 
 - **Survival:** Navigate the dark forest, manage your flashlight battery, stamina, and sanity. Darkness and nearby enemies drain sanity.
 - **Combat:** Use your bolo for silent close-quarters melee, the shotgun for powerful spread damage, or the revolver for precise ranged shots.
-- **Sacred Wards & Items:** Cast wards using Faith energy to repel or bind creatures. Scatter Salt or place Garlic to create protective zones. Collect Bible pages for lore and strength.
+- **Sacred Wards & Items:** Cast the five wards — *Light of the Almighty* (repel), *Shield of Faith*, *Banishment of Darkness*, *Binding of the Shadow*, and the ultimate *The Final Benediction* — using Faith energy to repel or bind creatures. Scatter Salt (`G`) or place Garlic (`H`) for protective zones, pray with the Rosary (`V`) to restore sanity, and hold the Cross (`C`) for a repelling radiance pulse. Collect Bible pages for lore and strength.
 - **Progression:** Reach checkpoints and find the exit portal/door to advance through chapters.
 
 ---
@@ -202,10 +240,20 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 ## Settings
 
 ### Constants (`settings.py`)
-- Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV (`60°`), max ray depth (`25 tiles`), player movement speeds, weapon damage/cooldown/ammo stats, enemy stats, and UI colors.
+- Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV, max ray depth, player movement speeds, weapon damage/cooldown/ammo stats, enemy stats, UI colors, and the **quality-tier presets** (`low` / `medium` / `high`) that are the single source of truth for all renderer feature flags.
 
 ### Configuration (`settings.json`)
-- User preferences (`fullscreen`, `quality_tier`, `enable_intro`, volume levels, etc.).
+Auto-created and updated on save. Notable keys:
+
+| Group | Keys |
+|---|---|
+| Display & audio | `fullscreen`, `screen_width`/`screen_height`, `mouse_sensitivity`, `invert_mouse_y`, `master_volume`, `music_volume`, `sfx_volume`, `ambient_volume`, `enemy_volume`, `vsync` |
+| Graphics | `quality_tier`, `brightness`, `fov`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_camera_shake`, `reduce_camera_shake`, `reduce_flashing`, `gpu_world_rendering` |
+| Accessibility & UI | `ui_scale` (e.g. `100%`), `high_contrast_ui`, `hud_visible` |
+| Gameplay | `difficulty`, `enemy_aggression`, `enemy_spawn_rate`, `enable_sanity`, `enable_intro`, `fps_limit` |
+| Performance | `adaptive_perf` (enables the auto governor described in [Performance & Scaling](#performance--scaling)) |
+| Controls | `controls` (per-action bindings) |
+
 - `settings.json` is auto-created or updated upon saving game state or modifying settings.
 
 ---
@@ -214,14 +262,21 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 
 | Module | Role |
 |---|---|
-| `main.py` | Game loop, state machine (`MENU` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN`), HUD, audio triggers, save/load |
-| `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, serialization |
-| `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, proximity sanity drain |
+| `main.py` | Game loop, state machine (`MENU` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN` / `INTRO`), input, HUD, audio triggers, save/load, present hook, GC policy |
+| `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, ward casting, serialization |
+| `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, proximity sanity drain, **hitscan resolution** (wall-aware, deterministic shotgun spread, distance falloff) |
 | `map_system.py` | Map grids, tile queries, doors, pickups, checkpoints |
-| `renderer.py` | Raycasting engine, colored fog, parallax sky, particles, post-fx (vignette, blood), F3 debug overlay |
+| `renderer.py` | Raycasting engine, parallax sky, particles, depth fog, billboard sprites, first-person viewmodel + equip animations, F3 debug overlay |
+| `gl_present.py` | Readback-free GPU presenter — uploads the scene texture and runs post-FX in-shader; keeps the UI layer un-distorted |
+| `graphics_manager.py` | Quality-tier presets, display/window setup, GPU feature negotiation |
+| `shader_renderer.py` | Legacy readback shader path (opt-in via `ANINO_GPU_POST=1`) |
+| `photorealistic.py` | CPU photo-grade pass (vignette / mist / floor glints) for the 2D fallback |
+| `perf_governor.py` | Adaptive performance governor with 7 measured shedding levels |
+| `radar.py` / `page_arrow.py` | Enemy radar and objective compass widgets |
+| `cinematic.py` / `jumpscare.py` | Intro cinematic and jumpscare presentation |
 | `asset_generator.py` | 100% procedural pixel art & fBm noise textures with ambient occlusion |
-| `audio_synth.py` | Procedural sound synthesis using NumPy arrays & Pygame mixer |
-| `settings.py` | All constants: display, physics, weapons, enemies, wards, colors, tiles, controls |
+| `audio_synth.py` / `enemy_audio.py` | Procedural sound synthesis + spatialized per-enemy audio |
+| `settings.py` | All constants: display, physics, weapons, enemies, wards, colors, tiles, controls, quality tiers |
 
 ---
 
@@ -231,8 +286,53 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 - **Z-Buffer:** Sprites depth-sorted per frame; prevented from drawing in front of closer walls.
 - **Procedural Art:** Zero external asset dependencies — everything generated from Python code at startup.
 - **Delta Time Cap:** `dt` capped at 50ms per frame to prevent physics tunneling on lag spikes.
-- **Upscaling:** Internal 640×360 upscaled to 1280×720 via `pygame.transform.scale` for a retro CRT aesthetic.
-- **Platform:** Built and tested on Windows with Python 3.10+. Compatible with Linux/macOS given same dependencies.
+- **Upscaling:** Internal 640×360 is presented on a SCALED 1280×720 window. By default the **GPU compositor** (`gl_present.py`) uploads the small buffer once and lets a fullscreen shader do the upscale + post-FX with **no CPU↔GPU readback**; the UI layer is composited last on its own texture so it stays crisp. The 2D fallback blits the buffer to the window with SDL's accelerated blit rather than a per-frame CPU `pygame.transform.scale`.
+- **GC policy:** long-lived map/sprite caches are frozen into the permanent generation and the cyclic collector is disabled while playing, so multi-millisecond GC pauses never land on a gameplay frame.
+- **Platform:** Built and tested on Windows with Python 3.10+. Compatible with Linux/macOS given the same dependencies.
+
+---
+
+## Performance & Scaling
+
+The scene is **CPU-bound, not GPU-bound**: the GPU only does one texture upload, one fullscreen shader, and one upscale per frame. Everything is tuned to hold a stable frame rate across the whole range of client hardware rather than just the dev machine.
+
+- **Adaptive governor (`perf_governor.py`):** when enabled (`adaptive_perf`), it measures average frame time over ~1.5 s windows (ignoring warmup and long hitches) and sheds quality across **7 levels** — off the legacy GPU post, then particles + stars, then wind sway + fewer trees, then depth fog + minimum trees, then a quarter of trees + no CPU photo-grade, down to a bare forest with all CPU post off. It restores quality step-by-step when headroom returns and uses a *floor* so it doesn't flap.
+- **Quality tiers (`graphics_manager.py` / `settings.py`):** `low` / `medium` / `high` presets are the single source of truth for renderer feature flags; the governor layers further shedding on top.
+- **Cross-hardware targets (at 60 FPS):**
+
+  | Device | Internal | Trees | Governor floor |
+  |---|---|---|---|
+  | Low (iGPU / CEM, 4-core) | 640×360 | ≤ ~30 | 4–5 |
+  | Medium (iGPU, 6-core) | 640×360 | 150 cap | 2–3 |
+  | High (dGPU) | 640×360 (crisp via GPU upscale) | 150 cap | 0 |
+
+  Because the scene is CPU-bound, "high quality" mostly means a crisper GPU upscale and the full effect stack — the extra shader cost is negligible.
+
+- **Spikes are guarded:** the cyclic GC is frozen during play, the redundant CPU upscale in the 2D fallback is gone, and the biggest load-time spikes (map generation, sprite-sheet prescaling, audio preparation) are the main remaining targets for lazy/cached loading.
+
+---
+
+## Testing
+
+The project ships a headless test + benchmark suite in `tests/` (no display required). A few highlights:
+
+| Script | Purpose |
+|---|---|
+| `smoke_test.py` | End-to-end "does it run" sanity checks |
+| `test_gl_present.py` | GPU presenter: texture upload, shader post, **HUD layer never distorted** |
+| `test_weapon_hitscan.py` | Wall-aware hitscan, deterministic shotgun spread, distance falloff |
+| `test_perf_governor.py` | All 7 shedding levels + exact restore |
+| `test_enemy_hit_reactions.py` / `test_enemy_drops.py` / `test_collision.py` | Combat, loot, and collision behavior |
+| `benchmark_profile.py` | Per-stage frame-time export for the F3 debug overlay |
+
+Run any of them with:
+
+```bash
+python tests/test_gl_present.py
+python tests/smoke_test.py
+# full headless HUD render check:
+$env:SDL_VIDEODRIVER='dummy'; python _hud_verify.py
+```
 
 ---
 
