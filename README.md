@@ -19,14 +19,13 @@
 9. [Enemy Roster](#enemy-roster)
 10. [Map & Tile System](#map--tile-system)
 11. [Chapters](#chapters)
-12. [Save System](#save-system)
-13. [Settings](#settings)
-14. [Architecture & Modules](#architecture--modules)
-15. [Technical Notes](#technical-notes)
-16. [Performance & Scaling](#performance--scaling)
-17. [Testing](#testing)
-18. [Intro Cinematic](#intro-cinematic)
-19. [Lore](#lore)
+12. [Settings](#settings)
+13. [Architecture & Modules](#architecture--modules)
+14. [Technical Notes](#technical-notes)
+15. [Performance & Scaling](#performance--scaling)
+16. [Testing](#testing)
+17. [Intro Cinematic](#intro-cinematic)
+18. [Lore](#lore)
 
 ---
 
@@ -41,7 +40,7 @@ The game features:
 - **Adaptive performance scaling** that automatically sheds effects and geometry on the fly to hold a stable frame rate on any hardware
 - Multiple weapons with reload mechanics (Bolo, Shotgun, Revolver), switched with the scroll wheel
 - A unique **Sacred Ward** and faith system based on Filipino spiritual traditions (5 wards)
-- Multi-chapter progression with JSON save/load support and standalone Windows executable build
+- Multi-chapter progression with a standalone Windows executable build
 
 ---
 
@@ -60,7 +59,6 @@ The game features:
 | 🧠 Sanity / Frenzy | Darkness and nearby enemies drain sanity; low sanity triggers a high-aggression frenzy |
 | 🎬 Intro Cinematic | A skippable animated title sequence with menu music |
 | 🗺️ 2 Chapters | Hand-crafted outdoor forest maps with trees, debris, checkpoints, and exits |
-| 💾 Save/Load | JSON-based save files stored in a `saves/` directory |
 | 🎲 Procedural Art & Audio | All textures, sprites, and most SFX are synthesized at runtime — no asset files required |
 
 ---
@@ -69,7 +67,7 @@ The game features:
 ```
 ANINO_SA_GUBAT/
 │
-├── main.py                # Game loop, states, HUD drawing, save/load, input, present hook
+├── main.py                # Game loop, states, HUD drawing, input, present hook
 ├── player.py              # Player class: movement, stamina, sanity, noise, weapons, items, wards
 ├── enemies.py             # Enemy AI state machine, noise investigation, sanity drain, hitscan resolution
 ├── map_system.py          # Map grid data, tile queries, pickups, checkpoints, doors
@@ -97,7 +95,6 @@ ANINO_SA_GUBAT/
 │
 ├── tests/                 # Headless unit + integration tests and performance benchmarks
 ├── docs/                  # Design notes (GPU compositor migration, model/sprite prompts)
-├── saves/                 # (auto-created) JSON save files
 ├── dist/                  # (auto-created) PyInstaller build output
 └── assets/                # (auto-created) Cached asset directories
     ├── textures/
@@ -175,8 +172,6 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 | `5` | Cast Ward — The Final Benediction (ultimate) |
 | `Tab` | Cycle the selected Sacred Ward |
 | `Q` | Cast the currently selected Sacred Ward |
-| `S` | Save Game (when paused) |
-| `L` | Load Game (from main menu) |
 | `I` | Replay Intro Cinematic (from main menu) |
 | `F3` | Toggle Debug Overlay |
 | `F4` | Snap camera toward moon azimuth |
@@ -230,20 +225,13 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 
 ---
 
-## Save System
-
-- **Storage:** JSON format saved in the `saves/` directory (`save_0.json`, etc.).
-- **Saved Data:** Current chapter, player position, health, armor, stamina, sanity, weapons, ammunition, inventory items (salt, garlic, Bible pages), faith energy, and active checkpoint.
-
----
-
 ## Settings
 
 ### Constants (`settings.py`)
 - Display resolution (`1280×720`), internal raycasting resolution (`640×360`), target FPS (`60`), FOV, max ray depth, player movement speeds, weapon damage/cooldown/ammo stats, enemy stats, UI colors, and the **quality-tier presets** (`low` / `medium` / `high`) that are the single source of truth for all renderer feature flags.
 
 ### Configuration (`settings.json`)
-Auto-created and updated on save. Notable keys:
+Auto-created and updated when settings change. Notable keys:
 
 | Group | Keys |
 |---|---|
@@ -254,7 +242,7 @@ Auto-created and updated on save. Notable keys:
 | Performance | `adaptive_perf` (enables the auto governor described in [Performance & Scaling](#performance--scaling)) |
 | Controls | `controls` (per-action bindings) |
 
-- `settings.json` is auto-created or updated upon saving game state or modifying settings.
+- `settings.json` is auto-created or updated when you modify settings.
 
 ---
 
@@ -262,8 +250,8 @@ Auto-created and updated on save. Notable keys:
 
 | Module | Role |
 |---|---|
-| `main.py` | Game loop, state machine (`MENU` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN` / `INTRO`), input, HUD, audio triggers, save/load, present hook, GC policy |
-| `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, ward casting, serialization |
+| `main.py` | Game loop, state machine (`MENU` / `PLAYING` / `PAUSED` / `GAMEOVER` / `WIN` / `INTRO`), input, HUD, audio triggers, present hook, GC policy |
+| `player.py` | Movement, collision, stamina, sanity, noise generation, weapons, cancelable reloads, ward casting |
 | `enemies.py` | AI state machine (`idle`, `patrol`, `investigate`, `stalk`, `attack`, `recover`, `retreat`, `defeated`), noise perception, proximity sanity drain, **hitscan resolution** (wall-aware, deterministic shotgun spread, distance falloff) |
 | `map_system.py` | Map grids, tile queries, doors, pickups, checkpoints |
 | `renderer.py` | Raycasting engine, parallax sky, particles, depth fog, billboard sprites, first-person viewmodel + equip animations, F3 debug overlay |
