@@ -342,7 +342,11 @@ class GLPresenter:
         prog['u_time'].value = float(time_sec)
         prog['u_flashlight_on'].value = int(flashlight_on)
         prog['u_fog_density'].value = float(fog_density)
-        prog['u_supernatural_intensity'].value = float(supernatural)
+        # GLSL compilers remove uniforms that are declared but never used.
+        # The current fragment shader does not consume this value, so indexing
+        # it unconditionally raises KeyError on Intel's OpenGL driver.
+        if 'u_supernatural_intensity' in prog:
+            prog['u_supernatural_intensity'].value = float(supernatural)
         prog['u_bloom_strength'].value = float(bloom_strength) if post else 0.0
         self.vao.render(self._moderngl.TRIANGLE_STRIP)
 
