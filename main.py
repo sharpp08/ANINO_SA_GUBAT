@@ -496,10 +496,20 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
             tick_x = bar_x + int(bar_w*i/10)
             pygame.draw.line(screen, (67, 51, 46), (tick_x, bar_y), (tick_x, bar_y+bar_h), 1)
 
-        desc = font_sm.render(step_text, True, (203, 194, 174))
-        screen.blit(desc, (bar_x, bar_y+bar_h+17))
+        # Keep the description and percentage in separate horizontal regions.
+        # Long loading labels (for example, "Summoning the forest entities...")
+        # previously extended underneath the percentage on the same line.
         pct = font_sm.render(f"{int(progress*100):02d}%", True, (177, 86, 69))
-        screen.blit(pct, (bar_x+bar_w-pct.get_width(), bar_y+bar_h+17))
+        desc_max_w = max(40, bar_w - pct.get_width() - 14)
+        desc_text = str(step_text)
+        while desc_text and font_sm.size(desc_text + "...")[0] > desc_max_w:
+            desc_text = desc_text[:-1]
+        if desc_text != str(step_text):
+            desc_text = desc_text.rstrip() + "..."
+        desc = font_sm.render(desc_text, True, (203, 194, 174))
+        text_y = bar_y+bar_h+17
+        screen.blit(desc, (bar_x, text_y))
+        screen.blit(pct, (bar_x+bar_w-pct.get_width(), text_y))
 
         warning = font_sm.render("DO NOT ANSWER WHEN IT CALLS YOUR NAME", True, (105, 91, 79))
         screen.blit(warning, (panel_x+25, panel_y+panel_h-30))
