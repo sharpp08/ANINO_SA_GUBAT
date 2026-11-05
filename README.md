@@ -3,7 +3,7 @@
 
 A first-person, pseudo-3D horror-survival game inspired by Philippine folklore. Explore a haunted forest, gather sacred pages, manage your sanity and supplies, and survive until sunrise.
 
-**Current build:** `BUILD 2026.11.02-SURVIVAL-AUDIO`
+**Current build:** `BUILD 2026.11.05-HITSCAN-HUD`
 
 ---
 
@@ -71,6 +71,14 @@ Other effects include dynamic wind, rain and lightning, fog, glowing eyes and pi
 ---
 
 ## Changelog
+
+### BUILD 2026.11.05-HITSCAN-HUD (November 5, 2026)
+
+- **Geometric hitscan weapon damage:** `apply_weapon_hit` now uses precise ray-casting instead of random circle checks, respecting 3D line-of-sight and solid map tiles. Enemy hits only register when forward of the aim and within the enemy's physical body radius. Shotgun spread is deterministic even-fan instead of random. Melee bolts respect wall-blocking.
+- **HUD readability improvements:** panel opacity and text alignment are updated for better legibility, dedicated HUD fonts replace dynamic parameters, fixed-width item columns for inventory, and increased spacing between objective lines and weapon slots.
+- **Outlined text helper:** `_outlined()` in `main.py` renders text with a subtle dark alpha-blended outline so UI remains readable over post-processing effects such as muzzle flashes, color grade, and bloom. Used in the survival stats, inventory, weapon chips, and pause menu.
+- **Frenzy background audio fallback:** if `frenzy_mode_ambience.mp3` is missing or cannot be loaded, procedural audio provides a silent-safe fallback so the Frenzy layer does not break startup.
+- **Windows executable rebuilt:** `ANINO_SA_GUBAT.exe` was recompiled from the PyInstaller spec so the shipped binary includes the geometric hitscan damage, HUD readability, and outlined-text changes.
 
 ### BUILD 2026.11.02-SURVIVAL-AUDIO (November 2, 2026)
 
