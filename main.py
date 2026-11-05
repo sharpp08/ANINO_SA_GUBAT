@@ -831,13 +831,15 @@ class Game:
         return self._set_display_mode_2d()
 
     def _set_display_mode_2d(self):
-        """Create the window with GPU-side scaling (SCALED) and vsync on ~60 Hz displays.
+        """Create a low-resolution logical display that SDL scales to the monitor.
 
-        SCALED lets SDL stretch the 1280x720 surface to the real monitor on the GPU
-        (no desktop mode switch).
+        The software renderer already draws at INTERNAL_WIDTH x INTERNAL_HEIGHT.
+        Using that same size for the SCALED display lets SDL perform the final
+        GPU-side upscale. A normal Surface.blit() does not resize its source, so
+        the display surface and internal render surface must have matching sizes.
         """
         flags = pygame.FULLSCREEN if FULLSCREEN else 0
-        size = (SCREEN_WIDTH, SCREEN_HEIGHT)
+        size = (INTERNAL_WIDTH, INTERNAL_HEIGHT)
         vsync = self._vsync_flag()
         try:
             return pygame.display.set_mode(size, flags | pygame.SCALED, vsync=vsync)
@@ -845,6 +847,9 @@ class Game:
             try:
                 return pygame.display.set_mode(size, flags | pygame.SCALED)
             except Exception:
+                # Last-resort compatibility path: use a real display-sized surface.
+                # The caller's blit is still unscaled, so keep the logical surface
+                # dimensions consistent with the software render target.
                 return pygame.display.set_mode(size, flags)
 
     def toggle_fullscreen(self):
@@ -1493,12 +1498,11 @@ class Game:
             if overlay is not None:
                 self.internal.blit(overlay, (0, 0))
 
-            # Scale to screen. A blit with a dest rect triggers SDL_BlitScaled (GPU on an
-            # accelerated / SCALED window) instead of pygame's CPU transform.scale, which
-            # runs bilinear on the main thread every frame. The SCALED flag already takes
-            # the 1280x720 surface to the physical monitor, so we just need to stretch the
-            # internal canvas once per frame, cheaply.
-            self.screen.blit(self.internal, self.screen.get_rect())
+            # The 2D fallback display uses the same logical dimensions as the
+            # internal render target. SDL's SCALED display mode performs the final
+            # GPU-side upscale to the actual window/monitor; Surface.blit itself
+            # does not resize and must use a same-size destination here.
+            self.screen.blit(self.internal, (0, 0))
         # Work time excludes the flip, which blocks on vsync and would look like load.
         self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
         pygame.display.flip()
