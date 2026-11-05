@@ -612,7 +612,7 @@ class Game:
                 print("[GPU WORLD] Requested but OpenGL presentation is unavailable; CPU walls remain active.")
         self.renderer.crosshair = crosshair_spr
         self.renderer.clock = self.clock
-        # Adaptive 60 FPS governor: sheds optional effects if frame work time stays over budget.
+        # Quality-preserving performance monitor: reports slow frame work without shedding effects.
         self.perf = PerfGovernor(self.renderer, _renderer_mod, _settings_mod,
                                  enabled=bool((getattr(_settings_mod, 'RUNTIME_SETTINGS', None) or {}).get('adaptive_perf', True)))
         self._loop_t0 = _perf_counter()
