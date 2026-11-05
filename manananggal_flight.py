@@ -27,10 +27,11 @@ import math
 FLYING_TYPES = ('manananggal',)
 
 # Flight behaviour modes (selected from the enemy AI state in enemies.py).
-CHASE = 'chase'      # fly toward the player, orbiting the attack band
-LOITER = 'loiter'    # cruise in a circle around the creature's anchor
-FLEE = 'flee'        # bank away from the threat, then orbit behind it
-DESCEND = 'descend'  # level out while keeping the medium-altitude band
+CHASE = 'chase'      # fly toward the player, orbiting the attack band (high)
+LOITER = 'loiter'    # cruise in a circle around the creature's anchor (high)
+FLEE = 'flee'        # bank away from the threat, then orbit behind it (high)
+DESCEND = 'descend'  # level out while keeping the high-altitude band
+STRIKE = 'strike'    # dive down to a low altitude to attack the player
 
 
 class TerrainHeightSampler:
@@ -76,6 +77,7 @@ class FlightController:
 
     def __init__(self, speed=2.5, base_altitude=2.4,
                  altitude_min=2.0, altitude_max=3.2,
+                 strike_altitude=0.5, strike_min=0.2,
                  alt_lerp=2.5, bob_amplitude=0.18, bob_freq=1.6,
                  orbit_radius=5.5, orbit_speed=1.0, arrive_radius=3.0,
                  flee_radius=9.0, turn_rate=4.5, footprint=0.4,
@@ -99,6 +101,10 @@ class FlightController:
         self.flee_radius = float(flee_radius)
         self.turn_rate = float(turn_rate)
         self.footprint = float(footprint)
+        # Low strike band (tiles above the ground): the creature dives to this
+        # altitude to attack the player, then climbs back up when it's not striking.
+        self.strike_altitude = float(strike_altitude)
+        self.strike_min = float(strike_min)
         self.terrain = terrain or TerrainHeightSampler()
 
         # Runtime state.
@@ -109,6 +115,7 @@ class FlightController:
         self.altitude = self.base_altitude   # tiles above terrain
         self.terrain_height = 0.0            # ground height under us
         self.loft = self.base_altitude       # excess over terrain (clamped)
+        self._loft = self.base_altitude      # smoothed excess (drives climb/dive)
         self.facing = 0.0
         self._bob_phase = 0.0
         self._orbit_phase = 0.0
@@ -129,13 +136,14 @@ class FlightController:
         """Advance one frame.
 
         ``mode`` is one of :data:`CHASE`, :data:`LOITER`, :data:`FLEE`,
-        :data:`DESCEND`. ``target_x/target_y`` is the player position for
-        chase/flee and the loiter centre otherwise. Returns ``(x, y)``.
+        :data:`DESCEND`, :data:`STRIKE`. ``target_x/target_y`` is the player
+        position for chase/flee/strike and the loiter centre otherwise.
+        Returns ``(x, y)``.
         """
         dt = max(0.0, float(dt))
         if mode == FLEE:
             goal = self._flee_goal(target_x, target_y)
-        elif mode == CHASE:
+        elif mode in (CHASE, STRIKE):
             goal = self._chase_goal(target_x, target_y)
         else:  # LOITER / DESCEND cruise around the anchor
             goal = self._loiter_goal(target_x, target_y)
@@ -169,20 +177,29 @@ class FlightController:
         if abs(self.vx) > 0.02 or abs(self.vy) > 0.02:
             self.facing = math.atan2(self.vy, self.vx)
 
-        # ── altitude: terrain-relative, medium band, hard-capped ────────
+        # ── altitude: terrain-relative, high normally / low when striking ──
         self._orbit_phase += dt * self.orbit_speed
         self._bob_phase += dt * self.bob_freq
         self.terrain_height = self.terrain.height(self.x, self.y, game_map)
         bob = self.bob_amplitude * math.sin(self._bob_phase)
-        # Chasing lifts a little so the swoop reads; loitering settles to base.
-        target_loft = self.base_altitude + bob
-        if mode == CHASE:
-            target_loft += self.bob_amplitude
-        target_loft = max(self.altitude_min, min(target_loft, self.altitude_max))
-        self.loft = target_loft
-        # Absolute altitude always tracks the terrain beneath us and stays in
-        # the hard band even on a cliff; the last line is "never flies too high".
-        self.altitude = self.terrain_height + target_loft
+        if mode == STRIKE:
+            # Dive to the low strike band to attack the player.
+            target_loft = self.strike_altitude + 0.5 * bob
+            lo, hi = self.strike_min, self.strike_altitude + self.bob_amplitude
+        else:
+            # Hold the high cruising band; chasing adds a little extra lift.
+            target_loft = self.base_altitude + bob
+            if mode == CHASE:
+                target_loft += self.bob_amplitude
+            lo, hi = self.altitude_min, self.altitude_max
+        target_loft = max(lo, min(target_loft, hi))
+        # Smooth the excess so climbing / diving is a banked swoop, not a snap.
+        smooth = 1.0 - math.exp(-self.alt_lerp * dt)
+        self._loft += (target_loft - self._loft) * smooth
+        self.loft = self._loft
+        # Absolute altitude always tracks the terrain beneath us; the clamped
+        # band guarantees it never soars above the landscape even on a cliff.
+        self.altitude = self.terrain_height + self._loft
         return self.x, self.y
 
     def altitude_pixels(self, unit):

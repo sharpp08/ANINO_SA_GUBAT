@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import numpy as np
 from manananggal_flight import (
     FlightController, make_flight_controller,
-    CHASE, LOITER, FLEE, DESCEND, FLYING_TYPES,
+    CHASE, LOITER, FLEE, DESCEND, STRIKE, FLYING_TYPES,
 )
 
 
@@ -102,8 +102,29 @@ def test_descend_keeps_medium_band():
         assert fc.altitude_min - 1e-9 <= fc.altitude <= fc.altitude_max + 1e-9
 
 
+def test_strike_dives_low_then_climbs_back():
+    m = FlatMap()
+    fc = make_flight_controller('manananggal', 2.5)
+    fc.set_origin(60, 60)
+    # Establish the high cruising altitude first.
+    for _ in range(200):
+        fc.update(1.0 / 60.0, 60, 60, CHASE, m)
+    high = fc.altitude
+    assert high >= fc.altitude_min, high
+    # STRIKE: it dives down to the low strike band to attack the player.
+    for _ in range(300):
+        fc.update(1.0 / 60.0, 60, 60, STRIKE, m)
+    low = fc.altitude
+    assert low < fc.strike_altitude + fc.strike_min + 1e-6, low
+    assert low < high, (low, high)                 # it genuinely descended
+    # Back to cruising: it climbs back up to the high band.
+    for _ in range(300):
+        fc.update(1.0 / 60.0, 60, 60, CHASE, m)
+    assert fc.altitude > low, (fc.altitude, low)   # and it climbed back up
+
+
 def test_enemy_integration():
-    from enemies import Enemy
+    from enemies import Enemy, EnemyState
     flier = Enemy('manananggal', 60.0, 60.0)
     grounded = Enemy('aswang', 60.0, 60.0)
     assert flier.flight is not None
@@ -111,16 +132,19 @@ def test_enemy_integration():
     assert grounded.flight_lift == 0.0
 
     m = FlatMap()
-    # Frenzy forces the CHASE flight branch regardless of AI state, so we can
-    # exercise the Enemy -> FlightController path without a full game map.
-    flier.frenzy = True
+    # Not engaged, cruising from spawn: it flies HIGH (well above the ground).
+    flier.frenzy = False
+    flier.state = EnemyState.IDLE
     for _ in range(120):
-        flier.update(1.0 / 60.0, 80.0, 60.0, m)
-        assert flier.flight_lift >= flier.flight.altitude_min - 1e-9
-        assert flier.flight_lift <= flier.flight.altitude_max + 1e-9
-    # It must have actually moved off its spawn while pursuing the player.
-    moved = ((flier.x - 60.0) ** 2 + (flier.y - 60.0) ** 2) ** 0.5
-    assert moved > 0.5, moved
+        flier.update(1.0 / 60.0, 120.0, 120.0, m)   # player far away -> LOITER
+    assert flier.flight_lift >= flier.flight.altitude_min - 1e-6, flier.flight_lift
+
+    # Now actively attacking the player up close: it DIVES to the low strike band.
+    flier.state = EnemyState.ATTACK
+    flier.frenzy = False
+    for _ in range(300):
+        flier.update(1.0 / 60.0, flier.x + 1.0, flier.y, m)   # player right on it
+    assert flier.flight_lift < flier.flight.strike_altitude + flier.flight.strike_min + 1e-6, flier.flight_lift
 
 
 def main():

@@ -4,7 +4,7 @@ Enemy AI - Implements enemy behaviors, states, and combat interactions.
 import math
 import random
 from settings import *
-from manananggal_flight import make_flight_controller, CHASE, LOITER, FLEE
+from manananggal_flight import make_flight_controller, CHASE, LOITER, FLEE, STRIKE
 
 
 
@@ -539,8 +539,16 @@ class Enemy:
             fl = self.flight
             fl.speed = self.speed          # frenzy boosts flight speed too
             fl.x, fl.y = self.x, self.y     # carry in any ground-side movement
-            if self.frenzy or self.state in (EnemyState.ATTACK, EnemyState.INVESTIGATE, EnemyState.STALK):
-                fl.x, fl.y = fl.update(dt, player_x, player_y, CHASE, game_map)
+            dist = self.distance_to(player_x, player_y)
+            engaged = self.frenzy or self.state in (
+                EnemyState.ATTACK, EnemyState.INVESTIGATE, EnemyState.STALK)
+            if engaged:
+                # Close in high across the sky, then dive down to actually bite
+                # once it's within a strike band of the player.
+                if dist <= self.attack_range * 1.5:
+                    fl.x, fl.y = fl.update(dt, player_x, player_y, STRIKE, game_map)
+                else:
+                    fl.x, fl.y = fl.update(dt, player_x, player_y, CHASE, game_map)
             elif self.state == EnemyState.RETREAT:
                 fl.x, fl.y = fl.update(dt, player_x, player_y, FLEE, game_map)
             else:
