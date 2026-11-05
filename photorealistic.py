@@ -54,6 +54,20 @@ class PhotorealisticPass:
             for amount in (1.0, 0.65)
         }
         self._grade_tmp = np.empty((self.width, self.height), dtype=np.uint16)
+        # Precompute the complete color-grade LUT at 1/64 daylight increments.
+        # The old path rebuilt three 256-entry float LUTs every frame.
+        self._grade_luts = np.empty((65, 3, 256), dtype=np.uint8)
+        lut_input = np.arange(256, dtype=np.float32)
+        for daylight_step in range(65):
+            day = daylight_step / 64.0
+            for channel in range(3):
+                night = (0.91, 0.985, 1.045)[channel]
+                dawn = (1.045, 1.015, 0.94)[channel]
+                tint = night * (1.0 - day) + dawn * day
+                values = np.maximum(0.0, (lut_input - 18.0) * 1.055 + 18.0)
+                values *= tint
+                values = 255.0 * (values / (values + 230.0)) * 1.94
+                self._grade_luts[daylight_step, channel] = np.clip(values, 0.0, 255.0).astype(np.uint8)
 
     def enhance_floor(self, surface, horizon_y, time_s=0.0, strength=1.0):
         """Add restrained wet-leaf / puddle glints to the exposed ground plane."""
@@ -111,25 +125,18 @@ class PhotorealisticPass:
             return
         rgb = pygame.surfarray.pixels3d(surface)
 
-        # Build tiny per-channel 256-entry LUTs for the contrast/tint/film curve.
-        # Applying them in-place avoids the several full-frame float32 arrays used
-        # by grade_rgb_array() on every frame.
+        # Quantize daylight to the nearest precomputed LUT. This avoids
+        # rebuilding float arrays and transfer curves on every rendered frame.
         day = max(0.0, min(1.0, float(daylight)))
-        night = (0.91, 0.985, 1.045)
-        dawn = (1.045, 1.015, 0.94)
-        lut_input = np.arange(256, dtype=np.float32)
+        lut_set = self._grade_luts[int(day * 64.0 + 0.5)]
         factors = self._vignette_u8[1.0 if amount >= 0.999 else 0.65]
         work = self._grade_tmp
         for channel in range(3):
-            tint = night[channel] * (1.0 - day) + dawn[channel] * day
-            values = np.maximum(0.0, (lut_input - 18.0) * 1.055 + 18.0)
-            values *= tint
-            values = 255.0 * (values / (values + 230.0)) * 1.94
-            lut = np.clip(values, 0.0, 255.0).astype(np.uint8)
+            lut = lut_set[channel]
             np.take(lut, rgb[:, :, channel], out=rgb[:, :, channel])
 
-            # Integer multiply/divide reproduces the vignette blend while using
-            # one reusable uint16 plane instead of a new float32 image per channel.
+            # Integer multiply/divide reproduces the vignette blend using one
+            # reusable uint16 plane, with no full-frame temporary allocations.
             np.multiply(rgb[:, :, channel], factors, out=work, dtype=np.uint16)
             work += 127
             np.floor_divide(work, 255, out=work)
