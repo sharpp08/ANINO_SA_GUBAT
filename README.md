@@ -76,7 +76,7 @@ ANINO_SA_GUBAT/
 ├── graphics_manager.py    # Quality-tier presets, window/display setup, GPU feature negotiation
 ├── shader_renderer.py     # Legacy (readback) shader path, used only when ANINO_GPU_POST=1
 ├── photorealistic.py      # CPU photo-grade pass (vignette / mist / floor glints) for the 2D fallback
-├── perf_governor.py       # Adaptive performance governor (7 shedding levels)
+├── perf_governor.py       # Quality-preserving performance monitor
 ├── radar.py               # Top-right enemy radar widget
 ├── page_arrow.py          # Compass page-arrow pointing at the active objective
 ├── cinematic.py           # Intro cinematic scenes
@@ -238,7 +238,7 @@ Auto-created and updated when settings change. Notable keys:
 | Graphics | `quality_tier`, `brightness`, `fov`, `enable_bloom`, `enable_film_grain`, `enable_fog`, `enable_particles`, `enable_camera_shake`, `reduce_camera_shake`, `reduce_flashing`, `gpu_world_rendering` |
 | Accessibility & UI | `ui_scale` (e.g. `100%`), `high_contrast_ui`, `hud_visible` |
 | Gameplay | `difficulty`, `enemy_aggression`, `enemy_spawn_rate`, `enable_sanity`, `enable_intro`, `fps_limit` |
-| Performance | `adaptive_perf` (enables the auto governor described in [Performance & Scaling](#performance--scaling)) |
+| Performance | `adaptive_perf` (enables performance monitoring; it never changes visual quality) |
 | Controls | `controls` (per-action bindings) |
 
 - `settings.json` is auto-created or updated when you modify settings.
@@ -258,7 +258,7 @@ Auto-created and updated when settings change. Notable keys:
 | `graphics_manager.py` | Quality-tier presets, display/window setup, GPU feature negotiation |
 | `shader_renderer.py` | Legacy readback shader path (opt-in via `ANINO_GPU_POST=1`) |
 | `photorealistic.py` | CPU photo-grade pass (vignette / mist / floor glints) for the 2D fallback |
-| `perf_governor.py` | Adaptive performance governor with 7 measured shedding levels |
+| `perf_governor.py` | Monitor-only performance tracking; preserves configured visual quality |
 | `radar.py` / `page_arrow.py` | Enemy radar and objective compass widgets |
 | `cinematic.py` / `jumpscare.py` | Intro cinematic and jumpscare presentation |
 | `asset_generator.py` | 100% procedural pixel art & fBm noise textures with ambient occlusion |
@@ -281,19 +281,13 @@ Auto-created and updated when settings change. Notable keys:
 
 ## Performance & Scaling
 
-The scene is **CPU-bound, not GPU-bound**: the GPU only does one texture upload, one fullscreen shader, and one upscale per frame. Everything is tuned to hold a stable frame rate across the whole range of client hardware rather than just the dev machine.
+The scene contains substantial CPU-side rendering work, while the GPU compositor handles presentation and post-processing. Use the F3 stage timings on the target machine to identify whether a slowdown comes from CPU rendering, uploads, or GPU work.
 
 - **Performance monitor (`perf_governor.py`):** when enabled (`adaptive_perf`), it measures gameplay frame work over rolling ~1.5 s windows, ignores warmup and long hitches, and reports sustained over-budget work. It is deliberately monitor-only: it never disables shaders, particles, stars, wind, fog, trees, or photo grading. Use the F3 stage timings to identify the actual bottleneck.
 - **Quality tiers (`graphics_manager.py` / `settings.py`):** `low` / `medium` / `high` presets remain the source of configured renderer feature flags. The performance monitor never overrides them.
 - **Cross-hardware targets (at 60 FPS):**
 
-  | Device | Internal | Trees | Governor floor |
-  |---|---|---|---|
-  | Low (iGPU / CEM, 4-core) | 640×360 | ≤ ~30 | 4–5 |
-  | Medium (iGPU, 6-core) | 640×360 | 150 cap | 2–3 |
-  | High (dGPU) | 640×360 (crisp via GPU upscale) | 150 cap | 0 |
-
-  Because the scene is CPU-bound, "high quality" mostly means a crisper GPU upscale and the full effect stack — the extra shader cost is negligible.
+  The monitor does not apply automatic device tiers or tree caps. Choose the desired quality tier explicitly in settings, then use F3 timings to profile performance. Do not infer GPU headroom from the presence of an OpenGL context alone.
 
 - **Spikes are guarded:** the cyclic GC is frozen during play, the redundant CPU upscale in the 2D fallback is gone, and the biggest load-time spikes (map generation, sprite-sheet prescaling, audio preparation) are the main remaining targets for lazy/cached loading.
 
