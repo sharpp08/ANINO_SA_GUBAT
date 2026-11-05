@@ -1131,7 +1131,7 @@ class Game:
         # Keep the active hunt challenging without allowing an unbounded AI crowd.
         if len(self.enemy_manager.get_alive_enemies()) >= 12:
             return False
-        enemy_types = ('aswang', 'multo', 'sigbin', 'white_lady', 'tikbalang', 'kapre')
+        enemy_types = ('aswang', 'manananggal', 'multo', 'sigbin', 'white_lady', 'tikbalang', 'kapre')
         for _ in range(40):
             angle = random.uniform(0.0, math.tau)
             distance = random.uniform(13.0, 28.0)
