@@ -438,6 +438,11 @@ class Renderer:
         self.bolo_swing_timer = 0.0   # >0 while the bolo slash is playing
         self.shotgun_fire_timer = 0.0  # >0 while the shotgun fire animation is playing
         self.revolver_fire_timer = 0.0
+        # Equip/holster transition: when the equipped weapon changes, the new
+        # viewmodel rises into place while the outgoing one drops away.
+        self.weapon_equip_timer = 0.0  # >0 while the equip transition is playing
+        self._vm_equip_from = None     # weapon name holstered at the start of the transition
+        self._vm_weapon = None         # last weapon name drawn (detects changes)
 
         # Screen effects
         self.screen_shake = 0
@@ -2316,6 +2321,43 @@ class Renderer:
                 self._viewmodel_cache.pop(next(iter(self._viewmodel_cache)))
         return got
 
+    def _vm_weapon_scaled(self, wname, sprite):
+        """Viewmodel scale rules, shared by the idle weapon and the equip transition.
+
+        Custom bolo/shotgun art is sized to the screen height (works at any internal
+        resolution); the custom revolver sidearm is smaller; fallback art stays 3x.
+        """
+        from asset_generator import SHOTGUN_ANCHORS, REVOLVER_ANCHORS
+        custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
+        custom_revolver = (wname == 'revolver' and bool(REVOLVER_ANCHORS))
+        if wname == 'bolo' or custom_shotgun:
+            scale = self.h * 0.85 / sprite.get_height()
+        elif custom_revolver:
+            scale = self.h * 0.5 / sprite.get_height()
+        else:
+            scale = 3
+        size = (int(sprite.get_width() * scale), int(sprite.get_height() * scale))
+        return self._vm_scaled((wname, id(sprite)), sprite, size)
+
+    def _draw_holstered_weapon(self, p):
+        """Draw the outgoing viewmodel dropping away and fading (p = 0..1 transition progress)."""
+        if self._vm_equip_from is None:
+            return
+        old_sprite = self.weapon_sprites.get(self._vm_equip_from)
+        if old_sprite is None:
+            return
+        alpha = int(255 * max(0.0, 1.0 - p * 1.5))
+        if alpha <= 0:
+            return
+        old_scaled = self._vm_weapon_scaled(self._vm_equip_from, old_sprite)
+        # Same right-arm base position the new weapon starts from (see _draw_player_viewmodel).
+        ox = self.w // 2 - old_scaled.get_width() // 3 + 50
+        oy = self.h - old_scaled.get_height() + 30
+        fall = int(p * 140)  # sinks below the bottom of the screen
+        surf = old_scaled.copy()
+        surf.set_alpha(alpha)
+        self.surface.blit(surf, (ox, oy + fall))
+
     def _draw_player_viewmodel(self, player, dt):
         """Draw immersive first-person procedural hands, forearms, sleeves, and weapon viewmodel."""
         weapon_names = ['bolo', 'shotgun', 'revolver']
@@ -2330,20 +2372,32 @@ class Renderer:
         from asset_generator import SHOTGUN_ANCHORS, REVOLVER_ANCHORS
         custom_shotgun = (wname == 'shotgun' and bool(SHOTGUN_ANCHORS))
         custom_revolver = (wname == 'revolver' and bool(REVOLVER_ANCHORS))
-        sprite = self.weapon_sprites.get(wname)
-        if wname == 'bolo' or custom_shotgun:
-            scale = self.h * 0.85 / sprite.get_height()
-        elif custom_revolver:
-            # A sidearm: about half the screen height, tucked in the lower right so
-            # the crosshair and the view ahead stay clear (the old 3x procedural
-            # sprite was taller than the whole 360px screen).
-            scale = self.h * 0.5 / sprite.get_height()
-        else:
-            scale = 3
-        sw = int(sprite.get_width() * scale)
-        sh = int(sprite.get_height() * scale)
         vm_key = (wname, id(sprite))
-        scaled = self._vm_scaled(vm_key, sprite, (sw, sh))
+        scaled = self._vm_weapon_scaled(wname, sprite)
+        sw, sh = scaled.get_size()
+
+        # ── Equip / holster transition ──
+        # When the equipped weapon changes the new one rises in from below the
+        # screen edge (eased, slight cant, fading in) while the holstered weapon
+        # drops and fades out. switch_weapon's 0.3s delay keeps firing blocked
+        # for exactly as long as the draw-in plays.
+        if wname != self._vm_weapon:
+            self._vm_equip_from = self._vm_weapon
+            self._vm_weapon = wname
+            self.weapon_equip_timer = 0.3
+        equip_dy = 0
+        equip_rot = 0.0
+        equip_alpha = 255
+        if self.weapon_equip_timer > 0:
+            eq_p = max(0.0, min(1.0, 1.0 - self.weapon_equip_timer / 0.3))
+            ease = 1.0 - (1.0 - eq_p) ** 3              # ease-out: snap in, then settle
+            equip_dy = int((1.0 - ease) * 90)            # rise from 90px below rest
+            equip_rot = -18.0 * (1.0 - ease)
+            equip_alpha = int(255 * min(1.0, eq_p * 2.0))
+            self._draw_holstered_weapon(eq_p)
+            self.weapon_equip_timer = max(0.0, self.weapon_equip_timer - dt)
+            if self.weapon_equip_timer == 0.0:
+                self._vm_equip_from = None
 
         # Base screen position (shifted to right arm perspective)
         base_x = self.w // 2 - sw // 3 + 50
@@ -2410,7 +2464,7 @@ class Renderer:
             recoil_y += 10
 
         final_x = base_x + bob_x + sprint_off_x - revolver_kick_x
-        final_y = base_y + bob_y + recoil_y + reload_offset + revolver_kick_y
+        final_y = base_y + bob_y + recoil_y + reload_offset + revolver_kick_y + equip_dy
 
         # Revolver reload: lower and cant the gun as the cylinder is serviced.
         if wname == 'revolver' and player.reloading:
@@ -2420,7 +2474,7 @@ class Renderer:
             reload_rot -= 18.0 * reload_wave
 
         # Rotate viewmodel if sprinting, reloading, or dying
-        total_rot = sprint_tilt + reload_rot + revolver_tilt
+        total_rot = sprint_tilt + reload_rot + revolver_tilt + equip_rot
         if total_rot != 0:
             draw_surf = self._vm_rotated(vm_key, scaled, total_rot)
         else:
@@ -2518,10 +2572,17 @@ class Renderer:
             (-10, self.h + 10), (80, self.h - 30), (40, self.h + 10)
         ])
 
-        # Draw weapon viewmodel surface (slash trail first, then the bolo itself)
+        # Draw weapon viewmodel surface (slash trail first, then the bolo itself).
+        # During the equip transition the weapon fades in (copy + set_alpha so the
+        # cached rotated surface is never mutated).
         for g_surf, gx_, gy_ in bolo_ghosts:
             self.surface.blit(g_surf, (gx_, gy_))
-        self.surface.blit(draw_surf, (final_x, final_y))
+        if equip_alpha < 255:
+            vm_blit = draw_surf.copy()
+            vm_blit.set_alpha(equip_alpha)
+            self.surface.blit(vm_blit, (final_x, final_y))
+        else:
+            self.surface.blit(draw_surf, (final_x, final_y))
 
         # Draw visible gripping hands / knuckles
         if player.alive and bolo_grip is not None:

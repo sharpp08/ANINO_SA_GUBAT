@@ -803,8 +803,15 @@ class EnemyManager:
                 self.last_attackers.append(enemy)
         return total_damage
 
-    def apply_weapon_hit(self, player_x, player_y, player_angle, weapon_info):
-        """Apply weapon damage to enemies in range."""
+    def apply_weapon_hit(self, player_x, player_y, player_angle, weapon_info, game_map=None):
+        """Hitscan weapon damage with geometric accuracy.
+
+        Every weapon is resolved as rays from the player's eye, not as a circle
+        around the player: an enemy only takes damage when the ray actually passes
+        within its body radius, the enemy is in FRONT of the aim direction, and
+        no wall sits between them. Pellets are evenly fanned across the spread
+        cone (deterministic per shot -- no random flicker between frames).
+        """
         hits = []
         w_type = weapon_info['type']
         w_range = weapon_info['range']
@@ -812,14 +819,38 @@ class EnemyManager:
         w_spread = weapon_info.get('spread', 0)
         pellets = weapon_info.get('pellets', 1)
 
+        dir_x = math.cos(player_angle)
+        dir_y = math.sin(player_angle)
+
+        def wall_blocked(ux, uy, depth):
+            """True if a solid tile sits between the eye and (ux, uy) at `depth` tiles."""
+            if game_map is None or depth <= 0:
+                return False
+            steps = max(1, int(depth / 0.35))
+            sx, sy = ux - player_x, uy - player_y
+            for i in range(1, steps + 1):
+                t = i / steps
+                if game_map.is_solid(player_x + sx * t, player_y + sy * t):
+                    return True
+            return False
+
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
-            dist = enemy.distance_to(player_x, player_y)
+            dx = enemy.x - player_x
+            dy = enemy.y - player_y
+            dist = math.hypot(dx, dy)
             if dist > w_range:
                 continue
-
-            angle_to_enemy = math.atan2(enemy.y - player_y, enemy.x - player_x)
+            # Decompose the enemy offset into forward distance along the aim ray
+            # and perpendicular distance from it. Forward <= 0 means the enemy's
+            # centre is behind the player -- no weapon can reach it this way.
+            forward = dx * dir_x + dy * dir_y
+            if forward <= 0:
+                continue
+            perp = abs(dx * dir_y - dy * dir_x)
+            hit_radius = max(0.2, getattr(enemy, 'size', 0.3))
+            angle_to_enemy = math.atan2(dy, dx)
             angle_diff = angle_to_enemy - player_angle
             while angle_diff > math.pi:
                 angle_diff -= 2 * math.pi
@@ -827,26 +858,41 @@ class EnemyManager:
                 angle_diff += 2 * math.pi
 
             if w_type == 'bolo':
-                if abs(angle_diff) < 0.5 and dist <= w_range:
+                # Melee: blade reach past the body radius, no wall penetration.
+                if wall_blocked(enemy.x, enemy.y, forward):
+                    continue
+                if perp <= hit_radius + 0.35:
                     enemy.take_damage(w_damage, 'physical', (player_x, player_y))
                     hits.append(enemy)
             elif w_type == 'shotgun':
-                if abs(angle_diff) < 0.3:
-                    # Each pellet has a chance to hit based on spread and distance
-                    hit_pellets = 0
-                    for _ in range(pellets):
-                        pellet_spread = random.uniform(-w_spread, w_spread)
-                        if abs(angle_diff + pellet_spread) < 0.25:
-                            hit_pellets += 1
-                    if hit_pellets > 0:
-                        # Damage falloff with distance
-                        falloff = max(0.3, 1.0 - dist / w_range)
-                        total_dmg = w_damage * hit_pellets / pellets * falloff
-                        enemy.take_damage(total_dmg, 'physical', (player_x, player_y))
-                        hits.append(enemy)
+                # Deterministic even fan of pellets across the spread cone.
+                if wall_blocked(enemy.x, enemy.y, forward):
+                    continue
+                # Angular half-width the enemy presents to the shooter (grows up
+                # close), clamped so grazing pellets still register at long range.
+                half_width = math.asin(min(1.0, hit_radius / max(0.001, forward)))
+                half_width = max(half_width, 0.06)
+                if pellets > 1:
+                    step = 2.0 * w_spread / (pellets - 1)
+                    start = -w_spread
+                else:
+                    step, start = 0.0, 0.0
+                hit_pellets = 0
+                for i in range(pellets):
+                    if abs(angle_diff - (start + i * step)) < half_width:
+                        hit_pellets += 1
+                if hit_pellets > 0:
+                    # Damage falloff with distance (falloff uses forward depth).
+                    falloff = max(0.3, 1.0 - forward / w_range)
+                    total_dmg = w_damage * hit_pellets / pellets * falloff
+                    enemy.take_damage(total_dmg, 'physical', (player_x, player_y))
+                    hits.append(enemy)
             elif w_type == 'revolver':
-                if abs(angle_diff) < 0.15:
-                    falloff = max(0.5, 1.0 - dist / w_range * 0.3)
+                # Precise shot: ray must pass over the enemy and reach it.
+                if wall_blocked(enemy.x, enemy.y, forward):
+                    continue
+                if perp <= hit_radius:
+                    falloff = max(0.5, 1.0 - forward / w_range * 0.3)
                     enemy.take_damage(w_damage * falloff, 'physical', (player_x, player_y))
                     hits.append(enemy)
 

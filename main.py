@@ -1018,10 +1018,13 @@ class Game:
             elif k == pygame.K_TAB:
                 p.selected_ward = (p.selected_ward + 1) % 5
         if event.type == pygame.MOUSEWHEEL:
+            # Route through switch_weapon: it applies the equip delay and cancels
+            # any in-progress reload (assigning current_weapon directly bypassed
+            # both, letting the player fire a freshly-drawn weapon mid-reload).
             if event.y > 0:
-                p.current_weapon = (p.current_weapon - 1) % 3
+                p.switch_weapon((p.current_weapon - 1) % 3)
             elif event.y < 0:
-                p.current_weapon = (p.current_weapon + 1) % 3
+                p.switch_weapon((p.current_weapon + 1) % 3)
             try:
                 audio_mgr.play('click')
             except Exception:
@@ -1045,7 +1048,8 @@ class Game:
                     self.renderer.emit_casing(self.renderer.w // 2 + 60, self.renderer.h - 30, random.uniform(40, 90), random.uniform(-110, -60))
                     self.renderer.emit_smoke(self.renderer.w // 2, self.renderer.h // 2, random.uniform(-10, 10), random.uniform(-30, -10))
                     self.renderer.camera_shake.add(0.3, 0.25)
-            hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi)
+            # The map lets the hitscan resolve walls: shots no longer punch through cover.
+            hits = self.enemy_manager.apply_weapon_hit(p.x, p.y, p.angle, wi, self.game_map)
             if hits:
                 self.renderer.trigger_screen_shake(4)
                 for enemy in hits:
