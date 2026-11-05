@@ -25,9 +25,7 @@ def _get_floor_constants(h, horizon_y, pitch_offset, mist_phase):
         y0 = max(horizon_y, h // 2 + pitch_offset + 1)
         ys = np.arange(y0, h)
         row = (ys - h // 2 - pitch_offset).astype(np.float64)
-        # Store distance in the renderer's working precision once. Both floor
-        # paths consume float32, so converting this vector every frame is waste.
-        dist = ((h * 0.5) / row).astype(np.float32)
+        dist = (h * 0.5) / row
         fog = 1.0 - np.exp(-((dist * 0.07) ** 2))
         fshade = np.maximum(0.08, 1.0 - fog).astype(np.float32)
         floor_t = (ys - horizon_y) / max(1, floor_h)
@@ -55,8 +53,9 @@ def fill_floor(arr_3d, ground_arr, tint_lut, terrain_grid, map_w, map_h,
 
     ray_dx_f32 = np.asarray(ray_dx, dtype=np.float32)
     ray_dy_f32 = np.asarray(ray_dy, dtype=np.float32)
-    wx = px + dist[:, None] * ray_dx_f32[None, :]
-    wy = py + dist[:, None] * ray_dy_f32[None, :]
+    dist_f32 = dist.astype(np.float32)
+    wx = px + dist_f32[:, None] * ray_dx_f32[None, :]
+    wy = py + dist_f32[:, None] * ray_dy_f32[None, :]
 
     tx = np.minimum(np.mod(wx * 8.0, gw).astype(np.int32), gw - 1)
     ty = np.minimum(np.mod(wy * 8.0, gh).astype(np.int32), gh - 1)
@@ -98,8 +97,9 @@ def fill_floor_terrain(arr_3d, atlas, far_atlas, packed, fine, map_w, map_h,
 
     ray_dx_f32 = np.asarray(ray_dx, dtype=np.float32)
     ray_dy_f32 = np.asarray(ray_dy, dtype=np.float32)
-    wx = px + dist[:, None] * ray_dx_f32[None, :]
-    wy = py + dist[:, None] * ray_dy_f32[None, :]
+    dist_f32 = dist.astype(np.float32)
+    wx = px + dist_f32[:, None] * ray_dx_f32[None, :]
+    wy = py + dist_f32[:, None] * ray_dy_f32[None, :]
 
     tx = np.minimum(np.mod(wx * 8.0, size).astype(np.intp), size - 1)
     ty = np.minimum(np.mod(wy * 8.0, size).astype(np.intp), size - 1)
