@@ -324,10 +324,6 @@ class Renderer:
         self._ray_angle_array = np.asarray(self.ray_angles, dtype=np.float32)
         self._ray_cos = np.cos(self._ray_angle_array)
         self._ray_sin = np.sin(self._ray_angle_array)
-        # Reusable floor-ray rotation buffers: avoid allocating two new
-        # width-sized arrays every frame while the camera rotates.
-        self._floor_ray_dx = np.empty(self.w, dtype=np.float32)
-        self._floor_ray_dy = np.empty(self.w, dtype=np.float32)
         # float64 copies for the wall raycaster (same precision as the old scalar loop)
         self._ray_ang64 = np.asarray(self.ray_angles, dtype=np.float64)
         self._ray_cos64 = np.cos(self._ray_ang64)
@@ -831,11 +827,8 @@ class Renderer:
 
             cos_pa = math.cos(pa)
             sin_pa = math.sin(pa)
-            np.multiply(self._ray_cos, cos_pa, out=self._floor_ray_dx)
-            self._floor_ray_dx -= self._ray_sin * sin_pa
-            np.multiply(self._ray_sin, cos_pa, out=self._floor_ray_dy)
-            self._floor_ray_dy += self._ray_cos * sin_pa
-            ray_dx, ray_dy = self._floor_ray_dx, self._floor_ray_dy
+            ray_dx = self._ray_cos * cos_pa - self._ray_sin * sin_pa
+            ray_dy = self._ray_sin * cos_pa + self._ray_cos * sin_pa
 
             t_floor_fill = time.perf_counter()
             # Whole floor in one vectorised pass (see floor_fast.py).
