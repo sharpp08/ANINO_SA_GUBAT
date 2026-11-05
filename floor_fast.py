@@ -19,23 +19,25 @@ def _get_floor_constants(h, horizon_y, pitch_offset, mist_phase):
     key = (h, horizon_y, pitch_offset)
     cached = _floor_const_cache.get(key)
     if cached is not None:
-        dist, fog, fshade, mist_strength, ys = cached
+        dist, dist_f32, fog, fshade, mist_strength, ys = cached
     else:
         floor_h = h - horizon_y
         y0 = max(horizon_y, h // 2 + pitch_offset + 1)
         ys = np.arange(y0, h)
         row = (ys - h // 2 - pitch_offset).astype(np.float64)
         dist = (h * 0.5) / row
-        fog = 1.0 - np.exp(-((dist * 0.07) ** 2))
+        # Both floor paths use float32 world coordinates. Cache this conversion with
+        # the pitch constants instead of allocating/casting the distance vector every frame.
+            fog = 1.0 - np.exp(-((dist * 0.07) ** 2))
         fshade = np.maximum(0.08, 1.0 - fog).astype(np.float32)
         floor_t = (ys - horizon_y) / max(1, floor_h)
         mist_strength = np.clip((0.45 - floor_t) / 0.45, 0.0, None)
         _floor_const_cache.clear()
-        _floor_const_cache[key] = (dist, fog, fshade, mist_strength, ys)
+        _floor_const_cache[key] = (dist, dist_f32, fog, fshade, mist_strength, ys)
     # mist_wave changes every frame; recompute it cheaply.
     mist_wave = np.sin(mist_phase + ys * 0.08) * 0.5 + 0.5
     ma = (mist_strength * mist_wave * 0.25).astype(np.float32)
-    return dist, fog, fshade, mist_strength, ma
+    return dist, dist_f32, fog, fshade, mist_strength, ma
 
 
 def fill_floor(arr_3d, ground_arr, tint_lut, terrain_grid, map_w, map_h,
@@ -47,7 +49,7 @@ def fill_floor(arr_3d, ground_arr, tint_lut, terrain_grid, map_w, map_h,
         return
     gw, gh, _ = ground_arr.shape
 
-    dist, fog, fshade, mist_strength, ma = _get_floor_constants(
+    dist, dist_f32, fog, fshade, mist_strength, ma = _get_floor_constants(
         h, horizon_y, pitch_offset, mist_phase)
     n_rows = len(dist)
 
