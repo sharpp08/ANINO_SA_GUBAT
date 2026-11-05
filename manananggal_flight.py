@@ -66,21 +66,25 @@ class TerrainHeightSampler:
 
 
 class FlightController:
-    """Owns a flying enemy's horizontal position and medium altitude.
+    """Owns a flying enemy's horizontal position and high, terrain-relative altitude.
 
     Call :meth:`update` once per rendered frame. It steers the ground-plane
     (x, y) toward a mode-appropriate goal and sets ``altitude`` (tiles above
-    terrain) to a smoothed, hard-clamped medium band.
+    terrain) to a smoothed, hard-clamped high band so the creature flies
+    through the sky, well above the ground, while still never soaring too high.
     """
 
-    def __init__(self, speed=2.5, base_altitude=0.85,
-                 altitude_min=0.55, altitude_max=1.35,
-                 alt_lerp=2.5, bob_amplitude=0.12, bob_freq=1.6,
-                 orbit_radius=3.5, orbit_speed=0.9, arrive_radius=2.5,
-                 flee_radius=7.0, turn_rate=4.5, footprint=0.4,
+    def __init__(self, speed=2.5, base_altitude=2.4,
+                 altitude_min=2.0, altitude_max=3.2,
+                 alt_lerp=2.5, bob_amplitude=0.18, bob_freq=1.6,
+                 orbit_radius=5.5, orbit_speed=1.0, arrive_radius=3.0,
+                 flee_radius=9.0, turn_rate=4.5, footprint=0.4,
                  terrain=None):
         self.speed = float(speed)
-        # Medium-altitude band (tiles above the ground).
+        # High-altitude band (tiles above the ground). The creature hovers
+        # well above the tree canopy (~1.45 tiles tall) so it reads as flying
+        # through the sky rather than skimming the ground; the hard upper clamp
+        # still keeps it from ever soaring out of the landscape.
         self.base_altitude = float(base_altitude)
         self.altitude_min = float(altitude_min)
         self.altitude_max = float(altitude_max)
