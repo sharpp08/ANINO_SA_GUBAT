@@ -1,5 +1,5 @@
 """
-Headless tests for the adaptive performance governor (no pygame needed).
+Headless tests for the performance monitor (no pygame needed).
 
 Run: python tests/test_perf_governor.py
 """
@@ -10,15 +10,23 @@ import types
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 os.environ.pop('ANINO_ADAPTIVE', None)
 
-from perf_governor import PerfGovernor, MAX_LEVEL
+from perf_governor import PerfGovernor
 
 
 def make():
-    rm = types.SimpleNamespace(ENABLE_PARTICLES=True, ENABLE_PARTICLE_PHYSICS=True,
-                               ENABLE_ENV_ANIM=True, MAX_RENDER_TREES=150)
+    rm = types.SimpleNamespace(
+        ENABLE_PARTICLES=True,
+        ENABLE_PARTICLE_PHYSICS=True,
+        ENABLE_ENV_ANIM=True,
+        MAX_RENDER_TREES=150,
+    )
     sm = types.SimpleNamespace(ENABLE_FOG=True)
-    renderer = types.SimpleNamespace(shader_renderer=types.SimpleNamespace(enabled=True),
-                                     perf_no_stars=False, perf_no_grade=False)
+    shader = types.SimpleNamespace(enabled=True)
+    renderer = types.SimpleNamespace(
+        shader_renderer=shader,
+        perf_no_stars=False,
+        perf_no_grade=False,
+    )
     return PerfGovernor(renderer, rm, sm), renderer, rm, sm
 
 
@@ -27,96 +35,93 @@ def run(gov, ms, frames, playing=True):
         gov.update(ms, playing)
 
 
-def test_stays_at_full_quality_when_fast():
+def snapshot(renderer, rm, sm):
+    return (
+        renderer.shader_renderer.enabled,
+        renderer.perf_no_stars,
+        renderer.perf_no_grade,
+        rm.ENABLE_PARTICLES,
+        rm.ENABLE_PARTICLE_PHYSICS,
+        rm.ENABLE_ENV_ANIM,
+        rm.MAX_RENDER_TREES,
+        sm.ENABLE_FOG,
+    )
+
+
+def test_slow_frames_never_reduce_visual_quality():
     gov, renderer, rm, sm = make()
+    before = snapshot(renderer, rm, sm)
+    run(gov, 30.0, 5000)
+    assert gov.level == 0
+    assert gov.over_budget is True
+    assert gov.avg_ms == 30.0
+    assert snapshot(renderer, rm, sm) == before
+
+
+def test_fast_frames_are_measured_without_mutation():
+    gov, renderer, rm, sm = make()
+    before = snapshot(renderer, rm, sm)
     run(gov, 8.0, 2000)
-    assert gov.level == 0 and renderer.shader_renderer.enabled and rm.MAX_RENDER_TREES == 150
-
-
-def test_sheds_levels_when_slow_and_reaches_max():
-    gov, renderer, rm, sm = make()
-    run(gov, 30.0, 400)
-    assert gov.level >= 1 and renderer.shader_renderer.enabled is False
-    run(gov, 30.0, 3000)
-    assert gov.level == MAX_LEVEL
-    assert rm.ENABLE_PARTICLES is False and rm.ENABLE_PARTICLE_PHYSICS is False
-    assert renderer.perf_no_stars is True and rm.ENABLE_ENV_ANIM is False
-    assert sm.ENABLE_FOG is False and rm.MAX_RENDER_TREES == max(10, int(150 * 0.10))
-    assert renderer.perf_no_grade is True
-
-
-def test_restores_exactly_when_headroom_returns():
-    gov, renderer, rm, sm = make()
-    run(gov, 30.0, 3000)
-    assert gov.level == MAX_LEVEL
-    run(gov, 6.0, 20000)
     assert gov.level == 0
-    assert renderer.shader_renderer.enabled is True and rm.ENABLE_PARTICLES is True
-    assert rm.ENABLE_ENV_ANIM is True and rm.MAX_RENDER_TREES == 150 and sm.ENABLE_FOG is True
-    assert renderer.perf_no_stars is False
-    assert renderer.perf_no_grade is False
+    assert gov.over_budget is False
+    assert snapshot(renderer, rm, sm) == before
 
 
-def test_ignores_hitches_and_non_gameplay():
-    gov, *_ = make()
-    run(gov, 500.0, 2000)            # loading-style hitches are ignored
-    run(gov, 40.0, 2000, playing=False)   # menus/pause never count
+def test_hitches_and_non_gameplay_are_ignored():
+    gov, renderer, rm, sm = make()
+    before = snapshot(renderer, rm, sm)
+    run(gov, 500.0, 2000)
+    run(gov, 40.0, 2000, playing=False)
     assert gov.level == 0
+    assert gov.over_budget is False
+    assert snapshot(renderer, rm, sm) == before
 
 
-def test_respects_user_settings_that_were_off():
-    rm = types.SimpleNamespace(ENABLE_PARTICLES=False, ENABLE_PARTICLE_PHYSICS=True,
-                               ENABLE_ENV_ANIM=True, MAX_RENDER_TREES=80)
+def test_user_disabled_features_are_never_changed_or_enabled():
+    rm = types.SimpleNamespace(
+        ENABLE_PARTICLES=False,
+        ENABLE_PARTICLE_PHYSICS=True,
+        ENABLE_ENV_ANIM=True,
+        MAX_RENDER_TREES=80,
+    )
     sm = types.SimpleNamespace(ENABLE_FOG=False)
-    renderer = types.SimpleNamespace(shader_renderer=types.SimpleNamespace(enabled=False),
-                                     perf_no_stars=False)
+    renderer = types.SimpleNamespace(
+        shader_renderer=types.SimpleNamespace(enabled=False),
+        perf_no_stars=True,
+        perf_no_grade=True,
+    )
     gov = PerfGovernor(renderer, rm, sm)
-    run(gov, 30.0, 3000)
-    run(gov, 6.0, 20000)
-    assert gov.level == 0
-    assert rm.ENABLE_PARTICLES is False and sm.ENABLE_FOG is False   # never force on
-    assert renderer.shader_renderer.enabled is False and rm.MAX_RENDER_TREES == 80
+    before = snapshot(renderer, rm, sm)
+    run(gov, 30.0, 5000)
+    run(gov, 6.0, 5000)
+    assert snapshot(renderer, rm, sm) == before
 
 
-def test_no_flapping_after_failed_restore():
-    gov, *_ = make()
-    run(gov, 30.0, 3000)
-    top = gov.level
-    run(gov, 6.0, 700)               # headroom long enough to restore one level
-    assert gov.level == top - 1
-    run(gov, 30.0, 400)              # ...but that level can't hold 60 fps: shed again
-    assert gov.level == top and gov.floor == top
-    run(gov, 6.0, 5000)              # and it must not retry restoring below the floor
-    assert gov.level == top
-
-
-def test_skips_gpu_post_level_when_gpu_presenter_active():
-    rm = types.SimpleNamespace(ENABLE_PARTICLES=True, ENABLE_PARTICLE_PHYSICS=True,
-                               ENABLE_ENV_ANIM=True, MAX_RENDER_TREES=150)
-    sm = types.SimpleNamespace(ENABLE_FOG=True)
-    renderer = types.SimpleNamespace(shader_renderer=types.SimpleNamespace(enabled=False),
-                                     perf_no_stars=False)   # old readback shader inert (SKIP)
-    gov = PerfGovernor(renderer, rm, sm)
-    run(gov, 30.0, 400)
-    assert gov.level == 2 and rm.ENABLE_PARTICLES is False   # went straight to level 2
-    run(gov, 6.0, 20000)
-    assert gov.level == 0 and rm.ENABLE_PARTICLES is True
-
-
-def test_can_be_disabled():
-    gov, *_ = make()
+def test_disabled_monitor_does_not_change_anything():
+    gov, renderer, rm, sm = make()
     gov.enabled = False
-    run(gov, 40.0, 3000)
+    before = snapshot(renderer, rm, sm)
+    run(gov, 40.0, 5000)
     assert gov.level == 0
+    assert gov.avg_ms == 0.0
+    assert snapshot(renderer, rm, sm) == before
+
+
+def test_reset_clears_measurement_history():
+    gov, *_ = make()
+    run(gov, 30.0, 5000)
+    assert gov.over_budget is True
+    gov.reset()
+    assert gov.avg_ms == 0.0
+    assert gov.over_budget is False
+    assert len(gov._samples) == 0
 
 
 if __name__ == '__main__':
-    test_stays_at_full_quality_when_fast()
-    test_sheds_levels_when_slow_and_reaches_max()
-    test_restores_exactly_when_headroom_returns()
-    test_ignores_hitches_and_non_gameplay()
-    test_respects_user_settings_that_were_off()
-    test_no_flapping_after_failed_restore()
-    test_skips_gpu_post_level_when_gpu_presenter_active()
-    test_can_be_disabled()
-    print("All perf governor tests passed.")
+    test_slow_frames_never_reduce_visual_quality()
+    test_fast_frames_are_measured_without_mutation()
+    test_hitches_and_non_gameplay_are_ignored()
+    test_user_disabled_features_are_never_changed_or_enabled()
+    test_disabled_monitor_does_not_change_anything()
+    test_reset_clears_measurement_history()
+    print("All performance-monitor tests passed.")
