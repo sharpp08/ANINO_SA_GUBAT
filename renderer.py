@@ -2164,6 +2164,14 @@ class Renderer:
             elif is_dead:
                 hover = -unit * 0.25
 
+            # Airborne hunters (Manananggal) ride on top of their hover spring:
+            # enemy.flight_lift is the altitude in world tiles set by the flight
+            # controller, converted to pixels here so the creature visibly hovers
+            # in the sky at a medium height above the landscape.
+            lift = getattr(enemy, 'flight_lift', 0.0)
+            if lift > 0:
+                hover += unit * lift
+
         if is_dead:
             # collapse: shrink toward the ground, sink, and lean to the side the last hit came from
             body = 0.85 * (1.0 - 0.72 * death_e)

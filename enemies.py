@@ -4,6 +4,7 @@ Enemy AI - Implements enemy behaviors, states, and combat interactions.
 import math
 import random
 from settings import *
+from manananggal_flight import make_flight_controller, CHASE, LOITER, FLEE
 
 
 
@@ -140,6 +141,15 @@ class Enemy:
         self._last_repath_dist = 5.0
         self._last_player_pos = (x, y)
         self._repath_timer = random.uniform(0.0, 3.0)  # stagger initial A* work across enemies
+
+        # Flight behaviour: airborne hunters (Manananggal) get a dedicated
+        # controller that steers them through the sky at a medium, terrain-
+        # relative altitude (see manananggal_flight.py). Grounded enemies keep
+        # self.flight = None and use the normal pathfinding/walk movement.
+        self.flight = make_flight_controller(enemy_type, self.base_speed)
+        if self.flight is not None:
+            self.flight.set_origin(x, y)
+        self.flight_lift = 0.0   # tiles above the ground, read by the renderer
 
         # Animation springs for organic movement
         if ENABLE_ANIMATIONS and ENABLE_ENEMIES_ANIM:
@@ -516,6 +526,30 @@ class Enemy:
                 else:
                     self.state = EnemyState.IDLE
                 self.state_timer = 3.0
+
+        # ── Flight behaviour (airborne hunters, e.g. Manananggal) ────────
+        # The state machine above still sets animation_state / state /
+        # cooldowns for every enemy. For a flying enemy we then hand
+        # authoritative control of position + altitude to the flight
+        # controller: it flies through the sky at a medium, terrain-relative
+        # height (never soaring above the landscape) and picks its flight
+        # mode from the AI state. The grounded _try_move calls above are
+        # harmless for flyers because the controller overwrites x/y last.
+        if self.flight is not None and self.alive and not self.bound and not self.repelled:
+            fl = self.flight
+            fl.speed = self.speed          # frenzy boosts flight speed too
+            fl.x, fl.y = self.x, self.y     # carry in any ground-side movement
+            if self.frenzy or self.state in (EnemyState.ATTACK, EnemyState.INVESTIGATE, EnemyState.STALK):
+                fl.x, fl.y = fl.update(dt, player_x, player_y, CHASE, game_map)
+            elif self.state == EnemyState.RETREAT:
+                fl.x, fl.y = fl.update(dt, player_x, player_y, FLEE, game_map)
+            else:
+                # Cruise in the sky around its spawn point when not engaged.
+                fl.x, fl.y = fl.update(dt, 0.0, 0.0, LOITER, game_map)
+            self.x, self.y = fl.x, fl.y
+            self.flight_lift = fl.altitude
+            if abs(fl.vx) > 0.02 or abs(fl.vy) > 0.02:
+                self.facing_angle = fl.facing
 
     def can_attack(self, player_x, player_y):
         """Check if enemy can attack the player."""
