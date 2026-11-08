@@ -29,6 +29,7 @@ def check(name, fn):
 
 def make_game():
     os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+    os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
     import main
     game = main.Game()
     game.start_new_game()

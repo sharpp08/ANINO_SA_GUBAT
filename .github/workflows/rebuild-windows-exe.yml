@@ -37,6 +37,24 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
 
+      - name: Run ward VFX regression tests
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python tests/test_vfx_zones.py
+
+      - name: Run gameplay regression tests
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python tests/test_gameplay_fixes.py
+
+      - name: Run headless smoke tests
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python tests/smoke_test.py
+
       - name: Build standalone Windows executable
         shell: pwsh
         run: |
