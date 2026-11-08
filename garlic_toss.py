@@ -115,7 +115,6 @@ class GarlicToss:
         if img is None:
             return
         u = min(1.0, self.phase_time / CHARGE_TIME)
-        from zone_fx import ease_out_back
         scale = 0.52 + 0.48 * (1.0 - (1.0 - u) ** 3) - 0.06 * math.sin(math.pi * u)
         sw = max(4, int(img.get_width() * scale))
         sh = max(4, int(img.get_height() * scale))
