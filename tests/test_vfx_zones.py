@@ -172,6 +172,40 @@ def test_zone_garlic_visuals_smoke():
         game.update_playing(1.0 / 60.0, 0.0, 0.0)
         game.render(1.0 / 60.0)
     assert len(game.renderer._zone_ring_cache) <= 64, "ring cache must be bounded"
+    assert len(game.renderer.zone_fx._decal_cache) <= 48, "decal cache must be bounded"
+
+
+def test_garlic_zone_damages_each_enemy_once():
+    """A sustained garlic ward must not apply sacred damage every frame."""
+    from enemies import Enemy, EnemyManager, EnemyState
+    manager = EnemyManager()
+    enemy = Enemy("aswang", 4.0, 4.0)
+    enemy.state = EnemyState.ATTACK
+    enemy.update = lambda *args: None
+    enemy.set_frenzy = lambda *args: None
+    manager.enemies = [enemy]
+    manager.add_garlic_zone(4.0, 4.0)
+    start_health = enemy.health
+    class _Map:
+        pass
+    manager.update(1.0 / 60.0, 0.0, 0.0, _Map())
+    after_first = enemy.health
+    for _ in range(20):
+        manager.update(1.0 / 60.0, 0.0, 0.0, _Map())
+    assert after_first == start_health - 10, "garlic should apply one initial sacred hit"
+    assert enemy.health == after_first, "garlic must not deal repeated per-frame damage"
+
+
+def test_zone_decal_cache_is_material_specific_and_bounded():
+    from zone_fx import ZoneFX
+    fx = ZoneFX()
+    salt = fx._decal("salt", 42)
+    garlic = fx._decal("garlic", 42)
+    assert salt is fx._decal("salt", 42), "salt decal should be cached"
+    assert salt is not garlic, "salt and garlic need distinct material decals"
+    for radius in range(4, 256, 4):
+        fx._decal("salt", radius)
+    assert len(fx._decal_cache) <= 48
 
 
 def main():
@@ -183,6 +217,8 @@ def main():
     check("Garlic throw ballistic arc and landing", test_garlic_throw_has_ballistic_arc_and_exact_landing)
     check("Enemy animator motion and turn weight", test_enemy_animator_tracks_motion_and_turn_weight)
     check("Salt + garlic zones smoke render", test_zone_garlic_visuals_smoke)
+    check("Garlic zone damage is applied once per enemy", test_garlic_zone_damages_each_enemy_once)
+    check("Zone decal cache is material-specific and bounded", test_zone_decal_cache_is_material_specific_and_bounded)
     failed = [r for r in _results if not r[1]]
     print(f"=== VFX ZONE TESTS: {len(_results) - len(failed)} PASSED, {len(failed)} FAILED ===")
     sys.exit(1 if failed else 0)

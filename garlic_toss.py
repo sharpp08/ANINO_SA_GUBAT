@@ -60,7 +60,7 @@ FLIGHT_TIME = 0.5
 CHARGE_TIME = 0.15
 TOSS_RANGE = 4.5      # tiles the bulb lands ahead of the thrower
 Z_MAX = 0.45           # peak arc height in tile units
-SPIN_DPS = 560.0      # slower, weighted tumble
+SPIN_DPS = 430.0      # weighted tumble with visible air-drag loss
 
 
 class GarlicToss:
@@ -82,14 +82,19 @@ class GarlicToss:
         """Advance the toss. Returns True on the exact frame of landing."""
         if self.landed:
             return False
-        dt = max(0.0, min(float(dt), 0.05))
-        self.phase_time += dt
-        if self.phase == 'charge':
-            if self.phase_time >= CHARGE_TIME:
-                self.phase = 'flight'
-                self.phase_time = 0.0
-        else:  # flight
+        remaining = max(0.0, float(dt))
+        if self.phase == "charge":
+            to_flight = max(0.0, CHARGE_TIME - self.phase_time)
+            if remaining < to_flight:
+                self.phase_time += remaining
+                return False
+            remaining -= to_flight
+            self.phase = "flight"
+            self.phase_time = 0.0
+        if self.phase == "flight":
+            self.phase_time += remaining
             if self.phase_time >= FLIGHT_TIME:
+                self.phase_time = FLIGHT_TIME
                 self.landed = True
                 return True
         return False
@@ -171,17 +176,17 @@ class GarlicToss:
 
     def world_pos(self):
         t = self.flight_t()
-        # Ballistic travel: horizontal velocity stays nearly constant while
-        # gravity produces the vertical arc. A tiny crosswind peaks at the apex
-        # and returns to zero so the landing point remains exact.
+        # Ease-out horizontal travel gives the bulb a weighted landing; height
+        # remains a normalized ballistic parabola with an exact zero-height impact.
+        travel = 1.0 - (1.0 - t) ** 2.35
         dx, dy = self.x1 - self.x0, self.y1 - self.y0
-        crosswind = math.sin(math.pi * t) * 0.035
-        x = self.x0 + dx * t - math.sin(self.angle) * crosswind
-        y = self.y0 + dy * t + math.cos(self.angle) * crosswind
+        crosswind = math.sin(math.pi * t) * 0.025
+        x = self.x0 + dx * travel - math.sin(self.angle) * crosswind
+        y = self.y0 + dy * travel + math.cos(self.angle) * crosswind
         z = 4.0 * Z_MAX * t * (1.0 - t)
         return x, y, z
 
     def spin(self):
         # A small air-drag loss near landing softens the otherwise mechanical spin.
         t = self.flight_t() if self.phase == 'flight' else 0.0
-        return (self.phase_time * SPIN_DPS * (1.0 - 0.12 * t)) % 360.0
+        return (self.phase_time * SPIN_DPS * (1.0 - 0.28 * t)) % 360.0

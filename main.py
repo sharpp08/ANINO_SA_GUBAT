@@ -1108,9 +1108,16 @@ class Game:
     def _use_garlic(self):
         if self.player.use_garlic():
             p = self.player
-            # The protection zone forms where the tossed bulb LANDS (4.5 tiles
-            # ahead), not under the player: flight runs in update_playing.
-            self.garlic_toss = GarlicToss(p.x, p.y, p.angle)
+            # Stop at the first solid tile so the ward cannot pass through walls.
+            last_clear = (p.x, p.y)
+            for step in range(1, 24):
+                travel = 4.5 * step / 24.0
+                tx = p.x + math.cos(p.angle) * travel
+                ty = p.y + math.sin(p.angle) * travel
+                if self.game_map.is_solid(tx, ty):
+                    break
+                last_clear = (tx, ty)
+            self.garlic_toss = GarlicToss(p.x, p.y, p.angle, target=last_clear)
             self.notify("Garlic thrown!")
             try:
                 audio_mgr.play('garlic_throw')

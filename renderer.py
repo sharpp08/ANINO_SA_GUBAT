@@ -885,9 +885,10 @@ class Renderer:
         # 5a. Salt/garlic protection zones (EnemyManager.active_effects, passed
         # as `effects`): ground decal now, emissive glow ring after darkness.
         t_zones = time.perf_counter()
-        if ENABLE_ANIMATIONS and effects:
-            self.zone_fx.update(dt)
+        if effects:
+            # Base ward visibility is gameplay feedback, not an optional animation.
             self.zone_fx.draw(self, player, effects)
+        self.zone_fx.update(dt)
         self.timings['zones'] = (time.perf_counter() - t_zones) * 1000.0
 
         # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls

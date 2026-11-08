@@ -1,209 +1,204 @@
-"""
-Zone FX: renders active salt/garlic protection zones (EnemyManager.active_effects).
-
-The zone pass projects each zone's ground position with the same math as the
-pickup sprite pass (relative bearing -> screen column, WALL_HEIGHT_SCALE depth
-squish -> floor contact line) and draws:
-  * a perspective-squished elliptical ring decal on the ground,
-  * an additive emissive glow ring registered on Renderer._emissive
-    (drawn AFTER the darkness pass, so wards stay visible in the dark),
-  * phosphorescent salt motes / garlic vapor drifting up from the ring.
-
-Lifecycle animation (per zone, driven by timer vs max_timer):
-  * Formation  : first 0.5s, ring radius scales in with easeOutQuad.
-  * Sustained  : breathing pulse sin(age*3) +-5% radius.
-  * Dissipation: last 0.5s, alpha ramps to 0 and grains scatter.
-
-All drawing is wrapped defensively: a zone pass failure must never crash
-the render loop.
-"""
+"""Cached perspective ground decals for salt and garlic protective zones."""
 import math
 import random
-
 import pygame
 import settings as _settings_mod
 
-# Per-zone-type visual profile: (ring RGB, emissive RGB, mote RGB)
 ZONE_STYLE = {
-    'salt':   ((220, 240, 255), (90, 100, 125),  (210, 230, 255)),
-    'garlic': ((230, 220, 200), (120, 110, 80),  (190, 185, 160)),
+    "salt": ((218, 231, 242), (86, 111, 145), (198, 222, 246)),
+    "garlic": ((190, 174, 137), (111, 101, 70), (174, 185, 143)),
 }
-
-FORMATION_TIME = 0.5   # seconds of easeOutQuad ring scale-in
-FADE_TIME = 0.5       # seconds of alpha fade-out
-MOTES_INTERVAL = 0.35 # seconds between mote spawns per visible zone
+FORMATION_TIME = 0.48
+FADE_TIME = 0.5
+MOTES_INTERVAL = 0.38
+_DECAL_CACHE_LIMIT = 48
+_GARLIC_SCALE_CACHE = {}
 
 
 def ease_out_quad(t):
-    t = min(1.0, max(0.0, t))
+    t = min(1.0, max(0.0, float(t)))
     return 1.0 - (1.0 - t) ** 2
 
 
 def ease_out_cubic(t):
-    t = min(1.0, max(0.0, t))
+    t = min(1.0, max(0.0, float(t)))
     return 1.0 - (1.0 - t) ** 3
 
 
 def ease_out_back(t):
-    """Overshooting pop-in, used for the cross manifestation."""
-    t = min(1.0, max(0.0, t))
+    t = min(1.0, max(0.0, float(t)))
     c1, c3 = 1.70158, 2.70158
     return 1.0 + c3 * (t - 1.0) ** 3 + c1 * (t - 1.0) ** 2
 
 
 class ZoneFX:
-    """Draws every active salt/garlic zone for the current frame."""
+    """Render active wards; the base visuals never depend on particle settings."""
 
     def __init__(self):
-        # zone id -> last mote-emit timestamp (seconds)
         self._mote_timers = {}
         self._time = 0.0
+        self._decal_cache = {}
 
-    # ── Projection (mirrors Renderer._unit_h / pickup pass) ───────────────
     @staticmethod
     def _project(renderer, player, wx, wy):
-        dx = wx - player.x
-        dy = wy - player.y
-        dist = math.hypot(dx, dy)
-        if dist < 0.05:
-            dist = 0.05
+        dx, dy = wx - player.x, wy - player.y
+        dist = max(0.05, math.hypot(dx, dy))
         rel = math.atan2(dy, dx) - player.angle
-        while rel > math.pi:
-            rel -= 2.0 * math.pi
-        while rel < -math.pi:
-            rel += 2.0 * math.pi
-        if abs(rel) > renderer.half_fov + 0.5:
+        rel = (rel + math.pi) % math.tau - math.pi
+        if abs(rel) > renderer.half_fov + 0.5 or dist > _settings_mod.MAX_DEPTH:
             return None
-        if dist > _settings_mod.MAX_DEPTH:
-            return None
-        screen_x = int((rel / renderer.fov_rad + 0.5) * renderer.w)
+        sx = int((rel / renderer.fov_rad + 0.5) * renderer.w)
         unit = renderer._unit_h(dist)
-        horizon_y = max(0, renderer.h // 2 + int(player.pitch * renderer.h))
-        # A ward placed at the player's feet is extremely close to the camera.
-        # The normal wall projection sends its floor contact below the viewport
-        # and creates a ring thousands of pixels wide. Keep near wards on-screen
-        # and cap their projected footprint to a readable portion of the view.
+        horizon = max(0, renderer.h // 2 + int(player.pitch * renderer.h))
         if dist < 1.25:
-            unit = min(unit, max(12.0, renderer.w * 0.34 / max(0.5, 2.0)))
-            floor_y = min(horizon_y + unit * 0.5, renderer.h * 0.90)
+            unit = min(unit, max(12.0, renderer.w * 0.17))
+            floor_y = min(horizon + unit * 0.5, renderer.h * 0.90)
         else:
-            floor_y = horizon_y + unit * 0.5
-        return screen_x, floor_y, unit, dist
+            floor_y = horizon + unit * 0.5
+        return sx, floor_y, unit, dist
 
     def update(self, dt):
-        self._time += dt
-        if len(self._mote_timers) > 64:
-            self._mote_timers.clear()
+        self._time += max(0.0, min(0.25, float(dt)))
 
+    def _decal(self, ztype, rx):
+        rx = max(4, min(256, int(round(int(rx) / 4.0) * 4)))
+        key = (ztype, rx)
+        if key in self._decal_cache:
+            return self._decal_cache[key]
+        ry = max(2, int(rx * 0.32))
+        surf = pygame.Surface((rx * 2 + 1, ry * 2 + 1), pygame.SRCALPHA)
+        rng = random.Random((rx * 7919) ^ (0x51A7 if ztype == "salt" else 0x6A21))
+        base = ZONE_STYLE[ztype][0]
+        pygame.draw.ellipse(surf, (*base, 90), (1, 1, rx * 2 - 1, max(2, ry * 2 - 1)), 1)
+        count = max(48, min(220, int(rx * 1.45)))
+        for i in range(count):
+            a = math.tau * i / count
+            jitter = rng.uniform(-1.25, 1.25)
+            px = int(rx + math.cos(a) * (rx - 1 + jitter))
+            py = int(ry + math.sin(a) * (ry - 1 + jitter * 0.32))
+            if ztype == "salt":
+                shade = rng.choice((0.66, 0.82, 1.0, 1.08))
+                col = tuple(max(0, min(255, int(c * shade))) for c in base)
+                pygame.draw.circle(surf, (*col, rng.randint(150, 238)),
+                                   (px, py), rng.choice((1, 1, 1, 2)))
+                if i % 7 == 0:
+                    pygame.draw.line(surf, (238, 244, 250, 190),
+                                     (px - 1, py), (px + 1, py - 1), 1)
+            elif i % 3 == 0:
+                pygame.draw.circle(surf, (150, 139, 105, 150), (px, py), 1)
+        if ztype == "salt":
+            for _ in range(max(20, min(90, rx // 2))):
+                a = rng.random() * math.tau
+                r = rng.uniform(0.72, 1.06)
+                px, py = int(rx + math.cos(a) * rx * r), int(ry + math.sin(a) * ry * r)
+                if 1 <= px < rx * 2 and 1 <= py < ry * 2:
+                    pygame.draw.circle(surf, (205, 220, 235, rng.randint(90, 190)),
+                                       (px, py), rng.choice((1, 1, 2)))
+        else:
+            for i in range(12):
+                a = math.tau * i / 12.0
+                px, py = int(rx + math.cos(a) * rx * 0.91), int(ry + math.sin(a) * ry * 0.91)
+                pygame.draw.line(surf, (144, 151, 112, 155), (px - 1, py), (px + 1, py - 1), 1)
+        if len(self._decal_cache) >= _DECAL_CACHE_LIMIT:
+            self._decal_cache.pop(next(iter(self._decal_cache)))
+        self._decal_cache[key] = surf
+        return surf
+
+    @staticmethod
+    def _scaled_garlic(img, size):
+        size = max(8, min(36, int(size)))
+        key = (id(img), size)
+        result = _GARLIC_SCALE_CACHE.get(key)
+        if result is None:
+            if len(_GARLIC_SCALE_CACHE) >= 48:
+                _GARLIC_SCALE_CACHE.clear()
+            result = pygame.transform.smoothscale(img, (size, size))
+            _GARLIC_SCALE_CACHE[key] = result
+        return result
 
     def draw(self, renderer, player, zones):
-        """One zone pass per frame. Appends ('ring', ...) to renderer._emissive."""
         if not zones:
+            self._mote_timers.clear()
             return
-        surface = renderer.surface
-        try:
-            for zone in zones:
-                ztype = zone.get('type')
-                style = ZONE_STYLE.get(ztype)
-                if style is None:
+        live = {id(z) for z in zones}
+        for stale in tuple(self._mote_timers):
+            if stale not in live:
+                self._mote_timers.pop(stale, None)
+        for zone in zones:
+            try:
+                ztype = zone.get("type")
+                if ztype not in ZONE_STYLE:
                     continue
-                ring_col, glow_col, mote_col = style
-                radius = float(zone.get('radius', 2.0))
-                timer = float(zone.get('timer', 0.0))
-                # Older zone records may predate max_timer. Never use the decreasing live
-                # timer as its own lifetime: that pins age at zero and keeps the
-                # formation scale invisible for the entire effect.
-                default_lifetime = 8.0 if ztype == 'salt' else 6.0
-                max_timer = float(zone.get('max_timer', default_lifetime))
+                timer = max(0.0, float(zone.get("timer", 0.0)))
                 if timer <= 0.0:
                     continue
-                proj = self._project(renderer, player, zone.get('x', 0.0), zone.get('y', 0.0))
+                lifetime = max(0.01, float(zone.get("max_timer", 8.0 if ztype == "salt" else 6.0)))
+                age = max(0.0, lifetime - timer)
+                formation = ease_out_quad(age / FORMATION_TIME)
+                fade = min(1.0, timer / FADE_TIME)
+                seed = float(zone.get("x", 0.0)) * 12.9898 + float(zone.get("y", 0.0)) * 78.233
+                phase = (math.sin(seed) * 43758.5453) % math.tau
+                breath = 1.0 + 0.018 * math.sin(self._time * 2.4 + phase)
+                shimmer = 0.96 + 0.04 * math.sin(self._time * 1.7 + phase * 1.3)
+                alpha = int(max(0, min(255, 210 * formation * fade * shimmer)))
+                if alpha <= 0:
+                    continue
+                proj = self._project(renderer, player, zone.get("x", 0.0), zone.get("y", 0.0))
                 if proj is None:
                     continue
-                screen_x, floor_y, unit, dist = proj
-
-                # ── Lifecycle envelopes ──
-                age = max(0.0, max_timer - timer)
-                scale = ease_out_quad(min(1.0, age / FORMATION_TIME))
-                # breathing pulse, seeded per-zone so circles don't sync
-                # Stable, decorrelated phase per placement. Keep ward motion subtle
-                # so it feels like a living aura rather than a synchronized UI pulse.
-                seed_value = math.sin(float(zone.get('x', 0.0)) * 12.9898
-                                      + float(zone.get('y', 0.0)) * 78.233) * 43758.5453
-                phase = (seed_value - math.floor(seed_value)) * math.tau
-                breath = 1.0 + 0.022 * math.sin(self._time * 2.15 + phase)
-                shimmer = 0.94 + 0.06 * (0.5 + 0.5 * math.sin(self._time * 1.35 + phase * 1.7))
-                fade = timer / FADE_TIME if timer < FADE_TIME else 1.0
-                alpha = int(max(0, min(255, 178 * scale * fade * shimmer)))
-
-                # Occlusion: a wall column in front hides the ring
-                if not renderer._col_visible(screen_x, dist):
+                sx, fy, unit, dist = proj
+                if not renderer._col_visible(sx, dist):
                     continue
-
-                w_px = max(2.0, 2.0 * radius * unit * scale * breath)
-                h_px = max(1.0, w_px * 0.32)
-                rx, ry = int(w_px / 2), max(1, int(h_px / 2))
-                cx, cy = screen_x, int(floor_y)
-
-                # ── Ground decal: squished elliptical ring (pre-darkness, so the
-                # flashlight actually illuminates the salt line; the emissive
-                # ring below carries the glow + fade in the dark) ──
-                faint = (int(ring_col[0] * 0.7), int(ring_col[1] * 0.7), int(ring_col[2] * 0.7))
-                rect = pygame.Rect(0, 0, rx * 2 + 1, ry * 2 + 1)
-                rect.center = (cx, cy)
-                # Three restrained concentric strokes make the ward readable
-                # at gameplay resolution without a costly full-screen shader.
-                pygame.draw.ellipse(surface, ring_col, rect, max(2, min(5, int(1.5 + unit * 0.04))))
-                inner = int(0.82 * rx)
-                if inner > 2:
-                    inner_rect = pygame.Rect(0, 0, inner * 2 + 1,
-                                             max(2, int(inner * 0.32 * 2)) + 1)
-                    inner_rect.center = (cx, cy)
-                    pygame.draw.ellipse(surface, faint, inner_rect, 1)
-                core = int(0.68 * rx)
-                if core > 3:
-                    core_rect = pygame.Rect(0, 0, core * 2 + 1,
-                                            max(2, int(core * 0.32 * 2)) + 1)
-                    core_rect.center = (cx, cy)
-                    pygame.draw.ellipse(surface, faint, core_rect, 1)
-
-                # ── Emissive ring glow (drawn after darkness) ──
-                renderer._emissive.append(('ring', cx, cy, int(w_px * 0.5), glow_col, alpha))
-
-                # ── Mote / vapor particles, throttled per zone ──
+                diameter = max(8.0, min(renderer.w * 0.78,
+                    2.0 * float(zone.get("radius", 2.0)) * unit * formation * breath))
+                rx = max(4, min(256, int(diameter * 0.5)))
+                cx, cy = int(sx), int(fy)
+                decal = self._decal(ztype, rx)
+                decal.set_alpha(alpha)
+                renderer.surface.blit(decal, (cx - decal.get_width() // 2,
+                                               cy - decal.get_height() // 2))
+                decal.set_alpha(None)
+                if ztype == "garlic":
+                    bulb = renderer.pickup_sprites.get("garlic")
+                    if bulb is not None:
+                        img = self._scaled_garlic(bulb, max(8, min(36, unit * 0.24)))
+                        sw = max(7, int(img.get_width() * 0.9))
+                        pygame.draw.ellipse(renderer.surface, (12, 10, 7),
+                                            (cx - sw // 2, cy - 2, sw, max(3, sw // 3)))
+                        bob = math.sin(self._time * 1.8 + phase) * 1.1
+                        renderer.surface.blit(img, (cx - img.get_width() // 2,
+                            int(cy - img.get_height() * 0.72 + bob)))
+                renderer._emissive.append(("ring", cx, cy, rx, ZONE_STYLE[ztype][1], alpha))
                 if _settings_mod.ENABLE_PARTICLES:
                     key = id(zone)
-                    last = self._mote_timers.get(key, -1.0)
+                    last = self._mote_timers.get(key, -MOTES_INTERVAL)
                     if self._time - last >= MOTES_INTERVAL:
                         self._mote_timers[key] = self._time
                         try:
                             for _ in range(2):
-                                off = (random.random() * 2 - 1.0) * w_px * 0.45
+                                off = (random.random() * 2.0 - 1.0) * diameter * 0.42
                                 renderer.physics_particles.emit(
-                                    cx + off, cy - 1,
-                                    vx=(random.random() - 0.5) * 7.0,
-                                    vy=-(5.0 + random.random() * 9.0),
-                                    life=1.0 + random.random() * 0.35,
-                                    size=0.8 + random.random() * 0.5, color=mote_col,
-                                    gravity_scale=-0.025, drag_scale=0.965)
+                                    cx + off, cy - 1, vx=(random.random() - 0.5) * 5.5,
+                                    vy=-(5.0 + random.random() * 8.0),
+                                    life=0.85 + random.random() * 0.35,
+                                    size=0.8 + random.random() * 0.5,
+                                    color=ZONE_STYLE[ztype][2], gravity_scale=0.0, drag_scale=0.96)
                         except Exception:
                             pass
-        except Exception:
-            # Zone visuals must never take down the frame
-            pass
-
+            except (TypeError, ValueError, AttributeError, pygame.error):
+                continue
 
     def on_zone_appeared(self, renderer, zone):
-        """Formation burst: one crackle of consecrated dust / vapor."""
         if not _settings_mod.ENABLE_PARTICLES:
             return
-        style = ZONE_STYLE.get(zone.get('type'))
+        style = ZONE_STYLE.get(zone.get("type"))
         if style is None:
             return
         try:
             renderer.physics_particles.burst(
                 int(renderer.w * 0.5), int(renderer.h * 0.72),
-                count=24, speed=(30, 110), life=0.9, size=2.0,
-                color=style[2], up_bias=30, gravity_scale=1.2)
+                count=18 if zone.get("type") == "salt" else 14,
+                speed=(24, 82), life=0.72, size=1.6,
+                color=style[2], up_bias=24, gravity_scale=0.9)
         except Exception:
             pass

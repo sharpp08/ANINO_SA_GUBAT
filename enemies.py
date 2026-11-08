@@ -823,6 +823,7 @@ class EnemyManager:
             if effect['timer'] <= 0:
                 expired.append(i)
             else:
+                affected_ids = effect.setdefault('_affected_enemy_ids', set())
                 for enemy in self.enemies:
                     if not enemy.alive:
                         continue
@@ -830,8 +831,9 @@ class EnemyManager:
                     if dist < effect['radius']:
                         if effect['type'] == 'salt':
                             enemy.apply_salt()
-                        elif effect['type'] == 'garlic':
-                            enemy.apply_garlic()
+                        elif effect['type'] == 'garlic' and id(enemy) not in affected_ids:
+                            if enemy.apply_garlic():
+                                affected_ids.add(id(enemy))
         for i in reversed(expired):
             self.active_effects.pop(i)
 
@@ -970,6 +972,7 @@ class EnemyManager:
         self.active_effects.append({
             'type': 'salt', 'x': x, 'y': y,
             'radius': 2.0, 'timer': 8.0, 'max_timer': 8.0,
+            '_affected_enemy_ids': set(),
         })
 
     def add_garlic_zone(self, x, y):
@@ -977,6 +980,7 @@ class EnemyManager:
         self.active_effects.append({
             'type': 'garlic', 'x': x, 'y': y,
             'radius': 2.5, 'timer': 6.0, 'max_timer': 6.0,
+            '_affected_enemy_ids': set(),
         })
 
     def get_alive_enemies(self):

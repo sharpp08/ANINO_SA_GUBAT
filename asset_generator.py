@@ -348,10 +348,30 @@ def generate_pickup_sprite(pickup_type='health', size=32):
             py = random.randint(14, 24)
             surf.set_at((px, py), (240, 240, 240))
     elif pickup_type == 'garlic':
-        pygame.draw.circle(surf, (230, 220, 200), (cx, cy), 10)
-        pygame.draw.circle(surf, (210, 200, 180), (cx, cy), 8)
-        pygame.draw.line(surf, (180, 170, 150), (cx, cy - 8), (cx, cy + 8))
-        pygame.draw.arc(surf, (100, 140, 60), (cx - 4, cy - 14, 8, 8), 0, math.pi, 2)
+        # Multi-lobed ivory bulb with visible cloves, papery seams and root fibres.
+        s = size / 32.0
+        def gp(x, y):
+            return (int(round(x * s)), int(round(y * s)))
+        def gr(x, y, w, h):
+            return pygame.Rect(int(round(x * s)), int(round(y * s)),
+                               max(1, int(round(w * s))), max(1, int(round(h * s))))
+        pygame.draw.ellipse(surf, (91, 78, 57, 95), gr(7, 22, 18, 5))
+        pygame.draw.ellipse(surf, (154, 139, 111), gr(7, 8, 18, 17))
+        pygame.draw.ellipse(surf, (213, 202, 178), gr(8, 5, 8, 20))
+        pygame.draw.ellipse(surf, (235, 226, 207), gr(12, 4, 8, 21))
+        pygame.draw.ellipse(surf, (202, 190, 164), gr(17, 7, 7, 17))
+        pygame.draw.ellipse(surf, (226, 216, 194), gr(5, 10, 7, 13))
+        pygame.draw.ellipse(surf, (240, 232, 214), gr(10, 7, 12, 15))
+        seam = (157, 143, 119)
+        pygame.draw.arc(surf, seam, gr(6, 8, 10, 17), 4.2, 6.1, max(1, int(1 * s)))
+        pygame.draw.arc(surf, seam, gr(12, 5, 10, 20), 4.5, 6.0, max(1, int(1 * s)))
+        pygame.draw.line(surf, (249, 243, 229), gp(13, 8), gp(12, 17), max(1, int(1 * s)))
+        pygame.draw.line(surf, (177, 162, 132), gp(10, 21), gp(16, 24), max(1, int(1 * s)))
+        for ox in (-3, 0, 3):
+            pygame.draw.line(surf, (143, 119, 82), gp(16, 22), gp(16 + ox, 27), max(1, int(1 * s)))
+        pygame.draw.line(surf, (91, 119, 65), gp(16, 7), gp(16, 2), max(2, int(2 * s)))
+        pygame.draw.arc(surf, (112, 145, 78), gr(14, 0, 10, 8), 0.1, 2.7, max(1, int(2 * s)))
+        pygame.draw.line(surf, (128, 151, 91), gp(17, 4), gp(22, 1), max(1, int(1 * s)))
     elif pickup_type == 'battery':
         pygame.draw.rect(surf, (60, 60, 70), (10, 8, 12, 20), border_radius=2)
         pygame.draw.rect(surf, (80, 80, 90), (12, 4, 8, 6))
