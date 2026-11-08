@@ -45,24 +45,61 @@ def test_zone_pass_generates_ring_emissive():
     zone = game.enemy_manager.active_effects[0]
     assert zone['type'] == 'salt' and zone['radius'] == 2.0
     assert zone['max_timer'] == zone['timer'] == 8.0, 'salt zone needs a stable lifetime'
-    # Force the player to face the zone so the projection keeps it on-screen.
+    game.player.angle = 0.0
+    zone['timer'] = 7.5
+    # Disable only wall occlusion in this geometry-focused assertion.
+    game.renderer._col_visible = lambda col, dist: True
+    game.render(1.0 / 60.0)
+    rings = [e for e in game.renderer._emissive if e[0] == 'salt_ground']
+    assert rings, "salt zone must render projected world-space circumference segments"
+    assert rings[0][1], "projected salt circumference should contain visible segments"
+    assert 0 <= rings[0][3] <= 255
+    assert game.renderer.zone_fx._salt_grain_samples, "salt grain geometry should be cached"
+
+
+
+def test_salt_placement_is_a_stationary_world_anchor():
+    game = make_game()
+    game.player.salt_count = 5
+    game.player.x, game.player.y, game.player.angle = 14.375, 22.625, 1.7
+    game._use_salt()
+    first = game.enemy_manager.active_effects[-1]
+    assert first['x'] == 14.375 and first['y'] == 22.625
+    assert first['radius'] == 2.0
+    game.player.x, game.player.y, game.player.angle = 18.0, 19.0, -2.2
+    assert (first['x'], first['y']) == (14.375, 22.625)
+    game._use_salt()
+    second = game.enemy_manager.active_effects[-1]
+    assert len(game.enemy_manager.active_effects) == 2
+    assert (second['x'], second['y']) == (18.0, 19.0)
+    assert (first['x'], first['y']) != (second['x'], second['y'])
+
+
+def test_salt_circle_projection_uses_world_space_perspective():
     import math
-    game.player.angle = math.atan2(zone['y'] - game.player.y, zone['x'] - game.player.x)
-    game.render(1.0 / 60.0)
-    rings = [e for e in game.renderer._emissive if e[0] == 'ring']
-    assert rings, "zone pass should register a 'ring' emissive entry"
-    kind, x, y, radius, color, alpha = rings[0]
-    assert 0 <= alpha <= 255
-    # A zone right under the camera projects off the bottom of the screen and its
-    # ring gets view-culled before the cache fills.  Drop a second zone a couple
-    # of tiles ahead so the ring actually renders and the sprite cache populates.
-    game.enemy_manager.active_effects.append(
-        {'type': 'salt', 'x': game.player.x + 2.0, 'y': game.player.y,
-         'radius': 2.0, 'timer': 8.0, 'max_timer': 8.0})
-    game.player.angle = math.atan2(0.0, 2.0)
-    game.render(1.0 / 60.0)
-    # Ring sprite cache must be populated and bounded.
-    assert len(game.renderer._zone_ring_cache) >= 1
+    from types import SimpleNamespace
+    from zone_fx import ZoneFX
+    from settings import WALL_HEIGHT_SCALE, TILE_SIZE
+    for width, height in ((640, 360), (960, 540), (1280, 720)):
+        renderer = SimpleNamespace(
+            w=width, h=height, fov_rad=math.radians(60.0),
+            _unit_h=lambda depth: WALL_HEIGHT_SCALE / (max(depth, 0.05) * TILE_SIZE),
+        )
+        for facing in (0.0, math.pi * 0.5, math.pi, -math.pi * 0.5):
+            player = SimpleNamespace(x=10.0, y=10.0, angle=facing, pitch=0.0)
+            front_x = player.x + math.cos(facing) * 2.0
+            front_y = player.y + math.sin(facing) * 2.0
+            back_x = player.x - math.cos(facing) * 2.0
+            back_y = player.y - math.sin(facing) * 2.0
+            front = ZoneFX._project_ground(renderer, player, front_x, front_y)
+            oblique = ZoneFX._project_ground(
+                renderer, player,
+                player.x + math.cos(facing + math.pi / 4) * 2.0,
+                player.y + math.sin(facing + math.pi / 4) * 2.0)
+            behind = ZoneFX._project_ground(renderer, player, back_x, back_y)
+            assert front is not None and oblique is not None
+            assert abs(front[1] - oblique[1]) > 1.0
+            assert behind is None
 
 
 def test_garlic_toss_lands_and_forms_zone():
@@ -211,6 +248,8 @@ def test_zone_decal_cache_is_material_specific_and_bounded():
 
 def main():
     check("Zone pass generates ring emissive entries", test_zone_pass_generates_ring_emissive)
+    check("Salt placement is a stationary world anchor", test_salt_placement_is_a_stationary_world_anchor)
+    check("Salt circle uses world-space perspective projection", test_salt_circle_projection_uses_world_space_perspective)
     check("Garlic toss lands and forms its zone", test_garlic_toss_lands_and_forms_zone)
     check("Cross manifestation ward effect", test_cross_manifestation_ward_effect)
     check("Legacy zone records keep animating", test_legacy_zone_records_keep_animating)
