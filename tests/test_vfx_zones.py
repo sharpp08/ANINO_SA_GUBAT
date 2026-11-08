@@ -142,6 +142,7 @@ def test_garlic_throw_has_ballistic_arc_and_exact_landing():
 
 
 def test_enemy_animator_tracks_motion_and_turn_weight():
+    import math
     from types import SimpleNamespace
     from anim_integration import RealisticEnemyAnimator
     enemy = SimpleNamespace(
