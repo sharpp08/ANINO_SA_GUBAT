@@ -977,6 +977,51 @@ class SoundManager:
         out = reverb(out, r, rt60=1.3, wet=0.3, brightness=0.4, echoes=[(0.21, 0.2, 2200), (0.47, 0.1, 1500)])
         return self._finish(out, peak=0.7)
 
+    def _build_salt_pour(self):
+        """Consecrated grain pour: fine crackling hiss with a sputter envelope."""
+        r = self.rate
+        n = int(r * 0.45)
+        t = np.arange(n) / r
+        noise = np.random.uniform(-1.0, 1.0, n)
+        granule = np.diff(noise, prepend=0.0)          # high-pass-ish crackle
+        sputter = np.sin(2 * np.pi * 24.0 * t) ** 4
+        sputter *= 0.4 + 0.6 * np.random.random(n)
+        env = np.clip(t / 0.08, 0.0, 1.0) * np.clip((0.45 - t) / 0.35, 0.0, 1.0)
+        out = (0.55 * granule * sputter + 0.25 * noise) * env
+        return self._finish(out, peak=0.5)
+
+    def _build_garlic_throw(self):
+        """Hand whoosh: short noise sweep with a rising shimmer."""
+        r = self.rate
+        n = int(r * 0.3)
+        t = np.arange(n) / r
+        noise = np.random.uniform(-1.0, 1.0, n)
+        swept = np.diff(noise, prepend=0.0) * 2.0
+        shimmer = 0.6 + 0.4 * np.sin(2 * np.pi * (500.0 + 2600.0 * t) * t)
+        env = np.sin(np.pi * (t / 0.3)) ** 2
+        out = swept * shimmer * env
+        return self._finish(out, peak=0.35)
+
+    def _build_garlic_impact(self):
+        """Clove shatter: low thump + a puff of pungent vapor."""
+        r = self.rate
+        n = int(r * 0.5)
+        t = np.arange(n) / r
+        thump = np.exp(-t * 18.0) * np.sin(2 * np.pi * 90.0 * t)
+        puff = np.random.uniform(-1.0, 1.0, n) * np.exp(-t * 30.0)
+        out = 0.8 * thump + 0.35 * puff
+        return self._finish(out, peak=0.6)
+
+    def _build_ward_bless(self):
+        """Cross radiance: bright ascending holy chime shimmer."""
+        r = self.rate
+        n = int(r * 1.6)
+        t = np.arange(n) / r
+        out = np.zeros(n, dtype=np.float64)
+        for i, f in enumerate((523.25, 659.25, 784.0, 1046.5)):
+            out += 0.30 * np.exp(-t * (3.0 - 0.35 * i)) * np.sin(2 * np.pi * f * t + i * 0.6)
+        return self._finish(out, peak=0.5)
+
     def _build_beds(self):
         wind = self._build_wind(10.0, True, 'wind_bed', 0.5)
         self.sounds['wind_bed'] = self._generate_sound(wind)
@@ -1000,6 +1045,10 @@ class SoundManager:
             ('snap', self._build_snap),
             ('rustle', lambda: self._build_rustle('rustle', 1.3, 85, (3200, 2.6), 2.5, 0.45, soft=True)),
             ('page_rustle', lambda: self._build_rustle('page_rustle', 0.75, 70, (4200, 2.4), 6.0, 0.5)),
+            ('salt_pour', self._build_salt_pour),
+            ('garlic_throw', self._build_garlic_throw),
+            ('garlic_impact', self._build_garlic_impact),
+            ('ward_bless', self._build_ward_bless),
             ('intro_wind', lambda: self._finish(
                 self._build_wind(7.0, False, 'intro_wind', 0.6, 0.8, 1.8), peak=0.6, fade_ms=0)),
         )

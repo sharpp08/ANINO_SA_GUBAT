@@ -23,6 +23,7 @@ from gl_present import GLPresenter
 import shader_renderer as _shader_mod
 from time import perf_counter as _perf_counter
 from radar import Radar
+from garlic_toss import GarlicToss
 from audio_synth import audio_mgr, FRENZY_AMBIENCE_VOLUME
 from menu_music import MenuMusic
 from enemy_audio import enemy_audio_mgr
@@ -625,6 +626,7 @@ class Game:
         self.chapter = 1
         self.level_enemy_total = 0
         self.effects = []
+        self.garlic_toss = None        # in-flight garlic projectile (garlic_toss.GarlicToss)
         self.notif   = ''
         self.notif_t = 0.0
         self.survival_spawn_timer = 18.0
@@ -950,6 +952,7 @@ class Game:
     def start_new_game(self):
         self.state = STATE_INTRO
         self.intro_to_menu = False
+        self.garlic_toss = None
         self.cinematic.reset()
         safe_set_relative_mouse(False)
 
@@ -1095,11 +1098,24 @@ class Game:
         if self.player.use_salt():
             self.enemy_manager.add_salt_zone(self.player.x, self.player.y)
             self.notify("Salt circle placed!")
+            try:
+                zone = self.enemy_manager.active_effects[-1]
+                self.renderer.zone_fx.on_zone_appeared(self.renderer, zone)
+                audio_mgr.play('salt_pour')
+            except Exception:
+                pass
 
     def _use_garlic(self):
         if self.player.use_garlic():
-            self.enemy_manager.add_garlic_zone(self.player.x, self.player.y)
+            p = self.player
+            # The protection zone forms where the tossed bulb LANDS (4.5 tiles
+            # ahead), not under the player: flight runs in update_playing.
+            self.garlic_toss = GarlicToss(p.x, p.y, p.angle)
             self.notify("Garlic thrown!")
+            try:
+                audio_mgr.play('garlic_throw')
+            except Exception:
+                pass
 
     def _use_rosary(self):
         p = self.player
@@ -1123,6 +1139,14 @@ class Game:
                     pass
                 affected = self.enemy_manager.apply_cross(p.x, p.y, radius=6.0)
                 self.notify("Cross held high. Radiance restored." + (f" Repelled {len(affected)} creature(s)!" if affected else ""))
+                # Manifestation VFX: golden cross raise + radiance pulse + rotating
+                # holy aura, with a small screen-shake beat.
+                try:
+                    self.renderer.trigger_ward_effect('cross', duration=1.5)
+                    self.renderer.trigger_screen_shake(2)
+                    audio_mgr.play('ward_bless')
+                except Exception:
+                    pass
         else:
             self.notify(f"Cross not ready! ({p.cross_cooldown:.1f}s)")
 
@@ -1194,6 +1218,19 @@ class Game:
 
         # Enemy AI with stealth sensing and sanity proximity
         self.enemy_manager.update(dt, p.x, p.y, self.game_map, player=self.player)
+
+        # Garlic toss flight: the zone forms where the bulb lands.
+        toss = self.garlic_toss
+        if toss is not None:
+            if toss.update(dt):
+                self.enemy_manager.add_garlic_zone(toss.land_x, toss.land_y)
+                self.garlic_toss = None
+                try:
+                    audio_mgr.play('garlic_impact')
+                    self.renderer.zone_fx.on_zone_appeared(
+                        self.renderer, self.enemy_manager.active_effects[-1])
+                except Exception:
+                    pass
 
         # Each living enemy emits its own spatial "tik-tik-tik" stalking call.
         # Independent timers prevent a synchronized chorus; closer enemies call
@@ -1415,7 +1452,12 @@ class Game:
             # Rain, lightning and thunder only advance while actually playing (not while paused).
             self.renderer.update_weather(self.player, dt, sunrise_progress)
             self.renderer.render_frame(
-                self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
+                self.player, self.game_map, render_enemies,
+                self.enemy_manager.active_effects, dt, sunrise_progress)
+            # In-flight garlic bulb (drawn after the world + darkness so the
+            # tossed item stays visible mid-air).
+            if self.garlic_toss is not None:
+                self.garlic_toss.draw(self.renderer, self.player)
             panel_bottom = 4
             if self._hud_visible:
                 draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm,
@@ -1438,7 +1480,10 @@ class Game:
             sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
             sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
             self.renderer.render_frame(
-                self.player, self.game_map, render_enemies, self.effects, dt, sunrise_progress)
+                self.player, self.game_map, render_enemies,
+                self.enemy_manager.active_effects, dt, sunrise_progress)
+            if self.garlic_toss is not None:
+                self.garlic_toss.draw(self.renderer, self.player)
             if self._hud_visible:
                 draw_hud(overlay if overlay is not None else self.internal, self.player, self.font_sm,
                          self.font_hud, self.font_micro)

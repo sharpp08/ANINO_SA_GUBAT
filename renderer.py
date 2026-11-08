@@ -35,6 +35,7 @@ from raycast_fast import cast_rays, visible_runs
 from weather_fx import WeatherFX
 from photorealistic import PhotorealisticPass
 from enemies import DEATH_ANIM_TIME
+from zone_fx import ZoneFX, ease_out_back
 
 # Lighting constants (AMBIENT, BEAM_RADIUS, FOG_DISTANCE, ...) live in settings.py
 
@@ -285,6 +286,7 @@ class Renderer:
         from animation_core import ParticleSystem, CameraShake
         self.physics_particles = ParticleSystem(400)
         self.camera_shake = CameraShake()
+        self.zone_fx = ZoneFX()
         
         # ─── Advanced Visual Enhancements ─────────────────────────────────────
         from visual_enhancements import DynamicLights, Fog, Grain, Grader, Particles
@@ -525,6 +527,7 @@ class Renderer:
         # Emissive effects (eyes / halos) drawn after the darkness pass
         self._emissive = []
         self._glow_cache = {}
+        self._zone_ring_cache = {}
 
         # Heartbeat / danger
         self.heart_phase = 0.0
@@ -879,6 +882,14 @@ class Renderer:
         self._draw_world_sprites(player, enemies, game_map)
         self.timings['sprites'] = (time.perf_counter() - t_sprites) * 1000.0
 
+        # 5a. Salt/garlic protection zones (EnemyManager.active_effects, passed
+        # as `effects`): ground decal now, emissive glow ring after darkness.
+        t_zones = time.perf_counter()
+        if ENABLE_ANIMATIONS and effects:
+            self.zone_fx.update(dt)
+            self.zone_fx.draw(self, player, effects)
+        self.timings['zones'] = (time.perf_counter() - t_zones) * 1000.0
+
         # 4b. Atmospheric depth-fog: drawn after sprites so distant trees/walls
         # get hazed, but before the flashlight so the beam cuts through it.
         t_fog = time.perf_counter()
@@ -1127,9 +1138,16 @@ class Renderer:
             self.screen_shake = max(self.screen_shake, 1.0 + 1.5 * (self.danger - 0.6))
 
     def _draw_emissive(self):
-        """Draw eye glows and pickup halos on top of the darkness overlay."""
-        for kind, x, y, radius, color in self._emissive:
+        """Draw eye glows, pickup halos, and ward-ring glows on top of the darkness overlay."""
+        for entry in self._emissive:
+            kind, x, y, radius, color = entry[0], entry[1], entry[2], entry[3], entry[4]
+            alpha = entry[5] if len(entry) > 5 else 255
             if x < -80 or x > self.w + 80 or y < -80 or y > self.h + 80:
+                continue
+            if kind == 'ring':
+                # Zone glow: cached SRCALPHA elliptical ring, alpha-baked for fades.
+                ring = self._zone_ring(int(radius), color, alpha)
+                self.surface.blit(ring, (int(x) - ring.get_width() // 2, int(y) - ring.get_height() // 2))
                 continue
             g = self._glow_sprite(radius, color)
             self.surface.blit(g, (int(x) - g.get_width() // 2, int(y) - g.get_height() // 2),
@@ -1137,6 +1155,26 @@ class Renderer:
             if kind == 'eye':
                 core = max(1, int(radius * 0.32))
                 pygame.draw.circle(self.surface, (255, 240, 235), (int(x), int(y)), core)
+
+    def _zone_ring(self, radius, color, alpha):
+        """Cached elliptical ward-ring glow (SRCALPHA, alpha baked in)."""
+        radius = max(4, min(256, int(radius)))
+        col = (int(color[0]), int(color[1]), int(color[2]))
+        key = (radius // 8, col, int(max(0, min(255, alpha)) // 16))
+        s = self._zone_ring_cache.get(key)
+        if s is None:
+            if len(self._zone_ring_cache) >= 64:
+                self._zone_ring_cache.clear()
+            a = int(max(0, min(255, alpha)))
+            rx, ry = radius, max(2, int(radius * 0.32))
+            s = pygame.Surface((rx * 2 + 1, ry * 2 + 1), pygame.SRCALPHA)
+            rect = s.get_rect()
+            pygame.draw.ellipse(s, (*col, min(255, a + 40)), rect, max(1, min(3, radius // 48)))
+            inner = rect.inflate(-max(2, rx // 4), -max(2, ry // 3))
+            pygame.draw.ellipse(s, (*col, max(0, a // 2)), inner, 1)
+            s = s.convert_alpha()
+            self._zone_ring_cache[key] = s
+        return s
 
     # ─── Debug overlay ────────────────────────────────────────────────────
     def _draw_debug_overlay(self, player, game_map, enemies):
@@ -2702,11 +2740,21 @@ class Renderer:
     def trigger_ward_effect(self, ward_type, duration=1.5):
         self.ward_effect_timer = duration
         self.ward_effect_type = ward_type
+        # Cross manifestation: one golden spark cascade at the pulse start.
+        if ward_type == 'cross' and ENABLE_PARTICLES:
+            try:
+                self.physics_particles.burst(
+                    self.w // 2, self.h // 2, count=24, speed=(60, 220),
+                    life=0.7, size=1.0, color=(255, 220, 90), gravity_scale=0.6)
+            except Exception:
+                pass
 
     def _draw_ward_effect(self, dt):
         """Draw sacred ward visual effects."""
         self.ward_effect_timer -= dt
-        t = self.ward_effect_timer
+        # The caller's "timer > 0" guard lets one extra frame slip through with a
+        # negative timer; clamp so per-branch math (e.g. t / 0.2) can't go negative.
+        t = max(0.0, self.ward_effect_timer)
 
         # One reusable full-screen scratch surface, cleared each frame (no per-frame allocation).
         effect = getattr(self, '_ward_fx', None)
@@ -2739,6 +2787,34 @@ class Renderer:
             effect.fill((255, 255, 200, min(alpha, 100)))
             radius = int((1.5 - t) * self.w * 0.6)
             pygame.draw.circle(effect, (255, 215, 0, alpha), (cx, cy), radius, 5)
+        elif self.ward_effect_type == 'cross':
+            u = 1.0 - t / 1.5                               # elapsed 0->1
+            fade = min(1.0, t / 0.2, (1.5 - t) / 0.4)       # ramp in fast, fade out at the end
+            # 1) RAISE: golden crucifix symbol springs up from the lower screen
+            rise = ease_out_back(min(1.0, u * 2.0))
+            sym = int(16 + 22 * rise)
+            sx = self.w // 2
+            sy = int(self.h * 0.80 - self.h * 0.30 * rise)
+            a = int(210 * fade)
+            pygame.draw.line(effect, (255, 215, 0, a), (sx, sy - sym), (sx, sy + int(sym * 0.6)),
+                             max(2, sym // 8))
+            pygame.draw.line(effect, (255, 215, 0, a), (sx - int(sym * 0.55), sy - int(sym * 0.15)),
+                             (sx + int(sym * 0.55), sy - int(sym * 0.15)), max(2, sym // 10))
+            pygame.draw.line(effect, (255, 250, 220, max(0, min(255, a // 2))), (sx, sy - sym),
+                             (sx, sy + int(sym * 0.6)), 1)
+            # 2) PULSE: expanding golden radiance rings from screen center
+            pr = int(u * self.w * 0.45)
+            pa = int(150 * fade)
+            if pr > 2:
+                pygame.draw.circle(effect, (255, 215, 0, min(255, pa)), (cx, cy), pr, 2)
+                pygame.draw.circle(effect, (255, 255, 200, max(0, min(255, pa // 2))), (cx, cy), max(1, pr - 8), 1)
+            # 3) ROTATE: six holy rune ticks revolve around the cross (blessing aura)
+            rot = u * 0.6
+            for i in range(6):
+                ang = rot + i * (math.pi * 2.0 / 6.0)
+                px = int(sx + math.cos(ang) * sym * 1.5)
+                py = int(sy + math.sin(ang) * sym * 0.7)
+                pygame.draw.circle(effect, (255, 230, 150, max(0, min(255, a // 2))), (px, py), 2)
 
         self.surface.blit(effect, (0, 0))
 
