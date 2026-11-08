@@ -969,14 +969,14 @@ class EnemyManager:
         """Create a salt protection zone."""
         self.active_effects.append({
             'type': 'salt', 'x': x, 'y': y,
-            'radius': 2.0, 'timer': 8.0,
+            'radius': 2.0, 'timer': 8.0, 'max_timer': 8.0,
         })
 
     def add_garlic_zone(self, x, y):
         """Create a garlic zone."""
         self.active_effects.append({
             'type': 'garlic', 'x': x, 'y': y,
-            'radius': 2.5, 'timer': 6.0,
+            'radius': 2.5, 'timer': 6.0, 'max_timer': 6.0,
         })
 
     def get_alive_enemies(self):
