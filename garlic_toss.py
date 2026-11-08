@@ -115,15 +115,24 @@ class GarlicToss:
             return
         # Same depth-scaling as the pickup pass; the bulb rides z() pixels above
         # its floor contact point.
-        sw = max(3, int(unit * 0.32))
-        sh = max(3, int(unit * 0.32 * img.get_height() / max(1, img.get_width())))
-        lift = int(z * unit)
+        # The old 0.32 scale made a 3-5px speck at normal throw distance.
+        # Use a deliberately readable projectile size, bounded for performance.
+        sw = max(12, min(54, int(unit * 0.95)))
+        sh = max(12, int(sw * img.get_height() / max(1, img.get_width())))
+        lift = int(z * unit * 0.85)
         img2 = img.get_scaled((sw, sh)) if (sw, sh) != img.get_size() else img
         # True tumbling rotation, quantized to 15-degree steps and cached.
-        # The cache is bounded so depth changes cannot grow memory indefinitely.
         spin_img = _rotated_bulb(img2, self.spin())
         cx = int(screen_x) - spin_img.get_width() // 2
         cy = int(floor_y) - sh - lift - (spin_img.get_height() - sh) // 2
+        # Ground contact shadow and a small warm halo make the projectile
+        # distinguishable against dark foliage during its short flight.
+        shadow_w = max(8, int(sw * 0.85))
+        pygame.draw.ellipse(renderer.surface, (18, 14, 10),
+                            (int(screen_x) - shadow_w // 2, int(floor_y) - 3,
+                             shadow_w, max(3, shadow_w // 4)))
+        pygame.draw.circle(renderer.surface, (105, 92, 58),
+                           (int(screen_x), max(0, cy + sh // 2)), max(5, sw // 2 + 3), 1)
         renderer.surface.blit(spin_img, (cx, cy))
         # Pungent vapor trail
         if _settings_mod.ENABLE_PARTICLES:
