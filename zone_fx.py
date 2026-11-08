@@ -126,10 +126,15 @@ class ZoneFX:
                 age = max(0.0, max_timer - timer)
                 scale = ease_out_quad(min(1.0, age / FORMATION_TIME))
                 # breathing pulse, seeded per-zone so circles don't sync
-                seed = int(zone.get('x', 0.0)) * 7 + int(zone.get('y', 0.0)) * 13
-                breath = 1.0 + 0.05 * math.sin(self._time * 3.0 + seed)
+                # Stable, decorrelated phase per placement. Keep ward motion subtle
+                # so it feels like a living aura rather than a synchronized UI pulse.
+                seed_value = math.sin(float(zone.get('x', 0.0)) * 12.9898
+                                      + float(zone.get('y', 0.0)) * 78.233) * 43758.5453
+                phase = (seed_value - math.floor(seed_value)) * math.tau
+                breath = 1.0 + 0.022 * math.sin(self._time * 2.15 + phase)
+                shimmer = 0.94 + 0.06 * (0.5 + 0.5 * math.sin(self._time * 1.35 + phase * 1.7))
                 fade = timer / FADE_TIME if timer < FADE_TIME else 1.0
-                alpha = int(max(0, min(255, 190 * scale * fade)))
+                alpha = int(max(0, min(255, 178 * scale * fade * shimmer)))
 
                 # Occlusion: a wall column in front hides the ring
                 if not renderer._col_visible(screen_x, dist):
@@ -176,10 +181,11 @@ class ZoneFX:
                                 off = (random.random() * 2 - 1.0) * w_px * 0.45
                                 renderer.physics_particles.emit(
                                     cx + off, cy - 1,
-                                    vx=(random.random() - 0.5) * 14.0,
-                                    vy=-(8.0 + random.random() * 14.0),
-                                    life=0.8, size=1.0, color=mote_col,
-                                    gravity_scale=0.0, drag_scale=0.9)
+                                    vx=(random.random() - 0.5) * 7.0,
+                                    vy=-(5.0 + random.random() * 9.0),
+                                    life=1.0 + random.random() * 0.35,
+                                    size=0.8 + random.random() * 0.5, color=mote_col,
+                                    gravity_scale=-0.025, drag_scale=0.965
                         except Exception:
                             pass
         except Exception:
