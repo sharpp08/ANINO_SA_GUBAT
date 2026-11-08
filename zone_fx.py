@@ -18,6 +18,7 @@ All drawing is wrapped defensively: a zone pass failure must never crash
 the render loop.
 """
 import math
+import random
 
 import pygame
 import settings as _settings_mod
@@ -153,11 +154,11 @@ class ZoneFX:
                         self._mote_timers[key] = self._time
                         try:
                             for _ in range(2):
-                                off = (math.random() * 2 - 1.0) * w_px * 0.45
+                                off = (random.random() * 2 - 1.0) * w_px * 0.45
                                 renderer.physics_particles.emit(
                                     cx + off, cy - 1,
-                                    vx=(math.random() - 0.5) * 14.0,
-                                    vy=-(8.0 + math.random() * 14.0),
+                                    vx=(random.random() - 0.5) * 14.0,
+                                    vy=-(8.0 + random.random() * 14.0),
                                     life=0.8, size=1.0, color=mote_col,
                                     gravity_scale=0.0, drag_scale=0.9)
                         except Exception:
