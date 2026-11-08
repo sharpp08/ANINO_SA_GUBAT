@@ -60,7 +60,7 @@ FLIGHT_TIME = 0.5
 CHARGE_TIME = 0.15
 TOSS_RANGE = 4.5      # tiles the bulb lands ahead of the thrower
 Z_MAX = 0.45           # peak arc height in tile units
-SPIN_DPS = 720.0      # degrees per second
+SPIN_DPS = 560.0      # slower, weighted tumble
 
 
 class GarlicToss:
@@ -75,12 +75,14 @@ class GarlicToss:
         self.phase_time = 0.0
         self.landed = False
         self.land_x, self.land_y = self.x1, self.y1
+        self._spin_phase = 0.0
 
     # ── Simulation ──────────────────────────────────────────────────────────
     def update(self, dt):
         """Advance the toss. Returns True on the exact frame of landing."""
         if self.landed:
             return False
+        dt = max(0.0, min(float(dt), 0.05))
         self.phase_time += dt
         if self.phase == 'charge':
             if self.phase_time >= CHARGE_TIME:
@@ -114,12 +116,13 @@ class GarlicToss:
             return
         u = min(1.0, self.phase_time / CHARGE_TIME)
         from zone_fx import ease_out_back
-        scale = 0.5 + 0.5 * ease_out_back(u)
+        scale = 0.52 + 0.48 * (1.0 - (1.0 - u) ** 3) - 0.06 * math.sin(math.pi * u)
         sw = max(4, int(img.get_width() * scale))
         sh = max(4, int(img.get_height() * scale))
         thumb = _scaled_bulb(img, (sw, sh))
         x = int(renderer.w * 0.5 + renderer.w * 0.22 * (1.0 - u))
-        y = int(renderer.h * 0.92 - 18 * u)
+        settle = 1.0 - (1.0 - u) ** 2
+        y = int(renderer.h * 0.92 - 15 * settle + 2.0 * math.sin(math.pi * u))
         renderer.surface.blit(thumb, (x - sw // 2, y - sh // 2))
 
     def _draw_flight(self, renderer, player):
@@ -146,7 +149,8 @@ class GarlicToss:
         cy = int(floor_y) - sh - lift - (spin_img.get_height() - sh) // 2
         # Ground contact shadow and a small warm halo make the projectile
         # distinguishable against dark foliage during its short flight.
-        shadow_w = max(8, int(sw * 0.85))
+        shadow_factor = max(0.42, 1.0 - z * 0.85)
+        shadow_w = max(6, int(sw * 0.90 * shadow_factor))
         pygame.draw.ellipse(renderer.surface, (18, 14, 10),
                             (int(screen_x) - shadow_w // 2, int(floor_y) - 3,
                              shadow_w, max(3, shadow_w // 4)))
@@ -168,12 +172,17 @@ class GarlicToss:
 
     def world_pos(self):
         t = self.flight_t()
-        # easeOutCubic horizontal deceleration into the landing point
-        u = 1.0 - (1.0 - t) ** 3
-        x = self.x0 + (self.x1 - self.x0) * u
-        y = self.y0 + (self.y1 - self.y0) * u
-        z = 4.0 * Z_MAX * t * (1.0 - t)          # parabola, peak at t=0.5
+        # Ballistic travel: horizontal velocity stays nearly constant while
+        # gravity produces the vertical arc. A tiny crosswind peaks at the apex
+        # and returns to zero so the landing point remains exact.
+        dx, dy = self.x1 - self.x0, self.y1 - self.y0
+        crosswind = math.sin(math.pi * t) * 0.035
+        x = self.x0 + dx * t - math.sin(self.angle) * crosswind
+        y = self.y0 + dy * t + math.cos(self.angle) * crosswind
+        z = 4.0 * Z_MAX * t * (1.0 - t)
         return x, y, z
 
     def spin(self):
-        return (self.phase_time * SPIN_DPS) % 360.0
+        # A small air-drag loss near landing softens the otherwise mechanical spin.
+        t = self.flight_t() if self.phase == 'flight' else 0.0
+        return (self.phase_time * SPIN_DPS * (1.0 - 0.12 * t)) % 360.0
