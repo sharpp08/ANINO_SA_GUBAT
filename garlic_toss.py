@@ -20,19 +20,20 @@ import math
 import pygame
 import settings as _settings_mod
 
-_FLIP_CACHE = {}
-_FLIP_CACHE_MAX = 64
+_ROTATE_CACHE = {}
+_ROTATE_CACHE_MAX = 192
 
 
-def _flip_h(img):
-    """Cheaply cached horizontal flip (per-frame transform.rot would not)."""
-    key = (img.get_width(), img.get_height())
-    hit = _FLIP_CACHE.get(key)
+def _rotated_bulb(img, angle):
+    """Quantized, bounded rotation cache: smooth-looking tumble without per-frame transforms."""
+    angle = int(round(angle / 15.0) * 15) % 360
+    key = (id(img), img.get_width(), img.get_height(), angle)
+    hit = _ROTATE_CACHE.get(key)
     if hit is None:
-        if len(_FLIP_CACHE) >= _FLIP_CACHE_MAX:
-            _FLIP_CACHE.clear()
-        hit = pygame.transform.flip(img, True, False)
-        _FLIP_CACHE[key] = hit
+        if len(_ROTATE_CACHE) >= _ROTATE_CACHE_MAX:
+            _ROTATE_CACHE.clear()
+        hit = pygame.transform.rotate(img, angle)
+        _ROTATE_CACHE[key] = hit
     return hit
 
 
@@ -118,13 +119,12 @@ class GarlicToss:
         sh = max(3, int(unit * 0.32 * img.get_height() / max(1, img.get_width())))
         lift = int(z * unit)
         img2 = img.get_scaled((sw, sh)) if (sw, sh) != img.get_size() else img
-        # Tumble: mirror the bulb each half-spin so it reads as rolling through
-        # the air (avoids a per-frame transform.rot, which would stomp the cache).
-        if (self.spin() // 180) % 2:
-            img2 = _flip_h(img2)
-        cx = int(screen_x) - sw // 2
-        cy = int(floor_y) - sh - lift
-        renderer.surface.blit(img2, (cx, cy))
+        # True tumbling rotation, quantized to 15-degree steps and cached.
+        # The cache is bounded so depth changes cannot grow memory indefinitely.
+        spin_img = _rotated_bulb(img2, self.spin())
+        cx = int(screen_x) - spin_img.get_width() // 2
+        cy = int(floor_y) - sh - lift - (spin_img.get_height() - sh) // 2
+        renderer.surface.blit(spin_img, (cx, cy))
         # Pungent vapor trail
         if _settings_mod.ENABLE_PARTICLES:
             try:
