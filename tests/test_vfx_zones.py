@@ -125,6 +125,41 @@ def test_garlic_sprite_scaling_uses_pygame_surface_api():
     assert _scaled_bulb(source, (24, 18)) is scaled, "scaled garlic art should be cached"
 
 
+def test_garlic_throw_has_ballistic_arc_and_exact_landing():
+    from garlic_toss import GarlicToss
+    toss = GarlicToss(2.0, 3.0, 0.0)
+    toss.phase = 'flight'
+    toss.phase_time = 0.0
+    start = toss.world_pos()
+    toss.phase_time = 0.25
+    apex = toss.world_pos()
+    toss.phase_time = 0.5
+    end = toss.world_pos()
+    assert abs(start[0] - toss.x0) < 1e-6 and abs(start[2]) < 1e-6
+    assert apex[2] > start[2] and apex[2] > end[2]
+    assert abs(end[0] - toss.x1) < 1e-6 and abs(end[1] - toss.y1) < 1e-6
+    assert abs(end[2]) < 1e-6
+
+
+def test_enemy_animator_tracks_motion_and_turn_weight():
+    from types import SimpleNamespace
+    from anim_integration import RealisticEnemyAnimator
+    enemy = SimpleNamespace(
+        x=4.0, y=5.0, spawn_x=4.0, spawn_y=5.0,
+        base_speed=1.2, facing_angle=0.0, animation_state='run',
+        type='aswang', hit_seq=0, hit_strength=0.5, hit_side=1,
+    )
+    animator = RealisticEnemyAnimator()
+    animator.update_all([enemy], 1.0 / 60.0)
+    enemy.x += 0.02
+    enemy.facing_angle = 0.12
+    animator.update_all([enemy], 1.0 / 60.0)
+    transform = animator.transform(enemy, 0.034)
+    assert 0.0 < enemy._ra['move_speed'] <= 1.35
+    assert enemy._ra['gait_phase'] != 0.0
+    assert all(math.isfinite(float(transform[k])) for k in ('breathe', 'sway', 'hover', 'tilt'))
+
+
 def test_zone_garlic_visuals_smoke():
     """Full-frame render while two zones live: no exceptions, no leaks."""
     game = make_game()
@@ -144,6 +179,8 @@ def main():
     check("Cross manifestation ward effect", test_cross_manifestation_ward_effect)
     check("Legacy zone records keep animating", test_legacy_zone_records_keep_animating)
     check("Garlic sprite scaling uses pygame Surface API", test_garlic_sprite_scaling_uses_pygame_surface_api)
+    check("Garlic throw ballistic arc and landing", test_garlic_throw_has_ballistic_arc_and_exact_landing)
+    check("Enemy animator motion and turn weight", test_enemy_animator_tracks_motion_and_turn_weight)
     check("Salt + garlic zones smoke render", test_zone_garlic_visuals_smoke)
     failed = [r for r in _results if not r[1]]
     print(f"=== VFX ZONE TESTS: {len(_results) - len(failed)} PASSED, {len(failed)} FAILED ===")
