@@ -2792,9 +2792,11 @@ class Renderer:
             fade = min(1.0, t / 0.2, (1.5 - t) / 0.4)       # ramp in fast, fade out at the end
             # 1) RAISE: golden crucifix symbol springs up from the lower screen
             rise = ease_out_back(min(1.0, u * 2.0))
-            sym = int(16 + 22 * rise)
+            # Scale to the internal render resolution so the symbol remains
+            # clearly visible on both 320x180 and 640x360 quality profiles.
+            sym = int(max(26, min(66, self.h * (0.075 + 0.105 * rise))))
             sx = self.w // 2
-            sy = int(self.h * 0.80 - self.h * 0.30 * rise)
+            sy = int(self.h * 0.72 - self.h * 0.24 * rise)
             a = int(210 * fade)
             # Soft halo and restrained radial rays make the symbol read as a
             # consecrated object rather than two plain vector strokes.
