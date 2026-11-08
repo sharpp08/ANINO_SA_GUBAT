@@ -38,6 +38,7 @@ class ZoneFX:
         self._mote_timers = {}
         self._time = 0.0
         self._decal_cache = {}
+        self._salt_grain_samples = None
 
     @staticmethod
     def _project(renderer, player, wx, wy):
@@ -55,6 +56,28 @@ class ZoneFX:
             floor_y = min(horizon + unit * 0.5, renderer.h * 0.90)
         else:
             floor_y = horizon + unit * 0.5
+        return sx, floor_y, unit, dist
+
+    @staticmethod
+    def _project_ground(renderer, player, wx, wy):
+        """Project a ground-plane world point using camera-forward depth."""
+        dx, dy = float(wx) - player.x, float(wy) - player.y
+        dist = math.hypot(dx, dy)
+        if dist < 1e-5 or dist > _settings_mod.MAX_DEPTH:
+            return None
+        forward = dx * math.cos(player.angle) + dy * math.sin(player.angle)
+        side = -dx * math.sin(player.angle) + dy * math.cos(player.angle)
+        if forward <= 0.08:
+            return None
+        focal = renderer.w / max(1e-6, 2.0 * math.tan(renderer.fov_rad * 0.5))
+        sx = renderer.w * 0.5 + side * focal / forward
+        if sx < -renderer.w * 3 or sx > renderer.w * 4:
+            return None
+        unit = renderer._unit_h(forward)
+        horizon = max(0, renderer.h // 2 + int(player.pitch * renderer.h))
+        floor_y = horizon + unit * 0.5
+        if floor_y > renderer.h * 4:
+            return None
         return sx, floor_y, unit, dist
 
     def update(self, dt):
@@ -104,6 +127,82 @@ class ZoneFX:
         self._decal_cache[key] = surf
         return surf
 
+
+    def _salt_samples(self):
+        """Cached deterministic grain offsets around a circular world-space band."""
+        if self._salt_grain_samples is None:
+            rng = random.Random(0x5A17C1)
+            samples = []
+            for i in range(96):
+                angle = math.tau * (i + rng.uniform(-0.32, 0.32)) / 96.0
+                radial = rng.uniform(-0.035, 0.035)
+                size = rng.choice((1, 1, 1, 2))
+                shade = rng.choice((0.76, 0.88, 1.0, 1.06))
+                samples.append((angle, radial, size, shade))
+            self._salt_grain_samples = tuple(samples)
+        return self._salt_grain_samples
+
+    def _draw_salt_ground(self, renderer, player, zone, radius, alpha, phase):
+        """Draw the salt band by projecting its actual world-space circumference."""
+        cx, cy = float(zone.get("x", 0.0)), float(zone.get("y", 0.0))
+        salt = (218, 231, 242)
+        dark = (30, 34, 39)
+        segments = []
+        count = 96
+        points = []
+        for i in range(count + 1):
+            angle = math.tau * i / count
+            points.append(self._project_ground(renderer, player,
+                cx + math.cos(angle) * radius,
+                cy + math.sin(angle) * radius))
+        fade_col = tuple(max(0, min(255, int(c * alpha / 255.0))) for c in salt)
+        for i in range(count):
+            a, b = points[i], points[i + 1]
+            if a is None or b is None:
+                continue
+            x1, y1, u1, d1 = a
+            x2, y2, u2, d2 = b
+            if abs(x2 - x1) > renderer.w * 0.5:
+                continue
+            mx = int((x1 + x2) * 0.5)
+            md = (d1 + d2) * 0.5
+            if 0 <= mx < renderer.w and not renderer._col_visible(mx, md):
+                continue
+            width = max(1, min(4, int(((u1 + u2) * 0.5) * 0.018)))
+            pygame.draw.line(renderer.surface, dark,
+                (int(x1), int(y1 + 1)), (int(x2), int(y2 + 1)), width + 1)
+            pygame.draw.line(renderer.surface, fade_col,
+                (int(x1), int(y1)), (int(x2), int(y2)), width)
+            mid_angle = math.tau * (i + 0.5) / count
+            delta = abs((mid_angle - phase + math.pi) % math.tau - math.pi)
+            if delta < 0.16:
+                glint = (int(190 * alpha / 255.0),
+                         int(205 * alpha / 255.0),
+                         int(225 * alpha / 255.0))
+                pygame.draw.line(renderer.surface, glint,
+                    (int(x1), int(y1)), (int(x2), int(y2)), max(1, width))
+            if -2 <= mx <= renderer.w + 2:
+                segments.append((int(x1), int(y1), int(x2), int(y2)))
+        grain_spread = min(1.0, max(0.1, radius / 0.25))
+        for angle, radial, size, shade in self._salt_samples():
+            rr = max(0.02, radius + radial * grain_spread)
+            p = self._project_ground(renderer, player,
+                cx + math.cos(angle) * rr,
+                cy + math.sin(angle) * rr)
+            if p is None:
+                continue
+            sx, sy, unit, dist = p
+            ix = int(sx)
+            if not 0 <= ix < renderer.w or not renderer._col_visible(ix, dist):
+                continue
+            grain_size = max(1, min(2, int(size * max(0.8, unit / 100.0))))
+            col = tuple(max(0, min(255, int(c * shade * alpha / 255.0)))
+                        for c in salt)
+            pygame.draw.circle(renderer.surface, (22, 25, 29),
+                               (ix, int(sy + 1)), grain_size)
+            pygame.draw.circle(renderer.surface, col, (ix, int(sy)), grain_size)
+        return segments
+
     @staticmethod
     def _scaled_garlic(img, size):
         size = max(8, min(36, int(size)))
@@ -143,6 +242,17 @@ class ZoneFX:
                 alpha = int(max(0, min(255, 210 * formation * fade * shimmer)))
                 if alpha <= 0:
                     continue
+                if ztype == "salt":
+                    world_radius = float(zone.get("radius", 2.0)) * formation
+                    salt_alpha = int(alpha * (0.92 + 0.08 * math.sin(self._time * 2.1 + phase)))
+                    segments = self._draw_salt_ground(
+                        renderer, player, zone, world_radius, salt_alpha,
+                        (self._time * 2.7 + phase) % math.tau)
+                    if segments:
+                        renderer._emissive.append(
+                            ("salt_ground", segments, ZONE_STYLE["salt"][1], salt_alpha))
+                    continue
+
                 proj = self._project(renderer, player, zone.get("x", 0.0), zone.get("y", 0.0))
                 if proj is None:
                     continue
@@ -150,7 +260,7 @@ class ZoneFX:
                 if not renderer._col_visible(sx, dist):
                     continue
                 diameter = max(8.0, min(renderer.w * 0.78,
-                    2.0 * float(zone.get("radius", 2.0)) * unit * formation * breath))
+                    2.0 * float(zone.get("radius", 2.5)) * unit * formation * breath))
                 rx = max(4, min(256, int(diameter * 0.5)))
                 cx, cy = int(sx), int(fy)
                 decal = self._decal(ztype, rx)
@@ -188,17 +298,31 @@ class ZoneFX:
             except (TypeError, ValueError, AttributeError, pygame.error):
                 continue
 
-    def on_zone_appeared(self, renderer, zone):
+    def on_zone_appeared(self, renderer, zone, player=None):
         if not _settings_mod.ENABLE_PARTICLES:
             return
         style = ZONE_STYLE.get(zone.get("type"))
         if style is None:
             return
         try:
+            if zone.get("type") == "salt":
+                if player is not None:
+                    radius = float(zone.get("radius", 2.0))
+                    for i in range(12):
+                        angle = math.tau * i / 12.0
+                        p = self._project_ground(renderer, player,
+                            float(zone["x"]) + math.cos(angle) * radius,
+                            float(zone["y"]) + math.sin(angle) * radius)
+                        if p is not None and 0 <= int(p[0]) < renderer.w:
+                            renderer.physics_particles.emit(
+                                int(p[0]), int(p[1]), vx=0.0,
+                                vy=-(8.0 + random.random() * 7.0),
+                                life=0.45, size=1.0, color=style[2],
+                                gravity_scale=0.0, drag_scale=0.96)
+                return
             renderer.physics_particles.burst(
                 int(renderer.w * 0.5), int(renderer.h * 0.72),
-                count=18 if zone.get("type") == "salt" else 14,
-                speed=(24, 82), life=0.72, size=1.6,
+                count=14, speed=(24, 82), life=0.72, size=1.6,
                 color=style[2], up_bias=24, gravity_scale=0.9)
         except Exception:
             pass

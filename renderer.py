@@ -1141,6 +1141,13 @@ class Renderer:
     def _draw_emissive(self):
         """Draw eye glows, pickup halos, and ward-ring glows on top of the darkness overlay."""
         for entry in self._emissive:
+            if entry[0] == 'salt_ground':
+                segments, color, alpha = entry[1], entry[2], entry[3]
+                strength = max(0.0, min(1.0, alpha / 255.0)) * 0.28
+                tint = tuple(int(c * strength) for c in color)
+                for x1, y1, x2, y2 in segments:
+                    pygame.draw.line(self.surface, tint, (x1, y1), (x2, y2), 1)
+                continue
             kind, x, y, radius, color = entry[0], entry[1], entry[2], entry[3], entry[4]
             alpha = entry[5] if len(entry) > 5 else 255
             if x < -80 or x > self.w + 80 or y < -80 or y > self.h + 80:

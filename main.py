@@ -1096,11 +1096,16 @@ class Game:
                     )
     def _use_salt(self):
         if self.player.use_salt():
-            self.enemy_manager.add_salt_zone(self.player.x, self.player.y)
+            # Player.x/y are the collision body's ground-plane world coordinates.
+            # Snapshot once so the deployed ward never follows later player movement.
+            placement_x = float(self.player.x)
+            placement_y = float(self.player.y)
+            self.enemy_manager.add_salt_zone(placement_x, placement_y)
             self.notify("Salt circle placed!")
             try:
                 zone = self.enemy_manager.active_effects[-1]
-                self.renderer.zone_fx.on_zone_appeared(self.renderer, zone)
+                self.renderer.zone_fx.on_zone_appeared(
+                    self.renderer, zone, self.player)
                 audio_mgr.play('salt_pour')
             except Exception:
                 pass
