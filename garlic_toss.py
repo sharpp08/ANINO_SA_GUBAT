@@ -20,8 +20,27 @@ import math
 import pygame
 import settings as _settings_mod
 
+_SCALE_CACHE = {}
+_SCALE_CACHE_MAX = 96
 _ROTATE_CACHE = {}
 _ROTATE_CACHE_MAX = 192
+
+
+def _scaled_bulb(img, size):
+    """Scale a normal pygame.Surface; cache the bounded set of flight sizes."""
+    size = (max(1, int(size[0])), max(1, int(size[1])))
+    if img.get_size() == size:
+        return img
+    key = (id(img), size[0], size[1])
+    hit = _SCALE_CACHE.get(key)
+    if hit is None:
+        if len(_SCALE_CACHE) >= _SCALE_CACHE_MAX:
+            _SCALE_CACHE.clear()
+        # Pickup sprites are tiny (32x32); scale is substantially cheaper than
+        # smoothscale and the following cached rotation keeps per-frame work low.
+        hit = pygame.transform.scale(img, size)
+        _SCALE_CACHE[key] = hit
+    return hit
 
 
 def _rotated_bulb(img, angle):
@@ -98,7 +117,7 @@ class GarlicToss:
         scale = 0.5 + 0.5 * ease_out_back(u)
         sw = max(4, int(img.get_width() * scale))
         sh = max(4, int(img.get_height() * scale))
-        thumb = img.get_scaled((sw, sh))
+        thumb = _scaled_bulb(img, (sw, sh))
         x = int(renderer.w * 0.5 + renderer.w * 0.22 * (1.0 - u))
         y = int(renderer.h * 0.92 - 18 * u)
         renderer.surface.blit(thumb, (x - sw // 2, y - sh // 2))
@@ -120,7 +139,7 @@ class GarlicToss:
         sw = max(12, min(54, int(unit * 0.95)))
         sh = max(12, int(sw * img.get_height() / max(1, img.get_width())))
         lift = int(z * unit * 0.85)
-        img2 = img.get_scaled((sw, sh)) if (sw, sh) != img.get_size() else img
+        img2 = _scaled_bulb(img, (sw, sh))
         # True tumbling rotation, quantized to 15-degree steps and cached.
         spin_img = _rotated_bulb(img2, self.spin())
         cx = int(screen_x) - spin_img.get_width() // 2
