@@ -43,9 +43,10 @@ def test_zone_pass_generates_ring_emissive():
     assert len(game.enemy_manager.active_effects) == 1
     zone = game.enemy_manager.active_effects[0]
     assert zone['type'] == 'salt' and zone['radius'] == 2.0
+    assert zone['max_timer'] == zone['timer'] == 8.0, 'salt zone needs a stable lifetime'
     # Force the player to face the zone so the projection keeps it on-screen.
     import math
-    game.player.angle = math.atan2(zone['y'] - game.player.y, zone['x'] - game.player.y)
+    game.player.angle = math.atan2(zone['y'] - game.player.y, zone['x'] - game.player.x)
     game.render(1.0 / 60.0)
     rings = [e for e in game.renderer._emissive if e[0] == 'ring']
     assert rings, "zone pass should register a 'ring' emissive entry"
@@ -81,6 +82,7 @@ def test_garlic_toss_lands_and_forms_zone():
     assert len(game.enemy_manager.active_effects) == before + 1
     zone = game.enemy_manager.active_effects[-1]
     assert zone['type'] == 'garlic'
+    assert zone['max_timer'] == zone['timer'] == 6.0, 'garlic zone needs a stable lifetime'
     # Landing point is ahead of the player's position at the throw.
     import math
     dist = math.hypot(zone['x'] - game.player.x, zone['y'] - game.player.y)
@@ -103,6 +105,16 @@ def test_cross_manifestation_ward_effect():
     assert rend.ward_effect_timer <= 0
 
 
+def test_legacy_zone_records_keep_animating():
+    """Records without max_timer must still advance their formation animation."""
+    from zone_fx import FORMATION_TIME, ease_out_quad
+    zone = {'type': 'salt', 'timer': 7.5}
+    lifetime = float(zone.get('max_timer', 8.0))
+    age = max(0.0, lifetime - zone['timer'])
+    scale = ease_out_quad(min(1.0, age / FORMATION_TIME))
+    assert scale > 0.0, "legacy zone record must not remain stuck at zero scale"
+
+
 def test_zone_garlic_visuals_smoke():
     """Full-frame render while two zones live: no exceptions, no leaks."""
     game = make_game()
@@ -120,6 +132,7 @@ def main():
     check("Zone pass generates ring emissive entries", test_zone_pass_generates_ring_emissive)
     check("Garlic toss lands and forms its zone", test_garlic_toss_lands_and_forms_zone)
     check("Cross manifestation ward effect", test_cross_manifestation_ward_effect)
+    check("Legacy zone records keep animating", test_legacy_zone_records_keep_animating)
     check("Salt + garlic zones smoke render", test_zone_garlic_visuals_smoke)
     failed = [r for r in _results if not r[1]]
     print(f"=== VFX ZONE TESTS: {len(_results) - len(failed)} PASSED, {len(failed)} FAILED ===")
