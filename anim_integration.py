@@ -48,6 +48,11 @@ class RealisticEnemyAnimator:
                 'atk_t': None,
                 'was_attacking': False,
                 'hit_seq': getattr(enemy, 'hit_seq', 0),
+                'last_x': float(enemy.x), 'last_y': float(enemy.y),
+                'move_speed': 0.0, 'gait_phase': (seed % 628) / 100.0,
+                'last_facing': float(getattr(enemy, 'facing_angle', 0.0)),
+                'turn_rate': 0.0,
+                'spring_lean': SpringScalar(0.0, stiffness=95.0, damping=16.0),
             }
             enemy._ra = rec
         return rec
@@ -59,6 +64,26 @@ class RealisticEnemyAnimator:
     def _update_one(self, enemy, dt):
         rec = self._rec(enemy)
         attacking = enemy.animation_state in ('attack', 'lunge')
+
+        # Measure actual movement so gait cadence follows acceleration and collisions.
+        dt_safe = max(1.0 / 240.0, min(float(dt), 0.05))
+        dx = float(enemy.x) - rec['last_x']
+        dy = float(enemy.y) - rec['last_y']
+        measured_speed = math.hypot(dx, dy) / dt_safe
+        rec['last_x'], rec['last_y'] = float(enemy.x), float(enemy.y)
+        base_speed = max(0.1, float(getattr(enemy, 'base_speed', 1.0)))
+        speed_ratio = min(1.35, measured_speed / base_speed)
+        blend = 1.0 - math.exp(-8.0 * dt_safe)
+        rec['move_speed'] += (speed_ratio - rec['move_speed']) * blend
+        facing = float(getattr(enemy, 'facing_angle', rec['last_facing']))
+        turn_delta = (facing - rec['last_facing'] + math.pi) % (math.pi * 2.0) - math.pi
+        rec['last_facing'] = facing
+        turn_rate = turn_delta / dt_safe
+        rec['turn_rate'] += (turn_rate - rec['turn_rate']) * (1.0 - math.exp(-10.0 * dt_safe))
+        lean_target = max(-5.0, min(5.0, -rec['turn_rate'] * 0.055))
+        rec['spring_lean'].update(dt_safe, lean_target)
+        if rec['move_speed'] > 0.035:
+            rec['gait_phase'] = (rec['gait_phase'] + dt_safe * (5.0 + rec['move_speed'] * 8.0)) % (math.pi * 2.0)
 
         # attack phase timing
         if attacking and not rec['was_attacking']:
@@ -105,24 +130,27 @@ class RealisticEnemyAnimator:
 
         # organic breathing: noise-modulated, never a pure metronome sine
         breath_amp = 0.030
-        breathe = rec['spring_scale'].value * (1.0 + breath_amp * n.sample(t_s * 0.45 + ph))
+        moving = rec['move_speed']
+        gait = math.sin(rec['gait_phase'])
+        gait_abs = abs(gait)
+        gait_amount = min(1.0, moving * 1.25) if st in ('run', 'sprint', 'walk', 'crawl', 'stalk') else 0.0
+        breathe = rec['spring_scale'].value * (1.0 + breath_amp * n.sample(t_s * 0.45 + ph) - 0.018 * gait_abs * gait_amount)
 
-        # gait / stalk sway
-        if st in ('run', 'sprint'):
-            sway = n.sample(t_s * 1.4 + ph) * 0.9
-        elif st in ('crawl', 'stalk'):
-            sway = n.sample(t_s * 0.8 + ph) * 0.5
+        # Gait follows actual speed, with a restrained alternating weight shift.
+        if gait_amount > 0.0:
+            sway = gait * 0.52 * gait_amount + n.sample(t_s * 0.55 + ph) * 0.12
         else:
-            sway = n.sample(t_s * 0.5 + ph) * 0.35
+            sway = n.sample(t_s * 0.42 + ph) * 0.28
+        turn_lean = rec['spring_lean'].value
 
         # hover: floating types ride the spring; grounded types keep tiny settle
         floats = enemy.type in ('manananggal', 'multo', 'white_lady')
         if floats:
-            hover = rec['spring_hover'].value + 0.06 * n.sample(t_s * 0.4 + ph)
+            hover = rec['spring_hover'].value + 0.045 * n.sample(t_s * 0.4 + ph) + 0.018 * math.sin(rec['gait_phase'] * 0.5)
         elif st in ('crawl', 'crouch', 'stalk'):
-            hover = -0.18
+            hover = -0.18 - 0.018 * gait_abs * gait_amount
         else:
-            hover = rec['spring_hover'].value * 0.3
+            hover = rec['spring_hover'].value * 0.3 + 0.012 * gait_abs * gait_amount
 
         # coherent attack jitter (v1 used random.uniform per frame: TV static)
         jitter = 0.0
@@ -130,7 +158,7 @@ class RealisticEnemyAnimator:
             jitter = rec['noise_fast'].sample(t_s * 11.0) * 2.4
 
         return {'breathe': breathe, 'sway': sway, 'hover': hover, 'jitter': jitter,
-                'flinch': rec['spring_flinch'].value, 'tilt': rec['spring_tilt'].value}
+                'flinch': rec['spring_flinch'].value, 'tilt': rec['spring_tilt'].value + turn_lean}
 
 
 _animator = None
