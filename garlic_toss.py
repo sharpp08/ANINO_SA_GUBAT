@@ -6,7 +6,7 @@ Phases
   'charge' 0.15s : the viewmodel garlic sprite pops up at bottom-center of the
                    screen (world pass is not involved yet).
   'flight' 0.50s : parabolic arc in world space.
-                   horizontal: easeOutCubic decel into the landing point
+                   horizontal: eased deceleration into the landing point
                    z(t)      = 4 * Z_MAX * t * (1 - t)   (pseudo-Z height,
                    same convention as manananggal_flight)
                    the bulb tumbles at 720 deg/s while a pale vapor trail

@@ -193,3 +193,13 @@ which reads as fresnel falloff at this pixel density.
 (12/12, includes the frames that fire salt/garlic through the new paths),
 `python tests/test_gameplay_fixes.py` (ALL PASSED — cooldown semantics untouched).
 
+
+
+## 5. Audit follow-up — Salt and Garlic implementation
+
+- Salt decals are cached SRCALPHA ground surfaces with deterministic irregular edges, individually shaded crystalline grains, and scattered granules. Their formation, breathing, and final fade are driven by elapsed zone lifetime.
+- Garlic uses a multi-lobed procedural bulb sprite with clove seams, papery shading, root fibres, and a green stalk. The bulb remains visible at the landed ward and has a restrained idle bob.
+- Zone decals and the garlic scale variants use bounded caches. The base ward pass is not disabled when optional animation/particle settings are off; particles remain optional.
+- Garlic toss flight uses a normalized parabolic height curve and eased horizontal travel. The landing point is clamped before the first solid map tile.
+- Garlic applies its sacred damage once per eligible enemy per individual garlic zone, rather than every simulation frame. Each zone tracks its affected enemy identities independently.
+- The Cross manifestation renderer and its animation branch were not changed by this follow-up.

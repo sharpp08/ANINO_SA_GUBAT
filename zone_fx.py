@@ -134,7 +134,7 @@ class ZoneFX:
                     continue
                 lifetime = max(0.01, float(zone.get("max_timer", 8.0 if ztype == "salt" else 6.0)))
                 age = max(0.0, lifetime - timer)
-                formation = ease_out_quad(age / FORMATION_TIME)
+                formation = max(0.035, ease_out_quad(age / FORMATION_TIME))
                 fade = min(1.0, timer / FADE_TIME)
                 seed = float(zone.get("x", 0.0)) * 12.9898 + float(zone.get("y", 0.0)) * 78.233
                 phase = (math.sin(seed) * 43758.5453) % math.tau
