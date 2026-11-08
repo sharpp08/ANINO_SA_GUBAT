@@ -2796,12 +2796,34 @@ class Renderer:
             sx = self.w // 2
             sy = int(self.h * 0.80 - self.h * 0.30 * rise)
             a = int(210 * fade)
-            pygame.draw.line(effect, (255, 215, 0, a), (sx, sy - sym), (sx, sy + int(sym * 0.6)),
-                             max(2, sym // 8))
-            pygame.draw.line(effect, (255, 215, 0, a), (sx - int(sym * 0.55), sy - int(sym * 0.15)),
-                             (sx + int(sym * 0.55), sy - int(sym * 0.15)), max(2, sym // 10))
-            pygame.draw.line(effect, (255, 250, 220, max(0, min(255, a // 2))), (sx, sy - sym),
-                             (sx, sy + int(sym * 0.6)), 1)
+            # Soft halo and restrained radial rays make the symbol read as a
+            # consecrated object rather than two plain vector strokes.
+            halo_r = max(3, int(sym * 1.35))
+            pygame.draw.circle(effect, (255, 190, 55, max(0, min(255, a // 5))),
+                               (sx, sy - int(sym * 0.15)), halo_r, 0)
+            for i in range(8):
+                ang = u * 0.35 + i * (math.pi / 4.0)
+                inner_r, outer_r = sym * 1.45, sym * 2.0
+                p1 = (int(sx + math.cos(ang) * inner_r),
+                      int(sy - sym * 0.15 + math.sin(ang) * inner_r * 0.65))
+                p2 = (int(sx + math.cos(ang) * outer_r),
+                      int(sy - sym * 0.15 + math.sin(ang) * outer_r * 0.65))
+                pygame.draw.line(effect, (255, 220, 125, max(0, min(255, a // 4))), p1, p2, 1)
+            # Layered crucifix: outer amber edge, bright ivory core, and crossbar.
+            stem_bottom = sy + int(sym * 0.68)
+            stem_top = sy - sym
+            bar_y = sy - int(sym * 0.15)
+            bar_half = int(sym * 0.62)
+            pygame.draw.line(effect, (160, 95, 20, a), (sx, stem_top), (sx, stem_bottom),
+                             max(3, sym // 6))
+            pygame.draw.line(effect, (255, 205, 70, a), (sx, stem_top), (sx, stem_bottom),
+                             max(2, sym // 10))
+            pygame.draw.line(effect, (255, 250, 220, max(0, min(255, a))), (sx, stem_top),
+                             (sx, stem_bottom), 1)
+            pygame.draw.line(effect, (160, 95, 20, a), (sx - bar_half, bar_y),
+                             (sx + bar_half, bar_y), max(3, sym // 7))
+            pygame.draw.line(effect, (255, 220, 115, a), (sx - bar_half, bar_y),
+                             (sx + bar_half, bar_y), max(2, sym // 11))
             # 2) PULSE: expanding golden radiance rings from screen center
             pr = int(u * self.w * 0.45)
             pa = int(150 * fade)
