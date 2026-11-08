@@ -115,6 +115,16 @@ def test_legacy_zone_records_keep_animating():
     assert scale > 0.0, "legacy zone record must not remain stuck at zero scale"
 
 
+def test_garlic_sprite_scaling_uses_pygame_surface_api():
+    """The toss viewmodel must scale generated pygame.Surface pickup art."""
+    import pygame
+    from garlic_toss import _scaled_bulb
+    source = pygame.Surface((32, 32), pygame.SRCALPHA)
+    scaled = _scaled_bulb(source, (24, 18))
+    assert scaled.get_size() == (24, 18)
+    assert _scaled_bulb(source, (24, 18)) is scaled, "scaled garlic art should be cached"
+
+
 def test_zone_garlic_visuals_smoke():
     """Full-frame render while two zones live: no exceptions, no leaks."""
     game = make_game()
@@ -133,6 +143,7 @@ def main():
     check("Garlic toss lands and forms its zone", test_garlic_toss_lands_and_forms_zone)
     check("Cross manifestation ward effect", test_cross_manifestation_ward_effect)
     check("Legacy zone records keep animating", test_legacy_zone_records_keep_animating)
+    check("Garlic sprite scaling uses pygame Surface API", test_garlic_sprite_scaling_uses_pygame_surface_api)
     check("Salt + garlic zones smoke render", test_zone_garlic_visuals_smoke)
     failed = [r for r in _results if not r[1]]
     print(f"=== VFX ZONE TESTS: {len(_results) - len(failed)} PASSED, {len(failed)} FAILED ===")
