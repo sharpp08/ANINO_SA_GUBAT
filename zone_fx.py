@@ -110,7 +110,11 @@ class ZoneFX:
                 ring_col, glow_col, mote_col = style
                 radius = float(zone.get('radius', 2.0))
                 timer = float(zone.get('timer', 0.0))
-                max_timer = float(zone.get('max_timer', timer))
+                # Older zone records may predate max_timer. Never use the decreasing live
+                # timer as its own lifetime: that pins age at zero and keeps the
+                # formation scale invisible for the entire effect.
+                default_lifetime = 8.0 if ztype == 'salt' else 6.0
+                max_timer = float(zone.get('max_timer', default_lifetime))
                 if timer <= 0.0:
                     continue
                 proj = self._project(renderer, player, zone.get('x', 0.0), zone.get('y', 0.0))
