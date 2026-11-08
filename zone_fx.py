@@ -79,7 +79,15 @@ class ZoneFX:
         screen_x = int((rel / renderer.fov_rad + 0.5) * renderer.w)
         unit = renderer._unit_h(dist)
         horizon_y = max(0, renderer.h // 2 + int(player.pitch * renderer.h))
-        floor_y = horizon_y + unit * 0.5
+        # A ward placed at the player's feet is extremely close to the camera.
+        # The normal wall projection sends its floor contact below the viewport
+        # and creates a ring thousands of pixels wide. Keep near wards on-screen
+        # and cap their projected footprint to a readable portion of the view.
+        if dist < 1.25:
+            unit = min(unit, max(12.0, renderer.w * 0.34 / max(0.5, 2.0)))
+            floor_y = min(horizon_y + unit * 0.5, renderer.h * 0.90)
+        else:
+            floor_y = horizon_y + unit * 0.5
         return screen_x, floor_y, unit, dist
 
     def update(self, dt):
@@ -134,14 +142,21 @@ class ZoneFX:
                 faint = (int(ring_col[0] * 0.7), int(ring_col[1] * 0.7), int(ring_col[2] * 0.7))
                 rect = pygame.Rect(0, 0, rx * 2 + 1, ry * 2 + 1)
                 rect.center = (cx, cy)
-                pygame.draw.ellipse(surface, ring_col, rect, max(1, int(1.5 + unit * 0.4)))
-                # inner speckle pass reads as scattered grains when close
-                if unit > 0.35:
-                    inner = int(0.82 * rx)
-                    if inner > 1:
-                        inner_rect = pygame.Rect(0, 0, inner * 2 + 1, max(1, int(inner * 0.32 * 2)) + 1)
-                        inner_rect.center = (cx, cy)
-                        pygame.draw.ellipse(surface, faint, inner_rect, 1)
+                # Three restrained concentric strokes make the ward readable
+                # at gameplay resolution without a costly full-screen shader.
+                pygame.draw.ellipse(surface, ring_col, rect, max(2, min(5, int(1.5 + unit * 0.04))))
+                inner = int(0.82 * rx)
+                if inner > 2:
+                    inner_rect = pygame.Rect(0, 0, inner * 2 + 1,
+                                             max(2, int(inner * 0.32 * 2)) + 1)
+                    inner_rect.center = (cx, cy)
+                    pygame.draw.ellipse(surface, faint, inner_rect, 1)
+                core = int(0.68 * rx)
+                if core > 3:
+                    core_rect = pygame.Rect(0, 0, core * 2 + 1,
+                                            max(2, int(core * 0.32 * 2)) + 1)
+                    core_rect.center = (cx, cy)
+                    pygame.draw.ellipse(surface, faint, core_rect, 1)
 
                 # ── Emissive ring glow (drawn after darkness) ──
                 renderer._emissive.append(('ring', cx, cy, int(w_px * 0.5), glow_col, alpha))
