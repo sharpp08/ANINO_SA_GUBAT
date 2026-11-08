@@ -219,7 +219,7 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 
 | Chapter | Setting | Player Start | Exit Position | Key Enemies |
 |---|---|---|---|---|
-| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) | Aswang, Multo, Sigbin |
+| **Chapter 1** | Outer Forest & Abandoned Cabin | (4.5, 4.5) | (58.5, 58.5) |  Aswang, Manananggal, Tikbalang, Kapre, Multo, Sigbin|
 | **Chapter 2** | Deep Forest & Cursed Ruins | (4.5, 4.5) | (58.5, 58.5) | Aswang, Manananggal, Tikbalang, Kapre, Multo, Sigbin |
 
 ---
