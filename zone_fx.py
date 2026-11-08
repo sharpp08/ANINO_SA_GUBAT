@@ -185,7 +185,7 @@ class ZoneFX:
                                     vy=-(5.0 + random.random() * 9.0),
                                     life=1.0 + random.random() * 0.35,
                                     size=0.8 + random.random() * 0.5, color=mote_col,
-                                    gravity_scale=-0.025, drag_scale=0.965
+                                    gravity_scale=-0.025, drag_scale=0.965)
                         except Exception:
                             pass
         except Exception:
