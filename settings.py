@@ -449,13 +449,11 @@ CONTROLS = {
     'strafe_left': 'a',
     'strafe_right': 'd',
     'fire': 'mouse1',
-    'alt_fire': '',      # reserved
     'reload': 'r',
     'flashlight': 'f',
     'interact': 'e',
     'sprint': 'lshift',
     'crouch': 'lctrl',
-    'jump': '',          # reserved
     'ward_menu': 'q',
     'ward_1': '1',
     'ward_2': '2',

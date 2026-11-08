@@ -42,7 +42,6 @@
     "interact": "e",
     "sprint": "lshift",
     "crouch": "lctrl",
-    "jump": "space",
     "ward_menu": "q",
     "ward_1": "1",
     "ward_2": "2",

@@ -156,7 +156,7 @@ The executable will be generated in the `dist/ANINO_SA_GUBAT/` folder.
 |---|---|
 | `W`, `A`, `S`, `D` / Arrow Keys | Move Forward, Strafe Left, Move Backward, Strafe Right |
 | `Shift` (Hold) | Sprint (consumes stamina) |
-| `Space` | Jump / Skip Cinematic |
+| `Space` | Skip Cinematic |
 | `Left Mouse Click` | Fire the active weapon |
 | `Mouse Wheel` | Cycle weapon: Bolo → Shotgun → Revolver (applies the equip delay, cancels an in-progress reload) |
 | `R` | Reload active weapon |
