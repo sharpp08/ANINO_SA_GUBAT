@@ -1,5 +1,6 @@
 """Focused regression tests for combat, weapon state, and enemy interactions."""
 import os
+import tempfile
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -311,6 +312,27 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(enemy.health, 0)
         enemy.take_damage(10, "physical")
         self.assertEqual(enemy.health, 0)
+
+
+    def test_multo_jumpscare_audio_loads_from_repository_folder(self):
+        from jumpscare import JumpscareManager
+
+        manager = JumpscareManager.__new__(JumpscareManager)
+        manager.enemy_sounds = {}
+        with tempfile.TemporaryDirectory() as base_path:
+            jumpscare_dir = os.path.join(base_path, "Jumpscare")
+            os.makedirs(jumpscare_dir)
+            audio_path = os.path.join(jumpscare_dir, "multo_jumpscare.mp3")
+            with open(audio_path, "wb") as audio_file:
+                audio_file.write(b"test audio placeholder")
+
+            loaded_sound = object()
+            with patch("jumpscare.BASE_PATH", base_path), \
+                 patch("jumpscare.pygame.mixer.Sound", return_value=loaded_sound):
+                manager._load_assets()
+
+        self.assertIs(manager.enemy_sounds.get("multo"), loaded_sound)
+
 
 
 if __name__ == "__main__":

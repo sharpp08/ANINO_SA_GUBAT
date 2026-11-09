@@ -93,20 +93,29 @@ class JumpscareManager:
                 except Exception as e:
                     print(f"[Jumpscare] Failed to load {name}: {e}")
 
-        # Enemy-specific jumpscare audio (replaces the generic scream for that enemy)
+        # Enemy-specific jumpscare audio (replaces the generic scream for that enemy).
+        # The Multo recording is stored in the repository's Jumpscare/ folder;
+        # older installs may still provide it beside the generic enemy sounds.
+        custom_sound_dirs = (pack_dir, os.path.join(BASE_PATH, 'Jumpscare'))
         for etype, fnames in self.CUSTOM_SOUNDS.items():
+            loaded = False
             for fname in fnames:
-                path = os.path.join(pack_dir, fname)
-                if not os.path.exists(path):
-                    continue
-                try:
-                    self.enemy_sounds[etype] = pygame.mixer.Sound(path)
-                    print(f"[Jumpscare] Loaded {etype} audio: {path}")
+                for sound_dir in custom_sound_dirs:
+                    path = os.path.join(sound_dir, fname)
+                    if not os.path.exists(path):
+                        continue
+                    try:
+                        self.enemy_sounds[etype] = pygame.mixer.Sound(path)
+                        print(f"[Jumpscare] Loaded {etype} audio: {path}")
+                        loaded = True
+                        break
+                    except Exception as e:
+                        print(f"[Jumpscare] Failed to load {fname} from {sound_dir}: {e}")
+                if loaded:
                     break
-                except Exception as e:
-                    print(f"[Jumpscare] Failed to load {fname}: {e}")
-            else:
-                print(f"[Jumpscare] No usable audio found for {etype} in {pack_dir}")
+            if not loaded:
+                print(f"[Jumpscare] No usable audio found for {etype} in "
+                      f"{', '.join(custom_sound_dirs)}")
 
     def _play(self, snd, volume):
         if snd is None:
