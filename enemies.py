@@ -606,12 +606,15 @@ class EnemyManager:
                         continue
                     angle_to_enemy = math.atan2(
                         enemy.y - player_y, enemy.x - player_x)
+                    pellet_angle = player_angle + pellet_spread
                     angle_diff = (
-                        angle_to_enemy - player_angle + math.pi
+                        angle_to_enemy - pellet_angle + math.pi
                     ) % (2 * math.pi) - math.pi
-                    if abs(angle_diff) >= 0.3:
-                        continue
-                    if abs(angle_diff + pellet_spread) >= 0.25:
+                    # A pellet only hits when its ray intersects the enemy's
+                    # apparent angular radius; a fixed cone over-hit distant targets.
+                    target_angle = math.atan2(
+                        max(0.12, enemy.size), max(0.1, dist))
+                    if abs(angle_diff) > target_angle:
                         continue
                     if not _has_clear_line_of_sight(
                             game_map, player_x, player_y, enemy.x, enemy.y):

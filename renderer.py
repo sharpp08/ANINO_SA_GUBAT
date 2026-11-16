@@ -1465,8 +1465,24 @@ class Renderer:
         except Exception:
             pass
 
+    def _advance_weapon_animation_timers(self, dt):
+        """Advance every transient weapon animation, even while unequipped."""
+        timers = (
+            self.bolo_swing_timer,
+            self.shotgun_fire_timer,
+            self.revolver_fire_timer,
+        )
+        elapsed = max(0.0, dt)
+        self.bolo_swing_timer = max(0.0, timers[0] - elapsed)
+        self.shotgun_fire_timer = max(0.0, timers[1] - elapsed)
+        self.revolver_fire_timer = max(0.0, timers[2] - elapsed)
+        return timers
+
     def _draw_player_viewmodel(self, player, dt):
         """Draw immersive first-person procedural hands, forearms, sleeves, and weapon viewmodel."""
+        bolo_swing_timer, shotgun_fire_timer, revolver_fire_timer = (
+            self._advance_weapon_animation_timers(dt)
+        )
         weapon_names = ['bolo', 'shotgun', 'revolver']
         wname = weapon_names[player.current_weapon] if 0 <= player.current_weapon < len(weapon_names) else 'bolo'
 
@@ -1526,7 +1542,7 @@ class Renderer:
 
         # Recoil (the shotgun's own fire frames already carry the kick, so skip the
         # procedural offset while they play to avoid a double kick)
-        shotgun_anim_playing = (wname == 'shotgun' and self.shotgun_fire_timer > 0
+        shotgun_anim_playing = (wname == 'shotgun' and shotgun_fire_timer > 0
                                 and bool(SHOTGUN_ANCHORS))
         recoil_y = 0 if shotgun_anim_playing else int(self.weapon_recoil * 18)
         if self.weapon_recoil > 0:
@@ -1541,15 +1557,13 @@ class Renderer:
 
         # Revolver: crisp backward kick, muzzle lift, and quick return.
         revolver_kick_x = revolver_kick_y = revolver_tilt = 0
-        if self.revolver_fire_timer > 0:
+        if revolver_fire_timer > 0:
             if wname == 'revolver':
-                fire_p = max(0.0, min(1.0, self.revolver_fire_timer / 0.16))
+                fire_p = max(0.0, min(1.0, revolver_fire_timer / 0.16))
                 kick = math.sin(fire_p * math.pi) ** 0.7
                 revolver_kick_x = int(12 * kick)
                 revolver_kick_y = int(25 * kick)
                 revolver_tilt = -7.0 * kick
-            # Transient timers must expire even when another weapon is equipped.
-            self.revolver_fire_timer = max(0.0, self.revolver_fire_timer - dt)
 
         # Damage / Death
         if not player.alive:
@@ -1607,8 +1621,8 @@ class Renderer:
                 return surf, bx, by, (int(pivot_x + g_x), int(pivot_y + g_y))
 
             swing_pose = (0.0, 0.0, 0.0)
-            if self.bolo_swing_timer > 0:
-                prog = max(0.0, min(1.0, 1.0 - self.bolo_swing_timer / BOLO_COOLDOWN))
+            if bolo_swing_timer > 0:
+                prog = max(0.0, min(1.0, 1.0 - bolo_swing_timer / BOLO_COOLDOWN))
                 swing_pose = self._bolo_swing_pose(prog)
                 # trail: older poses of the slash, progressively fainter
                 if 0.25 <= prog < 0.75:
@@ -1618,15 +1632,14 @@ class Renderer:
                         g_surf = g_surf.copy()
                         g_surf.set_alpha(alpha)
                         bolo_ghosts.append((g_surf, gx_, gy_))
-                self.bolo_swing_timer = max(0.0, self.bolo_swing_timer - dt)
             draw_surf, final_x, final_y, bolo_grip = place(*swing_pose)
 
         # Shotgun: play the pump sheet (flash, kick, settle) while firing
         shotgun_hands = None
-        if custom_shotgun and self.shotgun_fire_timer > 0:
+        if custom_shotgun and shotgun_fire_timer > 0:
             from asset_generator import SHOTGUN_FIRE_FRAMES, SHOTGUN_FIRE_WEIGHTS
             if SHOTGUN_FIRE_FRAMES:
-                prog = max(0.0, min(1.0, 1.0 - self.shotgun_fire_timer / SHOTGUN_COOLDOWN))
+                prog = max(0.0, min(1.0, 1.0 - shotgun_fire_timer / SHOTGUN_COOLDOWN))
                 idx, acc = len(SHOTGUN_FIRE_FRAMES) - 1, 0.0
                 for i, wgt in enumerate(SHOTGUN_FIRE_WEIGHTS[:len(SHOTGUN_FIRE_FRAMES)]):
                     acc += wgt
@@ -1644,7 +1657,6 @@ class Renderer:
                 shotgun_hands = (
                     (int(base_x + f_right[0] * sw), int(base_y + f_right[1] * sh)),
                     (int(base_x + f_left[0] * sw), int(base_y + f_left[1] * sh)))
-            self.shotgun_fire_timer = max(0.0, self.shotgun_fire_timer - dt)
 
         # ── Procedural First-Person Hands & Sleeves ──────────────────────────────
         skin_color = (210, 175, 150)

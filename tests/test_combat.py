@@ -95,6 +95,54 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertLess(near.health, near.max_health)
         self.assertEqual(far.health, far.max_health)
 
+    def test_shotgun_pellet_spread_uses_the_actual_firing_direction(self):
+        manager = EnemyManager()
+        # Target is below the aim line, but this pellet travels above it.
+        target = Enemy("aswang", 4.0, -0.4)
+        manager.enemies = [target]
+        shot = {
+            "type": "shotgun", "damage": 40, "range": 8,
+            "spread": 0.1, "pellets": 1,
+        }
+
+        with patch("enemies.random.uniform", return_value=0.1):
+            hits = manager.apply_weapon_hit(0, 0, 0, shot)
+
+        self.assertEqual(hits, [])
+        self.assertEqual(target.health, target.max_health)
+
+    def test_shotgun_hitbox_scales_with_target_angular_size_at_range(self):
+        manager = EnemyManager()
+        # Within shotgun range, but far enough off-axis to miss this small target.
+        target = Enemy("aswang", 7.8, 1.55)
+        manager.enemies = [target]
+        shot = {
+            "type": "shotgun", "damage": 40, "range": 8,
+            "spread": 0.0, "pellets": 1,
+        }
+
+        with patch("enemies.random.uniform", return_value=0.0):
+            hits = manager.apply_weapon_hit(0, 0, 0, shot)
+
+        self.assertEqual(hits, [])
+        self.assertEqual(target.health, target.max_health)
+
+    def test_unequipped_weapon_animation_timers_still_expire(self):
+        renderer = Renderer.__new__(Renderer)
+        renderer.weapon_sprites = {}
+        renderer.bolo_swing_timer = 0.3
+        renderer.shotgun_fire_timer = 0.6
+        renderer.revolver_fire_timer = 0.1
+        player = type("PlayerStub", (), {"current_weapon": 1})()
+
+        # The selected shotgun has no sprite in this headless test. Timers must
+        # still advance before the viewmodel's missing-sprite early return.
+        renderer._draw_player_viewmodel(player, 0.2)
+
+        self.assertAlmostEqual(renderer.bolo_swing_timer, 0.1)
+        self.assertAlmostEqual(renderer.shotgun_fire_timer, 0.4)
+        self.assertEqual(renderer.revolver_fire_timer, 0.0)
+
     def test_all_weapons_are_blocked_by_solid_cover(self):
         wall_map = FakeMap(
             wall=lambda x, y: 0.5 <= x <= 0.7 and abs(y) < 0.5
