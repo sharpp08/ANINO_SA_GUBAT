@@ -270,9 +270,11 @@ class Player:
 
     def fire_weapon(self):
         """Attempt to fire the current weapon. Cancel reload if active. Returns hit info."""
-        # The fire input interrupts a reload even if the previous shot's cooldown
-        # has not quite expired yet.
-        if self.reloading:
+        # A fire input interrupts an active reload even if the previous shot's
+        # cooldown has not quite expired. Remember that state so an empty-mag
+        # check below does not immediately restart the reload we just cancelled.
+        was_reloading = self.reloading
+        if was_reloading:
             self.cancel_reload()
         if self.weapon_cooldown > 0:
             return None
@@ -288,7 +290,8 @@ class Player:
             }
         elif self.current_weapon == 1:  # Shotgun
             if self.shotgun_mag <= 0:
-                self.start_reload()
+                if not was_reloading:
+                    self.start_reload()
                 return None
             self.shotgun_mag -= 1
             self.weapon_cooldown = SHOTGUN_COOLDOWN
@@ -302,7 +305,8 @@ class Player:
             }
         elif self.current_weapon == 2:  # Revolver
             if self.revolver_mag <= 0:
-                self.start_reload()
+                if not was_reloading:
+                    self.start_reload()
                 return None
             self.revolver_mag -= 1
             self.weapon_cooldown = REVOLVER_COOLDOWN

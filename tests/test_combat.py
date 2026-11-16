@@ -231,6 +231,21 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertFalse(player.reloading)
         self.assertEqual(player.ammo_shotgun, 4)
 
+    def test_fire_input_cancels_empty_magazine_reload_without_restarting(self):
+        player = Player()
+        player.current_weapon = 1
+        player.shotgun_mag = 0
+        player.ammo_shotgun = 4
+        self.assertTrue(player.start_reload())
+        player.weapon_cooldown = 0.0
+
+        self.assertIsNone(player.fire_weapon())
+
+        self.assertFalse(player.reloading)
+        self.assertEqual(player.reload_timer, 0.0)
+        self.assertEqual(player.ammo_shotgun, 4)
+        self.assertEqual(player.shotgun_mag, 0)
+
     def test_shotgun_reload_completion_transfers_only_available_reserve(self):
         player = Player()
         player.current_weapon = 1
