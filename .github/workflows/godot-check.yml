@@ -1,0 +1,33 @@
+name: Godot project validation
+
+on:
+  push:
+    branches: [godot-migration]
+    paths:
+      - "godot/**"
+      - ".github/workflows/godot-check.yml"
+  pull_request:
+    branches: [godot-migration]
+    paths:
+      - "godot/**"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.4.1
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: false
+
+      - name: Import and parse project
+        run: godot --headless --editor --path godot --quit
+
+      - name: Run project headlessly
+        run: godot --headless --path godot --quit-after 8
