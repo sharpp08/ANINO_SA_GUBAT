@@ -12,6 +12,7 @@ var game_started := false
 var paused := false
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_environment()
 	_create_world()
 	_create_player()
@@ -111,6 +112,7 @@ func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "FirstPersonPlayer"
 	player.set_script(PLAYER_SCRIPT)
+	player.process_mode = Node.PROCESS_MODE_PAUSABLE
 	player.position = Vector3(0.0, 1.0, 0.0)
 	add_child(player)
 
@@ -167,7 +169,6 @@ func _build_interface() -> void:
 	hud.add_child(controls)
 
 	menu_panel = _make_panel(hud, Vector2(0.5, 0.5), Vector2(520, 390))
-	menu_panel.position = Vector2(-260, -195)
 	var menu_content := VBoxContainer.new()
 	menu_content.alignment = BoxContainer.ALIGNMENT_CENTER
 	menu_content.add_theme_constant_override("separation", 18)
@@ -204,7 +205,6 @@ func _build_interface() -> void:
 	menu_content.add_child(quit_button)
 
 	pause_panel = _make_panel(hud, Vector2(0.5, 0.5), Vector2(420, 230))
-	pause_panel.position = Vector2(-210, -115)
 	var pause_content := VBoxContainer.new()
 	pause_content.alignment = BoxContainer.ALIGNMENT_CENTER
 	pause_content.add_theme_constant_override("separation", 14)
@@ -234,6 +234,10 @@ func _make_panel(parent: Control, anchor: Vector2, panel_size: Vector2) -> Panel
 	panel.anchor_right = anchor.x
 	panel.anchor_bottom = anchor.y
 	panel.custom_minimum_size = panel_size
+	panel.offset_left = -panel_size.x * 0.5
+	panel.offset_top = -panel_size.y * 0.5
+	panel.offset_right = panel_size.x * 0.5
+	panel.offset_bottom = panel_size.y * 0.5
 	panel.add_theme_stylebox_override("panel", _panel_style())
 	parent.add_child(panel)
 	return panel
@@ -284,5 +288,5 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _process(_delta: float) -> void:
-	if player and player.has_method("get"):
+	if player:
 		stamina_bar.value = player.stamina
