@@ -47,9 +47,14 @@ var message_timer := 0.0
 var spawn_timer := 0.0
 var objective_complete := false
 var rng := RandomNumberGenerator.new()
+var ambience_player: AudioStreamPlayer
+var frenzy_player: AudioStreamPlayer
+var weapon_player: AudioStreamPlayer
+var reload_player: AudioStreamPlayer
 
 func _ready() -> void:
 	rng.seed = 20261120
+	_setup_audio()
 	set_process(true)
 	_build_hud()
 
@@ -71,6 +76,7 @@ func begin_run() -> void:
 	game_over = false
 	objective_complete = false
 	game_active = true
+	if ambience_player and not ambience_player.playing: ambience_player.play()
 	_clear_runtime_entities()
 	_spawn_initial_enemies()
 	_spawn_pickups()
@@ -79,6 +85,8 @@ func begin_run() -> void:
 
 func stop_run() -> void:
 	game_active = false
+	if ambience_player: ambience_player.stop()
+	if frenzy_player: frenzy_player.stop()
 	_clear_runtime_entities()
 
 func _clear_runtime_entities() -> void:
@@ -111,6 +119,8 @@ func _process(delta: float) -> void:
 	_update_pickups()
 	_update_wards(delta)
 	_update_sanity(delta)
+	if frenzy and frenzy_player and not frenzy_player.playing: frenzy_player.play()
+	elif not frenzy and frenzy_player and frenzy_player.playing: frenzy_player.stop()
 	_update_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -126,6 +136,40 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_2: _switch_weapon(1)
 			KEY_E: _interact()
 			KEY_G: _use_sanity_tonic()
+
+func _setup_audio() -> void:
+	ambience_player = AudioStreamPlayer.new()
+	ambience_player.name = "ForestRainAmbience"
+	ambience_player.volume_db = -17.0
+	var rain = load("res://assets/audio/rain_ambience.mp3") if ResourceLoader.exists("res://assets/audio/rain_ambience.mp3") else null
+	if rain:
+		rain.loop = true
+		ambience_player.stream = rain
+	add_child(ambience_player)
+	frenzy_player = AudioStreamPlayer.new()
+	frenzy_player.name = "FrenzyAmbience"
+	frenzy_player.volume_db = -9.0
+	var frenzy_stream = load("res://assets/audio/frenzy_mode_ambience.mp3") if ResourceLoader.exists("res://assets/audio/frenzy_mode_ambience.mp3") else null
+	if frenzy_stream:
+		frenzy_stream.loop = true
+		frenzy_player.stream = frenzy_stream
+	add_child(frenzy_player)
+	weapon_player = AudioStreamPlayer.new()
+	weapon_player.name = "WeaponSound"
+	weapon_player.volume_db = -3.0
+	add_child(weapon_player)
+	reload_player = AudioStreamPlayer.new()
+	reload_player.name = "ReloadSound"
+	reload_player.volume_db = -6.0
+	add_child(reload_player)
+	_set_weapon_audio()
+
+func _set_weapon_audio() -> void:
+	if not weapon_player or not reload_player: return
+	var fire_path := "res://assets/audio/revolver_gunshot.mp3" if weapon_index == 0 else "res://assets/audio/shotgun_fire.mp3"
+	var reload_path := "res://assets/audio/revolver_reload.mp3" if weapon_index == 0 else "res://assets/audio/shotgun_reload.mp3"
+	if ResourceLoader.exists(fire_path): weapon_player.stream = load(fire_path)
+	if ResourceLoader.exists(reload_path): reload_player.stream = load(reload_path)
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -315,6 +359,7 @@ func _fire_weapon() -> void:
 		_show_message("Empty. Press R to reload.", 1.2)
 		return
 	ammo -= 1
+	if weapon_player: weapon_player.play()
 	shot_cooldown = 0.48 if weapon_index == 0 else 0.9
 	var from := camera.global_position
 	var direction := -camera.global_transform.basis.z
@@ -348,11 +393,13 @@ func _fire_weapon() -> void:
 func _reload() -> void:
 	if reload_timer > 0.0 or ammo >= max_ammo or reserve_ammo <= 0: return
 	reload_timer = 1.25 if weapon_index == 0 else 1.8
+	if reload_player: reload_player.play()
 	_show_message("Reloading...", reload_timer)
 
 func _switch_weapon(index: int) -> void:
 	if index < 0 or index > 1 or index == weapon_index: return
 	weapon_index = index
+	_set_weapon_audio()
 	max_ammo = weapon_capacity[index]
 	ammo = mini(ammo, max_ammo)
 	reserve_ammo = weapon_reserve[index]
