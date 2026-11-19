@@ -2,7 +2,7 @@
 config_version=5
 
 [application]
-config/name="ANINO SA GUBAT - Godot Visual Frontend"
+config/name="ANINO SA GUBAT: Mga Bulong ng Dilim"
 run/main_scene="res://scenes/main.tscn"
 
 [display]
