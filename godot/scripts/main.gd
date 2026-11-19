@@ -6,6 +6,8 @@ var player: CharacterBody3D
 var hud_layer: CanvasLayer
 var menu_panel: PanelContainer
 var pause_panel: PanelContainer
+var settings_panel: PanelContainer
+var settings_return_to_pause := false
 var stamina_bar: ProgressBar
 var status_label: Label
 var game_started := false
@@ -198,6 +200,12 @@ func _build_interface() -> void:
 	hint.add_theme_font_size_override("font_size", 13)
 	menu_content.add_child(hint)
 
+	var settings_button := Button.new()
+	settings_button.text = "SETTINGS"
+	settings_button.custom_minimum_size = Vector2(280, 38)
+	settings_button.pressed.connect(_open_settings_from_menu)
+	menu_content.add_child(settings_button)
+
 	var quit_button := Button.new()
 	quit_button.text = "QUIT"
 	quit_button.custom_minimum_size = Vector2(280, 38)
@@ -221,11 +229,52 @@ func _build_interface() -> void:
 	resume_button.pressed.connect(_resume_game)
 	pause_content.add_child(resume_button)
 
+	var pause_settings_button := Button.new()
+	pause_settings_button.text = "SETTINGS"
+	pause_settings_button.pressed.connect(_open_settings_from_pause)
+	pause_content.add_child(pause_settings_button)
+
 	var menu_button := Button.new()
 	menu_button.text = "MAIN MENU"
 	menu_button.pressed.connect(_return_to_menu)
 	pause_content.add_child(menu_button)
 	pause_panel.hide()
+
+	settings_panel = _make_panel(hud, Vector2(0.5, 0.5), Vector2(500, 330))
+	var settings_content := VBoxContainer.new()
+	settings_content.alignment = BoxContainer.ALIGNMENT_CENTER
+	settings_content.add_theme_constant_override("separation", 14)
+	settings_panel.add_child(settings_content)
+	var settings_title := Label.new()
+	settings_title.text = "SETTINGS"
+	settings_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	settings_title.add_theme_font_size_override("font_size", 28)
+	settings_content.add_child(settings_title)
+	var volume_label := Label.new()
+	volume_label.text = "MASTER VOLUME"
+	settings_content.add_child(volume_label)
+	var volume_slider := HSlider.new()
+	volume_slider.min_value = 0.0
+	volume_slider.max_value = 1.0
+	volume_slider.step = 0.05
+	volume_slider.value = 0.8
+	volume_slider.value_changed.connect(_apply_master_volume)
+	settings_content.add_child(volume_slider)
+	var sensitivity_label := Label.new()
+	sensitivity_label.text = "MOUSE SENSITIVITY"
+	settings_content.add_child(sensitivity_label)
+	var sensitivity_slider := HSlider.new()
+	sensitivity_slider.min_value = 0.0006
+	sensitivity_slider.max_value = 0.0035
+	sensitivity_slider.step = 0.0001
+	sensitivity_slider.value = 0.0018
+	sensitivity_slider.value_changed.connect(_apply_mouse_sensitivity)
+	settings_content.add_child(sensitivity_slider)
+	var settings_back := Button.new()
+	settings_back.text = "BACK"
+	settings_back.pressed.connect(_close_settings)
+	settings_content.add_child(settings_back)
+	settings_panel.hide()
 
 func _make_panel(parent: Control, anchor: Vector2, panel_size: Vector2) -> PanelContainer:
 	var panel := PanelContainer.new()
@@ -254,6 +303,7 @@ func _panel_style() -> StyleBox:
 func _show_main_menu() -> void:
 	menu_panel.show()
 	pause_panel.hide()
+	if settings_panel: settings_panel.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
 
@@ -266,6 +316,32 @@ func _start_game() -> void:
 	status_label.text = "SURVIVE THE FOREST  •  Find a way out"
 	survival.begin_run()
 	survival.show_hud(true)
+
+func _open_settings_from_menu() -> void:
+	settings_return_to_pause = false
+	menu_panel.hide()
+	pause_panel.hide()
+	settings_panel.show()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _open_settings_from_pause() -> void:
+	settings_return_to_pause = true
+	pause_panel.hide()
+	settings_panel.show()
+
+func _close_settings() -> void:
+	settings_panel.hide()
+	if settings_return_to_pause:
+		pause_panel.show()
+	else:
+		menu_panel.show()
+
+func _apply_master_volume(value: float) -> void:
+	var bus := AudioServer.get_bus_index("Master")
+	if bus >= 0: AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(value, 0.001)))
+
+func _apply_mouse_sensitivity(value: float) -> void:
+	if player: player.mouse_sensitivity = value
 
 func _resume_game() -> void:
 	paused = false
@@ -281,7 +357,9 @@ func _return_to_menu() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and game_started:
-		if paused:
+		if settings_panel and settings_panel.visible:
+			_close_settings()
+		elif paused:
 			_resume_game()
 		else:
 			paused = true
