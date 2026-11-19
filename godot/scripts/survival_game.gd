@@ -396,7 +396,7 @@ func _fire_weapon() -> void:
 		var distance := to_target.length()
 		if distance < best_distance and direction.dot(to_target.normalized()) > 0.965:
 			var query := PhysicsRayQueryParameters3D.create(from, target)
-			query.exclude = [player]
+			query.exclude = [player.get_rid()]
 			var hit := get_world_3d().direct_space_state.intersect_ray(query)
 			if hit.is_empty() or hit.collider == node:
 				best = item
