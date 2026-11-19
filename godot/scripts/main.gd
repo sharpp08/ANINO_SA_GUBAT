@@ -1,6 +1,7 @@
 extends Node3D
 
 const PLAYER_SCRIPT = preload("res://scripts/player_view.gd")
+const SURVIVAL_SCRIPT = preload("res://scripts/survival_game.gd")
 
 var player: CharacterBody3D
 var hud_layer: CanvasLayer
@@ -10,6 +11,7 @@ var settings_panel: PanelContainer
 var settings_return_to_pause := false
 var stamina_bar: ProgressBar
 var status_label: Label
+var survival: Variant
 var game_started := false
 var paused := false
 
@@ -18,6 +20,10 @@ func _ready() -> void:
 	_setup_environment()
 	_create_world()
 	_create_player()
+	survival = SURVIVAL_SCRIPT.new()
+	survival.name = "SurvivalGameplay"
+	add_child(survival)
+	survival.configure(player)
 	_build_interface()
 	_show_main_menu()
 
@@ -304,6 +310,9 @@ func _show_main_menu() -> void:
 	menu_panel.show()
 	pause_panel.hide()
 	if settings_panel: settings_panel.hide()
+	if survival:
+		survival.stop_run()
+		survival.show_hud(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
 
