@@ -21,6 +21,7 @@ var ammo_label: Label
 var objective_label: Label
 var prompt_label: Label
 var message_label: Label
+var weapon_viewmodel: TextureRect
 var weapon_label: Label
 var enemies: Array[Dictionary] = []
 var pickups: Array[Dictionary] = []
@@ -166,6 +167,8 @@ func _setup_audio() -> void:
 
 func _set_weapon_audio() -> void:
 	if not weapon_player or not reload_player: return
+	var view_path := "res://assets/sprites/weapons/revolver/revolver_hero.png" if weapon_index == 0 else "res://assets/sprites/weapons/shotgun/shotgun_hero.png"
+	if weapon_viewmodel and ResourceLoader.exists(view_path): weapon_viewmodel.texture = load(view_path)
 	var fire_path := "res://assets/audio/revolver_gunshot.mp3" if weapon_index == 0 else "res://assets/audio/shotgun_fire.mp3"
 	var reload_path := "res://assets/audio/revolver_reload.mp3" if weapon_index == 0 else "res://assets/audio/shotgun_reload.mp3"
 	if ResourceLoader.exists(fire_path): weapon_player.stream = load(fire_path)
@@ -208,6 +211,15 @@ func _build_hud() -> void:
 	bottom.position = Vector2(-270, -100)
 	bottom.add_theme_constant_override("separation", 4)
 	hud.add_child(bottom)
+	weapon_viewmodel = TextureRect.new()
+	weapon_viewmodel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	weapon_viewmodel.position = Vector2(-350, -300)
+	weapon_viewmodel.custom_minimum_size = Vector2(330, 270)
+	weapon_viewmodel.size = Vector2(330, 270)
+	weapon_viewmodel.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	weapon_viewmodel.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	weapon_viewmodel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(weapon_viewmodel)
 	weapon_label = _label("SERVICE PISTOL", 13)
 	weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	bottom.add_child(weapon_label)
@@ -281,6 +293,16 @@ func _spawn_enemy(type_index: int, at: Vector3) -> void:
 	material.metallic = 0.0
 	body.material_override = material
 	root.add_child(body)
+	var sprite_path := "res://assets/sprites/enemies/%s_idle.png" % String(data.name).to_lower().replace(" ", "_")
+	if ResourceLoader.exists(sprite_path):
+		var enemy_sprite := Sprite3D.new()
+		enemy_sprite.texture = load(sprite_path)
+		enemy_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		enemy_sprite.pixel_size = 0.012
+		enemy_sprite.position.y = 1.0
+		enemy_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		root.add_child(enemy_sprite)
+		body.visible = false
 	var eye := MeshInstance3D.new()
 	var eye_mesh := SphereMesh.new()
 	eye_mesh.radius = 0.075
