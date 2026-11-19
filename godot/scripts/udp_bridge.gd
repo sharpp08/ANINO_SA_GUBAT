@@ -11,6 +11,7 @@ var socket := PacketPeerUDP.new()
 var connected := false
 var send_accumulator := 0.0
 var last_state: Dictionary = {}
+var flashlight_was_down := false
 
 func _ready() -> void:
 	var err := socket.bind(GODOT_PORT, "127.0.0.1")
@@ -36,14 +37,16 @@ func _process(delta: float) -> void:
 	send_accumulator += delta
 	if send_accumulator >= 1.0 / 30.0:
 		send_accumulator = 0.0
+		var flashlight_down := Input.is_key_pressed(KEY_F)
 		var input_packet := {
 			"type": "godot_input",
 			"timestamp_usec": Time.get_ticks_usec(),
 			"move": Input.get_vector("move_left", "move_right", "move_forward", "move_back"),
 			"sprint": Input.is_key_pressed(KEY_SHIFT),
 			"crouch": Input.is_key_pressed(KEY_CTRL),
-			"flashlight_toggle": Input.is_key_pressed(KEY_F)
+			"flashlight_toggle": flashlight_down and not flashlight_was_down
 		}
+		flashlight_was_down = flashlight_down
 		socket.put_packet(JSON.stringify(input_packet).to_utf8_buffer())
 
 func _exit_tree() -> void:
