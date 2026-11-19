@@ -22,6 +22,7 @@ func _ready() -> void:
 	_create_player()
 	survival = SURVIVAL_SCRIPT.new()
 	survival.name = "SurvivalGameplay"
+	survival.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(survival)
 	survival.configure(player)
 	_build_interface()
