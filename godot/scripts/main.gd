@@ -264,6 +264,8 @@ func _start_game() -> void:
 	pause_panel.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	status_label.text = "SURVIVE THE FOREST  •  Find a way out"
+	survival.begin_run()
+	survival.show_hud(true)
 
 func _resume_game() -> void:
 	paused = false
