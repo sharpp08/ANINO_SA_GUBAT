@@ -56,8 +56,9 @@ var reload_player: AudioStreamPlayer
 func _ready() -> void:
 	rng.seed = 20261120
 	_setup_audio()
-	set_process(true)
 	_build_hud()
+	_set_weapon_audio()
+	set_process(true)
 
 func configure(target_player: CharacterBody3D) -> void:
 	player = target_player
