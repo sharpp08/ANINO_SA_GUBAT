@@ -3,13 +3,13 @@ extends Node3D
 ## Uses procedural placeholder meshes so the game is playable before source art is converted.
 
 const ENEMY_TYPES := [
-	{"name":"TikTik","hp":35.0,"speed":2.9,"damage":7.0,"range":1.7,"cooldown":1.5,"color":Color(0.22,0.30,0.20),"scale":Vector3(0.72,1.35,0.72),"sanity":2.0},
-	{"name":"Manananggal","hp":90.0,"speed":2.25,"damage":15.0,"range":2.2,"cooldown":2.0,"color":Color(0.25,0.12,0.16),"scale":Vector3(0.9,2.0,0.9),"sanity":5.0},
-	{"name":"Kapre","hp":180.0,"speed":1.25,"damage":24.0,"range":2.7,"cooldown":2.4,"color":Color(0.16,0.12,0.09),"scale":Vector3(1.55,2.6,1.4),"sanity":4.0},
-	{"name":"White Lady","hp":55.0,"speed":2.0,"damage":11.0,"range":1.8,"cooldown":1.8,"color":Color(0.72,0.72,0.68),"scale":Vector3(0.8,1.9,0.8),"sanity":8.0},
-	{"name":" tiyanak","hp":28.0,"speed":4.2,"damage":9.0,"range":1.35,"cooldown":1.1,"color":Color(0.34,0.12,0.10),"scale":Vector3(0.65,0.85,0.65),"sanity":3.0},
 	{"name":"Aswang","hp":70.0,"speed":3.15,"damage":13.0,"range":1.8,"cooldown":1.6,"color":Color(0.18,0.19,0.14),"scale":Vector3(0.82,1.75,0.82),"sanity":5.0},
-	{"name":"The Anino","hp":260.0,"speed":1.85,"damage":30.0,"range":2.8,"cooldown":2.2,"color":Color(0.035,0.025,0.055),"scale":Vector3(1.3,2.8,1.3),"sanity":12.0}
+	{"name":"Kapre","hp":180.0,"speed":1.25,"damage":24.0,"range":2.7,"cooldown":2.4,"color":Color(0.16,0.12,0.09),"scale":Vector3(1.55,2.6,1.4),"sanity":4.0},
+	{"name":"Manananggal","hp":90.0,"speed":2.25,"damage":15.0,"range":2.2,"cooldown":2.0,"color":Color(0.25,0.12,0.16),"scale":Vector3(0.9,2.0,0.9),"sanity":5.0},
+	{"name":"White Lady","hp":55.0,"speed":2.0,"damage":11.0,"range":1.8,"cooldown":1.8,"color":Color(0.72,0.72,0.68),"scale":Vector3(0.8,1.9,0.8),"sanity":8.0},
+	{"name":"Sigbin","hp":28.0,"speed":4.2,"damage":9.0,"range":1.35,"cooldown":1.1,"color":Color(0.34,0.12,0.10),"scale":Vector3(0.65,0.85,0.65),"sanity":3.0},
+	{"name":"Tikbalang","hp":110.0,"speed":2.7,"damage":17.0,"range":2.0,"cooldown":1.7,"color":Color(0.24,0.15,0.11),"scale":Vector3(0.95,2.2,0.95),"sanity":6.0},
+	{"name":"Multo","hp":52.0,"speed":2.0,"damage":10.0,"range":1.8,"cooldown":1.8,"color":Color(0.45,0.48,0.52),"scale":Vector3(0.8,1.9,0.8),"sanity":9.0}
 ]
 
 var player: CharacterBody3D
