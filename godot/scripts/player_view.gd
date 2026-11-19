@@ -12,9 +12,24 @@ var camera: Camera3D
 var flashlight: SpotLight3D
 
 func _ready() -> void:
+	_setup_input_actions()
 	_build_collision()
 	_build_camera_and_light()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+func _setup_input_actions() -> void:
+	var bindings := {
+		"move_forward": KEY_W,
+		"move_back": KEY_S,
+		"move_left": KEY_A,
+		"move_right": KEY_D
+	}
+	for action_name in bindings:
+		if not InputMap.has_action(action_name):
+			InputMap.add_action(action_name)
+		var event := InputEventKey.new()
+		event.physical_keycode = bindings[action_name]
+		InputMap.action_add_event(action_name, event)
 
 func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
@@ -54,7 +69,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_F:
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
 		flashlight_on = not flashlight_on
 		flashlight.visible = flashlight_on
 
