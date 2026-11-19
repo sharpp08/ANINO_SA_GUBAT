@@ -1,52 +1,74 @@
-# ANINO SA GUBAT — Godot 4.x standalone prototype
+# ANINO SA GUBAT — Godot 4.x standalone migration
 
-This folder contains a runnable Godot 4.x first-person forest prototype. The original Python/Pygame project remains unchanged in the repository root.
+This project is being ported from Python/Pygame to a standalone Godot 4.x first-person survival game. The original Python project remains unchanged and is retained as the reference implementation.
 
-## What currently runs in Godot
+## Implemented in this migration build
 
-- Procedurally generated 3D forest blockout with ground collision, trunks, and canopy meshes
-- First-person camera and collision body
-- WASD movement, sprint with stamina drain/recovery, crouching with capsule resizing
-- Toggleable flashlight (F)
-- Dark forest sky, ambient lighting, directional moonlight, fog, and shadows
-- Main menu, start button, quit button, stamina HUD, and pause/resume/main-menu flow
-- Compatibility renderer selected for broad hardware support
+- First-person controller: mouse look, WASD movement, sprint/stamina, crouch, flashlight
+- Procedural forest blockout, ground collision, moonlight, fog, shadows
+- Seven folklore enemy archetypes: Aswang, Kapre, Manananggal, White Lady, Sigbin, Tikbalang, and Multo
+- Basic enemy pursuit and melee damage
+- Two selectable firearms (service pistol and hunting shotgun), ammunition, hitscan firing, reload timers
+- Salt ward placement with temporary enemy damage
+- Pickups for torn pages, ammunition, first aid, and herbal sanity tonics
+- Health and sanity meters, frenzy state, page collection objective, win/death feedback
+- Main menu, pause/resume, and return-to-menu flow
+- Original rain/frenzy ambience and firearm/reload sound hooks (after asset import)
+
+These are first-pass Godot implementations and procedural placeholders. They are not yet exact feature parity with the original Python systems or final art/animation quality.
+
+## Import the original audio and sprite assets
+
+The Godot project folder is nested under the repository root, while the original assets live in the repository's top-level `assets` folder. Copy them into the Godot resource root before opening the project:
+
+Open PowerShell and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "D:\PhyGame\GODOT\godot\import_original_assets.ps1"
+```
+
+The script copies only `assets/audio` and `assets/sprites` into `godot/assets`; it does not delete or modify the originals. The Godot editor will import the copied files when the project is opened.
 
 ## Open and run
 
-1. Install **Godot 4.x** (standard build; no .NET version required).
+1. Install Godot 4.x standard edition (no .NET version required).
 2. In Godot Project Manager choose **Import**.
-3. Select this file: `godot/project.godot` (not the repository-root README or Python project).
-4. Open the project and press **F6** only if you want to run the current scene; use **F5** to run the project.
-5. Select **ENTER THE FOREST** to begin.
-
-If Godot reports a parse or resource error, open the **Debugger** panel and inspect the first error. The project should be tested in the installed Godot 4.x version before packaging.
+3. Select `D:\PhyGame\GODOT\godot\project.godot`.
+4. Open the project and press **F5**.
+5. Choose **ENTER THE FOREST**.
 
 ## Controls
 
-- WASD — move
-- Mouse — look
-- Shift — sprint (uses stamina)
-- Ctrl — crouch
-- F — toggle flashlight
-- Esc — pause / release mouse; click the viewport to recapture mouse
+| Input | Action |
+|---|---|
+| WASD | Move |
+| Mouse | Look |
+| Shift | Sprint (uses stamina) |
+| Ctrl | Crouch |
+| F | Toggle flashlight |
+| Left mouse | Fire |
+| R | Reload |
+| 1 / 2 | Select pistol / shotgun |
+| Q | Place salt ward |
+| E | Interact with the exit after finding all five pages |
+| Esc | Pause / resume |
+| Click viewport | Recapture mouse after releasing it |
 
-## Important migration status
+Walk over the colored pickups to collect them. Recover all five torn pages, then press E to complete the current prototype objective.
 
-This is **not yet a complete Godot port of the original game**. The original Python README describes procedural assets and systems implemented in Python modules. Python source files cannot simply be copied into a Godot project and executed as GDScript.
+## Still required for full original-game parity
 
-Not yet ported into this standalone Godot build:
-- Original title cinematic, chapters, map/tile data, pickups, and progression
-- Original weapons, ammunition, reloads, sacred wards, salt/garlic/rosary/cross items
-- All seven enemy types and their AI/combat behavior
-- Sanity/frenzy, inventory, objective progression, save/settings, and original audio systems
-- Original HUD, radar, compass, jumpscares, and full menu/settings flow
-
-The initial Godot UDP bridge was only a contract prototype; it is not enabled as a required dependency for this standalone scene. Do not launch Python expecting the Godot build to automatically receive its gameplay state.
+- Port the complete original chapter/map layouts and progression, rather than the current procedural forest test area
+- Replace placeholder enemy geometry with the original enemy sprite/model assets and animation sets; implement their distinct attack, movement, hit reaction, and spawn logic
+- Implement the complete original weapon roster, melee/throwable weapons, ammo economy, and weapon viewmodels
+- Port the full inventory and all sacred items (garlic, rosary, cross, salt, etc.)
+- Rebuild the original cinematic, lore, chapter objectives, radar, compass, jumpscares, and complete settings/options screens
+- Connect all original ambience, footsteps, heartbeat, breathing, thunder, enemy vocalizations, and cinematic audio
+- Add save/load, difficulty, accessibility, rebinding, resolution/fullscreen options, and automated gameplay regression tests
 
 ## Migration safety
 
-- Keep all work on `godot-migration` until the Godot build has feature parity and regression tests.
-- Keep the original Python/Pygame game as the authoritative reference during porting.
-- Reuse compatible original assets when they exist; the original README describes most visuals/audio as generated procedurally at runtime, so those generators and gameplay systems must be ported or replaced deliberately.
-- Do not merge this branch into `main` until the Godot version is independently playable and tested.
+- Continue working on `godot-migration`; do not merge into `main` yet.
+- Keep `D:\PhyGame\ANINO_SA_GUBAT` untouched.
+- Python files are source references, not executable Godot gameplay. Their behavior must be ported to GDScript or native Godot systems.
+- Run the project in the installed Godot version and check the first error in the Debugger before treating a commit as runtime-verified.
