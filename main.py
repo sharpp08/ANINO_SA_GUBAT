@@ -447,8 +447,7 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
             pygame.draw.circle(glow, (142, 28, 27, max(8, 42-ring*12)), (cx, cy), rr, 2)
         pygame.draw.circle(glow, (165, 39, 34, 150), (cx, cy), radius, 2)
         pygame.draw.polygon(glow, (155, 39, 34, 115), [
-            (cx, cy-radius+5), (cx+int(radius*.86), cy+radius//2),            (cx-int(radius*.86), cy+radius//2)], 2)
-        for i in range(12):
+            (cx, cy-radius+5), (cx+int(radius*.86), cy+radius//2),            (cx-int(radius*.86), cy+radius//2)], 2)        for i in range(12):
             a = (math.tau*i/12) + t*.12
             x1 = cx + int(math.cos(a)*(radius+5))
             y1 = cy + int(math.sin(a)*(radius+5))
@@ -897,8 +896,7 @@ class Game:
         self.player.pages_this_chapter = 0
         self.player.survival_time_left = 7 * 60.0
         self.survival_spawn_timer = 18.0
-        self.survival_spawn_count = 0
-        self.pages_complete_notified = False
+        self.survival_spawn_count = 0        self.pages_complete_notified = False
         self.sunrise_missed_notified = False
         self.enemy_manager.spawn_enemies(self.game_map.enemies)
         self.effects = []
@@ -1347,8 +1345,7 @@ class Game:
                         enemy.y,
                         base_volume=1.0,
                         max_dist=enemy.detect_range * 2.4,
-                    )
-                    enemy._chase_scream_timer = random.uniform(4.5, 6.0)
+                    )                    enemy._chase_scream_timer = random.uniform(4.5, 6.0)
                 except Exception as exc:
                     print(f"[Audio] chase scream failed for {enemy.type}: {exc}")
                     enemy._chase_scream_timer = 2.0
@@ -1760,10 +1757,18 @@ class Game:
             )
             self.menu_music.set_active(menu_music_active)
 
-            self.render(dt)
-            self.perf.update(self._work_ms, self.state == STATE_PLAYING)
             if getattr(self, 'godot_bridge', None) is not None:
+                # Godot owns visible rendering in bridge mode. Keep Python's gameplay,
+                # weather simulation, and audio active without doing a redundant Pygame frame.
+                if self.state == STATE_PLAYING:
+                    sunrise_progress = 1.0 - max(0.0, min(1.0, self.player.survival_time_left / 120.0))
+                    sunrise_progress = sunrise_progress * sunrise_progress * (3.0 - 2.0 * sunrise_progress)
+                    self.renderer.update_weather(self.player, dt, sunrise_progress)
+                self._work_ms = (_perf_counter() - self._loop_t0) * 1000.0
                 self.godot_bridge.send_state(self)
+            else:
+                self.render(dt)
+                self.perf.update(self._work_ms, self.state == STATE_PLAYING)
 
         if getattr(self, 'godot_bridge', None) is not None:
             self.godot_bridge.close()
