@@ -46,6 +46,9 @@ class GodotBridge:
         self.last_send = 0.0
         self.sequence = 0
         self.last_map_key = None
+        self.last_world_send = 0.0
+        self.world_revision = 0
+        self.last_game_state = "menu"
         self.last_packet_time = 0.0
         print(f"[GODOT BRIDGE] UDP input :{receive_port}, state target :{target_port}")
 
@@ -106,7 +109,8 @@ class GodotBridge:
         commands = latest.get("commands", [])
         if isinstance(commands, list):
             if "start_game" in commands:
-                events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN, "repeat": False}))
+                key = pygame.K_m if self.last_game_state == "gameover" else pygame.K_RETURN
+                events.append(pygame.event.Event(pygame.KEYDOWN, {"key": key, "repeat": False}))
             if "resume_game" in commands:
                 events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "repeat": False}))
         return events
@@ -143,7 +147,7 @@ class GodotBridge:
             if not getattr(enemy, "alive", True) and getattr(enemy, "death_t", 99.0) > 2.0:
                 continue
             enemies.append({
-                "id": str(index), "type": str(getattr(enemy, "type", "aswang")),
+                "id": str(id(enemy)), "type": str(getattr(enemy, "type", "aswang")),
                 "x": self._number(getattr(enemy, "x", 0)),
                 "y": self._number(getattr(enemy, "y", 0)),
                 "angle": self._number(getattr(enemy, "facing_angle", 0)),
@@ -156,14 +160,18 @@ class GodotBridge:
 
         map_key = (int(getattr(game, "chapter", 1)), id(gm), len(getattr(gm, "trees", []) or []))
         world = None
-        if map_key != self.last_map_key:
+        now = time.monotonic()
+        if map_key != self.last_map_key or now - self.last_world_send >= 1.5:
+            self.world_revision += 1
             world = {
                 "chapter": map_key[0],
+                "revision": self.world_revision,
                 "width": int(getattr(gm, "width", 64)),
                 "height": int(getattr(gm, "height", 64)),
                 "trees": self._trees_for(gm, p.x, p.y)
             }
             self.last_map_key = map_key
+            self.last_world_send = now
 
         pickups = []
         for index, pickup in enumerate(getattr(gm, "pickups", []) or []):
@@ -173,6 +181,7 @@ class GodotBridge:
                     "x": self._number(pickup.get("x")), "y": self._number(pickup.get("y"))
                 })
 
+        self.last_game_state = str(getattr(game, "state", "menu"))
         state = {
             "protocol": 1, "type": "state", "sequence": self.sequence,
             "game_state": str(getattr(game, "state", "menu")),
