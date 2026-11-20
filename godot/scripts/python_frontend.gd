@@ -245,6 +245,7 @@ func _on_python_state(state: Dictionary) -> void:
 		pause_panel.hide()
 	if state.has("notification"):
 		notification_label.text = str(state.get("notification", ""))
+	last_game_state = game_state
 
 func _update_hud(p: Dictionary, state: Dictionary) -> void:
 	stats_label.text = "HP %d   SAN %d   STM %d   BAT %d%%" % [
