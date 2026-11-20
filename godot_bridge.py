@@ -23,14 +23,14 @@ KEYS = {
 
 
 class _PressedView:
-    def __init__(self, base, remote, pygame):
-        self.base, self.remote, self.pygame = base, remote, pygame
+    def __init__(self, base, remote_codes):
+        self.base, self.remote_codes = base, remote_codes
 
     def __getitem__(self, key):
         try:
-            return bool(self.base[key]) or key in self.remote
+            return bool(self.base[key]) or key in self.remote_codes
         except (IndexError, TypeError):
-            return key in self.remote
+            return key in self.remote_codes
 
 
 class GodotBridge:
@@ -42,6 +42,7 @@ class GodotBridge:
         self.socket.setblocking(False)
         self.socket.bind((host, receive_port))
         self.remote_keys = set()
+        self.remote_codes = set()
         self.remote_buttons = set()
         self.last_send = 0.0
         self.sequence = 0
@@ -53,7 +54,7 @@ class GodotBridge:
         print(f"[GODOT BRIDGE] UDP input :{receive_port}, state target :{target_port}")
 
     def key_state_view(self, base, pygame):
-        return _PressedView(base, self.remote_keys, pygame)
+        return _PressedView(base, self.remote_codes)
 
     def poll_events(self, pygame):
         latest = None
@@ -73,6 +74,18 @@ class GodotBridge:
                 continue
 
         if latest is None:
+            # If the Godot window closes or its bridge stalls, release held keys
+            # rather than leaving Python movement/actions stuck indefinitely.
+            if self.last_packet_time and time.monotonic() - self.last_packet_time > 0.5 and self.remote_keys:
+                released = []
+                for name in sorted(self.remote_keys):
+                    key_name = KEYS.get(name)
+                    if key_name:
+                        released.append(pygame.event.Event(pygame.KEYUP, {"key": getattr(pygame, key_name)}))
+                self.remote_keys.clear()
+                self.remote_codes.clear()
+                self.remote_buttons.clear()
+                return released
             return []
 
         self.last_packet_time = time.monotonic()
@@ -87,6 +100,9 @@ class GodotBridge:
             if key_name:
                 events.append(pygame.event.Event(pygame.KEYUP, {"key": getattr(pygame, key_name)}))
         self.remote_keys = new_keys
+        self.remote_codes = {
+            getattr(pygame, KEYS[name]) for name in new_keys if name in KEYS
+        }
 
         dx, dy = latest.get("mouse_delta", [0, 0])[:2]
         try:
