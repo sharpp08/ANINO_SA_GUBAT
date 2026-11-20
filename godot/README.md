@@ -1,74 +1,93 @@
-# ANINO SA GUBAT — Godot 4.x standalone migration
+# ANINO SA GUBAT — Godot visual frontend
 
-This project is being ported from Python/Pygame to a standalone Godot 4.x first-person survival game. The original Python project remains unchanged and is retained as the reference implementation.
+This branch is an incremental renderer migration, **not a rewrite of the game rules**.
 
-## Implemented in this migration build
+## Runtime ownership
 
-- First-person controller: mouse look, WASD movement, sprint/stamina, crouch, flashlight
-- Procedural forest blockout, ground collision, moonlight, fog, shadows
-- Seven folklore enemy archetypes: Aswang, Kapre, Manananggal, White Lady, Sigbin, Tikbalang, and Multo
-- Basic enemy pursuit and melee damage
-- Two selectable firearms (service pistol and hunting shotgun), ammunition, hitscan firing, reload timers
-- Salt ward placement with temporary enemy damage
-- Pickups for torn pages, ammunition, first aid, and herbal sanity tonics
-- Health and sanity meters, frenzy state, page collection objective, win/death feedback
-- Main menu, pause/resume, and return-to-menu flow
-- Original rain/frenzy ambience and firearm/reload sound hooks (after asset import)
+- **Python/Pygame is authoritative:** player movement and collision, stamina, health and sanity, weapons, ammunition, reloads, enemy AI and damage, pickups, map progression, objectives, items/wards, weather/gameplay timers, and the existing audio systems.
+- **Godot 4 is the visual frontend:** 3D camera, forest geometry, lighting, fog, shadows, enemy/pickup visuals, and the presentation HUD.
+- **The original Python project and gameplay modules remain intact.** Godot no longer instantiates the standalone `survival_game.gd` prototype from the active main scene.
 
-These are first-pass Godot implementations and procedural placeholders. They are not yet exact feature parity with the original Python systems or final art/animation quality.
+The bridge is local-only UDP on loopback:
+- Godot input -> Python: `127.0.0.1:4244`
+- Python state -> Godot: `127.0.0.1:4243`
+- Protocol version: `1`
+- Input packets: up to 30 Hz; state snapshots: up to 20 Hz.
+- Player and enemy transforms are interpolated on the Godot side. Python remains the source of truth.
 
-## Import the original audio and sprite assets
+## Run the integrated build
 
-The Godot project folder is nested under the repository root, while the original assets live in the repository's top-level `assets` folder. Copy them into the Godot resource root before opening the project:
+The Python simulation and Godot renderer are two separate processes. Start Python first so it can receive the first start-game command.
 
-Open PowerShell and run:
+### 1. Start the Python gameplay process
+
+Open PowerShell in the repository root (the folder containing `main.py`):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "D:\PhyGame\GODOT\godot\import_original_assets.ps1"
+Set-Location "D:\PhyGame\GODOT"
+$env:ANINO_GODOT_BRIDGE = "1"
+$env:ANINO_GPU_PRESENT = "0"
+python main.py
 ```
 
-The script copies only `assets/audio` and `assets/sprites` into `godot/assets`; it does not delete or modify the originals. The Godot editor will import the copied files when the project is opened.
+In bridge mode, Pygame uses SDL's dummy video driver so it does not open a second visible game window. Python gameplay and the original Python audio systems continue running. Keep this terminal open.
 
-## Open and run
+Use the Python environment that already has the project's Pygame and other dependencies installed. If `python` points to a different interpreter, activate the project's virtual environment first.
 
-1. Install Godot 4.x standard edition (no .NET version required).
-2. In Godot Project Manager choose **Import**.
-3. Select `D:\PhyGame\GODOT\godot\project.godot`.
-4. Open the project and press **F5**.
-5. Choose **ENTER THE FOREST**.
+### 2. Start Godot
+
+1. Open Godot 4.7.2 (or a compatible Godot 4.x standard build).
+2. Import/open `D:\PhyGame\GODOT\godot\project.godot`.
+3. Press **F5**.
+4. Wait for the HUD to show **PYTHON CONNECTED**.
+5. Select **ENTER THE FOREST**. Python starts the original intro/chapter flow; Godot displays the received player, map, and enemy state.
+
+If Godot is started before Python, it will keep waiting for the Python process. Start Python and then run the Godot project again if the initial start command was sent before Python was listening.
 
 ## Controls
 
-| Input | Action |
+The Godot window forwards input to the original Python event handlers:
+
+| Input | Original Python action |
 |---|---|
 | WASD | Move |
 | Mouse | Look |
-| Shift | Sprint (uses stamina) |
+| Shift | Sprint |
 | Ctrl | Crouch |
 | F | Toggle flashlight |
-| Left mouse | Fire |
+| Left mouse | Fire current weapon |
+| Mouse wheel | Switch weapon |
 | R | Reload |
-| 1 / 2 | Select pistol / shotgun |
-| Q | Place salt ward |
-| E | Interact with the exit after finding all five pages |
+| E | Interact |
+| G / H | Salt / garlic |
+| V / C | Rosary / cross |
+| Q, 2–5, Tab | Original ward controls |
 | Esc | Pause / resume |
-| Click viewport | Recapture mouse after releasing it |
 
-Walk over the colored pickups to collect them. Recover all five torn pages, then press E to complete the current prototype objective.
+The exact behavior remains governed by the original Python settings and gameplay code.
 
-## Still required for full original-game parity
+## Current implementation boundaries
 
-- Port the complete original chapter/map layouts and progression, rather than the current procedural forest test area
-- Replace placeholder enemy geometry with the original enemy sprite/model assets and animation sets; implement their distinct attack, movement, hit reaction, and spawn logic
-- Implement the complete original weapon roster, melee/throwable weapons, ammo economy, and weapon viewmodels
-- Port the full inventory and all sacred items (garlic, rosary, cross, salt, etc.)
-- Rebuild the original cinematic, lore, chapter objectives, radar, compass, jumpscares, and complete settings/options screens
-- Connect all original ambience, footsteps, heartbeat, breathing, thunder, enemy vocalizations, and cinematic audio
-- Add save/load, difficulty, accessibility, rebinding, resolution/fullscreen options, and automated gameplay regression tests
+Implemented:
+- Two-way versioned JSON UDP transport on localhost.
+- Godot input is converted into Pygame key, mouse-motion, mouse-button, and mouse-wheel events and routed through the existing Python handlers.
+- Python sends authoritative player stats/transforms, enemy state, notifications, and nearby map-tree data.
+- Godot renders a Python-driven first-person camera, flashlight, forest blockout, enemy blockout visuals, pickup placeholders, and a basic HUD.
+- Nearby tree visuals are refreshed periodically; player and enemy transforms are smoothed between snapshots.
+- Python's Pygame display is hidden in bridge mode; original Python gameplay/audio remain active.
+
+Still required:
+- Validate the bridge on the target Windows PC with the installed Python environment and Godot 4.7.2.
+- Improve reliability/acknowledgement for one-shot commands and add connection timeout/reconnect UI.
+- Stream all relevant map geometry, terrain, water, doors, shrines, and chapter-specific landmarks instead of only nearby tree blockout geometry.
+- Replace procedural blockout visuals with the original art/animation assets and properly rigged 3D models.
+- Add visual representations for all original projectiles, ward effects, weather, cinematic events, and jumpscares.
+- Tune coordinate mapping, camera pitch, movement interpolation, and latency in a live play test.
+- Build and test a distributable launcher that starts the Python simulation and Godot frontend together.
 
 ## Migration safety
 
-- Continue working on `godot-migration`; do not merge into `main` yet.
-- Keep `D:\PhyGame\ANINO_SA_GUBAT` untouched.
-- Python files are source references, not executable Godot gameplay. Their behavior must be ported to GDScript or native Godot systems.
-- Run the project in the installed Godot version and check the first error in the Debugger before treating a commit as runtime-verified.
+- Continue on `godot-migration`; do not merge into `main` yet.
+- Keep the original `D:\PhyGame\ANINO_SA_GUBAT` working copy untouched.
+- `godot/scripts/main.gd` and `godot/scripts/survival_game.gd` are retained as prototype/reference files, but the active scene uses `python_frontend.gd`.
+- Do not treat this build as fully parity-complete or runtime-verified until the Windows two-process test has passed.
