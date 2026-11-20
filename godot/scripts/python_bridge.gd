@@ -39,13 +39,13 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		mouse_delta += event.relative
 	elif event is InputEventMouseButton:
-		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if not pending_mouse_downs.has("left"):
+				pending_mouse_downs.append("left")
+		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			mouse_wheel += 1
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			mouse_wheel -= 1
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if not pending_mouse_downs.has("left"):
-			pending_mouse_downs.append("left")
 	elif event is InputEventKey:
 		var key_name := _key_name_for_code(event.keycode)
 		if event.pressed and not event.echo:
@@ -58,7 +58,6 @@ func _input(event: InputEvent) -> void:
 					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif not event.pressed and key_name != "" and not pending_keyups.has(key_name):
 			pending_keyups.append(key_name)
-
 func _key_name_for_code(code: int) -> String:
 	match code:
 		KEY_W: return "w"
