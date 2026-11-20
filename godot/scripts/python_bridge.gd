@@ -13,6 +13,7 @@ var socket := PacketPeerUDP.new()
 var ready_to_send := false
 var send_accumulator := 0.0
 var mouse_delta := Vector2.ZERO
+var mouse_wheel := 0
 var queued_commands: Array[String] = []
 var latest_state: Dictionary = {}
 var packet_sequence := 0
@@ -34,9 +35,13 @@ func send_command(command: String) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		mouse_delta += event.relative
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
-		if event.button_index == MOUSE_BUTTON_LEFT:
+	elif event is InputEventMouseButton:
+		if event.pressed and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and event.button_index == MOUSE_BUTTON_LEFT:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			mouse_wheel += 1
+		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			mouse_wheel -= 1
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -78,11 +83,13 @@ func _send_input() -> void:
 		"sequence": packet_sequence,
 		"keys": keys,
 		"mouse_delta": [mouse_delta.x, mouse_delta.y],
+		"mouse_wheel": mouse_wheel,
 		"mouse_buttons": [Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)],
 		"commands": queued_commands
 	}
 	packet_sequence += 1
 	mouse_delta = Vector2.ZERO
+	mouse_wheel = 0
 	queued_commands.clear()
 	socket.put_packet(JSON.stringify(packet).to_utf8_buffer())
 
