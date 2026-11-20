@@ -33,9 +33,9 @@ func _ready() -> void:
 func _create_bridge() -> void:
 	bridge = BRIDGE_SCRIPT.new()
 	bridge.name = "PythonBridge"
-	add_child(bridge)
 	bridge.connect("state_received", Callable(self, "_on_python_state"))
 	bridge.connect("bridge_error", Callable(self, "_on_bridge_error"))
+	add_child(bridge)
 
 func _setup_environment() -> void:
 	var world_env := WorldEnvironment.new()
