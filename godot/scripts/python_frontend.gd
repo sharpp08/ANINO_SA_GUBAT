@@ -253,7 +253,7 @@ func _update_hud(p: Dictionary, state: Dictionary) -> void:
 	]
 
 func _apply_world(world: Dictionary) -> void:
-	var key := "%s:%s" % [str(world.get("chapter", 1)), str(world.get("trees", []).size())]
+	var key := "%s:%s" % [str(world.get("chapter", 1)), str(world.get("revision", 0))]
 	if key == current_world_key:
 		return
 	current_world_key = key
