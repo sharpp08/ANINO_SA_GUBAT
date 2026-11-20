@@ -91,11 +91,15 @@ class GodotBridge:
         self.last_packet_time = time.monotonic()
         events = []
         new_keys = set(str(k).lower() for k in latest.get("keys", []) if isinstance(k, str))
-        for name in sorted(new_keys - self.remote_keys):
+        edge_downs = set(str(k).lower() for k in latest.get("pressed", []) if isinstance(k, str))
+        edge_ups = set(str(k).lower() for k in latest.get("released", []) if isinstance(k, str))
+        down_names = (new_keys - self.remote_keys) | edge_downs
+        up_names = (self.remote_keys - new_keys) | edge_ups
+        for name in sorted(down_names):
             key_name = KEYS.get(name)
             if key_name:
                 events.append(pygame.event.Event(pygame.KEYDOWN, {"key": getattr(pygame, key_name), "repeat": False}))
-        for name in sorted(self.remote_keys - new_keys):
+        for name in sorted(up_names):
             key_name = KEYS.get(name)
             if key_name:
                 events.append(pygame.event.Event(pygame.KEYUP, {"key": getattr(pygame, key_name)}))
@@ -125,8 +129,12 @@ class GodotBridge:
         raw_buttons = latest.get("mouse_buttons", [])
         if isinstance(raw_buttons, list) and raw_buttons and bool(raw_buttons[0]):
             buttons.add(1)
-        for button in buttons - self.remote_buttons:
-            events.append(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": (0, 0), "button": button}))
+        edge_mouse = latest.get("mouse_pressed", [])
+        if isinstance(edge_mouse, list) and "left" in edge_mouse:
+            events.append(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": (0, 0), "button": 1}))
+        else:
+            for button in buttons - self.remote_buttons:
+                events.append(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": (0, 0), "button": button}))
         self.remote_buttons = buttons
 
         commands = latest.get("commands", [])
