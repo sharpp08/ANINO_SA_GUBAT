@@ -98,6 +98,13 @@ class GodotBridge:
                 "pos": (0, 0), "rel": (int(round(dx)), int(round(dy))), "buttons": (0, 0, 0)
             }))
 
+        try:
+            wheel = int(latest.get("mouse_wheel", 0))
+        except (TypeError, ValueError):
+            wheel = 0
+        if wheel:
+            events.append(pygame.event.Event(pygame.MOUSEWHEEL, {"x": 0, "y": max(-3, min(3, wheel))}))
+
         buttons = set()
         raw_buttons = latest.get("mouse_buttons", [])
         if isinstance(raw_buttons, list) and raw_buttons and bool(raw_buttons[0]):
