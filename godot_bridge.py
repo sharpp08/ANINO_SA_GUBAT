@@ -104,8 +104,11 @@ class GodotBridge:
         self.remote_buttons = buttons
 
         commands = latest.get("commands", [])
-        if isinstance(commands, list) and "start_game" in commands:
-            events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN, "repeat": False}))
+        if isinstance(commands, list):
+            if "start_game" in commands:
+                events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN, "repeat": False}))
+            if "resume_game" in commands:
+                events.append(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "repeat": False}))
         return events
 
     @staticmethod
