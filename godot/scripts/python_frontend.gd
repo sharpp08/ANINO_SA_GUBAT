@@ -7,6 +7,7 @@ const PLAYER_VIEW_SCRIPT := preload("res://scripts/player_view.gd")
 var bridge: Node
 var player_view: Node3D
 var world_root: Node3D
+var ground: MeshInstance3D
 var enemy_root: Node3D
 var pickup_root: Node3D
 var hud_layer: CanvasLayer
@@ -76,7 +77,7 @@ func _create_world() -> void:
 	pickup_root = Node3D.new()
 	pickup_root.name = "PythonPickupVisuals"
 	add_child(pickup_root)
-	var ground := MeshInstance3D.new()
+	ground = MeshInstance3D.new()
 	ground.name = "ForestGround"
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(260.0, 260.0)
@@ -257,6 +258,12 @@ func _apply_world(world: Dictionary) -> void:
 	if key == current_world_key:
 		return
 	current_world_key = key
+	var map_width := maxf(16.0, float(world.get("width", 256)))
+	var map_height := maxf(16.0, float(world.get("height", 256)))
+	var ground_plane := ground.mesh as PlaneMesh
+	if ground_plane:
+		ground_plane.size = Vector2(map_width, map_height)
+	ground.position = Vector3(map_width * 0.5, -0.08, -map_height * 0.5)
 	for child in world_root.get_children():
 		if child.name != "ForestGround":
 			child.queue_free()
