@@ -21,6 +21,7 @@ var enemy_nodes: Dictionary = {}
 var pickup_nodes: Dictionary = {}
 var current_world_key := ""
 var last_snapshot_sequence := -1
+var last_game_state := "menu"
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -214,6 +215,7 @@ func _on_bridge_error(message: String) -> void:
 func _on_python_state(state: Dictionary) -> void:
 	last_snapshot_sequence = int(state.get("sequence", last_snapshot_sequence))
 	var game_state := str(state.get("game_state", "menu"))
+	var state_changed := game_state != last_game_state
 	var player_data: Dictionary = state.get("player", {})
 	if player_view and player_view.has_method("apply_python_state"):
 		player_view.call("apply_python_state", player_data)
@@ -226,15 +228,18 @@ func _on_python_state(state: Dictionary) -> void:
 	if game_state == "playing":
 		menu_panel.hide()
 		pause_panel.hide()
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if state_changed:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif game_state == "paused":
 		menu_panel.hide()
 		pause_panel.show()
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if state_changed:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif game_state in ["menu", "gameover", "win"]:
 		pause_panel.hide()
 		menu_panel.show()
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if state_changed:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif game_state == "intro" or game_state == "settings":
 		menu_panel.hide()
 		pause_panel.hide()
