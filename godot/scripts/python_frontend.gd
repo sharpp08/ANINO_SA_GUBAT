@@ -303,9 +303,14 @@ func _sync_enemies(items: Array) -> void:
 			node = _make_enemy_visual(str(item.get("type", "aswang")))
 			enemy_root.add_child(node)
 			enemy_nodes[id] = node
+		var target_position := Vector3(float(item.get("x", 0.0)), float(item.get("flight_lift", 0.0)), -float(item.get("y", 0.0)))
+		var target_yaw := float(item.get("angle", 0.0)) - PI * 0.5
 		node.visible = bool(item.get("alive", true))
-		node.position = Vector3(float(item.get("x", 0.0)), float(item.get("flight_lift", 0.0)), -float(item.get("y", 0.0)))
-		node.rotation.y = float(item.get("angle", 0.0)) - PI * 0.5
+		if node.position == Vector3.ZERO:
+			node.position = target_position
+		else:
+			node.position = node.position.lerp(target_position, 0.55)
+		node.rotation.y = lerp_angle(node.rotation.y, target_yaw, 0.55)
 	for id in enemy_nodes.keys():
 		if not seen.has(id):
 			enemy_nodes[id].queue_free()
