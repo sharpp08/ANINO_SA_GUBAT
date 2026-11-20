@@ -14,6 +14,9 @@ var ready_to_send := false
 var send_accumulator := 0.0
 var mouse_delta := Vector2.ZERO
 var mouse_wheel := 0
+var pending_keydowns: Array[String] = []
+var pending_keyups: Array[String] = []
+var pending_mouse_downs: Array[String] = []
 var queued_commands: Array[String] = []
 var latest_state: Dictionary = {}
 var packet_sequence := 0
@@ -40,11 +43,51 @@ func _input(event: InputEvent) -> void:
 			mouse_wheel += 1
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			mouse_wheel -= 1
-	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		elif latest_state.get("game_state", "menu") == "playing":
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if not pending_mouse_downs.has("left"):
+			pending_mouse_downs.append("left")
+	elif event is InputEventKey:
+		var key_name := _key_name_for_code(event.keycode)
+		if event.pressed and not event.echo:
+			if key_name != "" and not pending_keydowns.has(key_name):
+				pending_keydowns.append(key_name)
+			if event.keycode == KEY_ESCAPE:
+				if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				elif latest_state.get("game_state", "menu") == "playing":
+					Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		elif not event.pressed and key_name != "" and not pending_keyups.has(key_name):
+			pending_keyups.append(key_name)
+
+func _key_name_for_code(code: int) -> String:
+	match code:
+		KEY_W: return "w"
+		KEY_A: return "a"
+		KEY_S: return "s"
+		KEY_D: return "d"
+		KEY_SHIFT: return "shift"
+		KEY_CTRL: return "ctrl"
+		KEY_F: return "f"
+		KEY_E: return "e"
+		KEY_G: return "g"
+		KEY_H: return "h"
+		KEY_V: return "v"
+		KEY_C: return "c"
+		KEY_1: return "1"
+		KEY_2: return "2"
+		KEY_3: return "3"
+		KEY_4: return "4"
+		KEY_5: return "5"
+		KEY_Q: return "q"
+		KEY_TAB: return "tab"
+		KEY_R: return "r"
+		KEY_ESCAPE: return "escape"
+		KEY_M: return "m"
+		KEY_F11: return "f11"
+		KEY_F3: return "f3"
+		KEY_ENTER: return "enter"
+		KEY_I: return "i"
+	return ""
 
 func _process(delta: float) -> void:
 	if not ready_to_send:
@@ -80,6 +123,9 @@ func _send_input() -> void:
 		"type": "input",
 		"sequence": packet_sequence,
 		"keys": keys,
+		"pressed": pending_keydowns,
+		"released": pending_keyups,
+		"mouse_pressed": pending_mouse_downs,
 		"mouse_delta": [mouse_delta.x, mouse_delta.y],
 		"mouse_wheel": mouse_wheel,
 		"mouse_buttons": [Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)],
@@ -88,6 +134,9 @@ func _send_input() -> void:
 	packet_sequence += 1
 	mouse_delta = Vector2.ZERO
 	mouse_wheel = 0
+	pending_keydowns.clear()
+	pending_keyups.clear()
+	pending_mouse_downs.clear()
 	queued_commands.clear()
 	socket.put_packet(JSON.stringify(packet).to_utf8_buffer())
 
