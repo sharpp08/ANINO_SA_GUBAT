@@ -447,8 +447,7 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
             pygame.draw.circle(glow, (142, 28, 27, max(8, 42-ring*12)), (cx, cy), rr, 2)
         pygame.draw.circle(glow, (165, 39, 34, 150), (cx, cy), radius, 2)
         pygame.draw.polygon(glow, (155, 39, 34, 115), [
-            (cx, cy-radius+5), (cx+int(radius*.86), cy+radius//2),
-            (cx-int(radius*.86), cy+radius//2)], 2)
+            (cx, cy-radius+5), (cx+int(radius*.86), cy+radius//2),            (cx-int(radius*.86), cy+radius//2)], 2)
         for i in range(12):
             a = (math.tau*i/12) + t*.12
             x1 = cx + int(math.cos(a)*(radius+5))
@@ -527,6 +526,11 @@ def draw_loading_step(screen, clock, font_lg, font_sm, step_text, progress):
 # ─── Game class ───────────────────────────────────────────────────────────────
 class Game:
     def __init__(self):
+        # In Godot-renderer mode, keep Pygame's simulation/audio alive without
+        # opening a second visible game window. Godot owns the visible 3D window.
+        if os.environ.get('ANINO_GODOT_BRIDGE') == '1':
+            os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+            os.environ.setdefault('ANINO_GPU_PRESENT', '0')
         pygame.init()
         print(f"[{BUILD_VERSION}] Starting ANINO SA GUBAT...")
         
@@ -640,6 +644,13 @@ class Game:
         self.settings_return_state = STATE_MENU
         self.menu_music = MenuMusic()
         self.target_fps = FPS
+        self.godot_bridge = None
+        if os.environ.get('ANINO_GODOT_BRIDGE') == '1':
+            try:
+                from godot_bridge import GodotBridge
+                self.godot_bridge = GodotBridge()
+            except Exception as exc:
+                print(f"[GODOT BRIDGE] Disabled: {type(exc).__name__}: {exc}")
 
     @staticmethod
     def _read_ui_scale(value):
@@ -897,8 +908,7 @@ class Game:
         # Spawn report: shows in the console if enemies/pickups spawn in bad places
         print(f"[CHAPTER {chapter_num}] enemies={self.level_enemy_total} "
               f"pickups={len(getattr(self.game_map, 'pickups', []))} "
-              f"trees={len(getattr(self.game_map, 'trees', []))} start=({sx:.1f},{sy:.1f})")
-        for e in self.enemy_manager.enemies:
+              f"trees={len(getattr(self.game_map, 'trees', []))} start=({sx:.1f},{sy:.1f})")        for e in self.enemy_manager.enemies:
             solid = False
             try:
                 solid = self.game_map.is_solid(e.x, e.y)
@@ -1209,6 +1219,8 @@ class Game:
         p   = self.player
         setattr(p, '_last_mouse_dx', mouse_dx)
         keys = pygame.key.get_pressed()
+        if getattr(self, 'godot_bridge', None) is not None:
+            keys = self.godot_bridge.key_state_view(keys, pygame)
         p.update(dt, keys, mouse_dx, mouse_dy, self.game_map)
         # Update procedural world chunks around player for infinite exploration
         if hasattr(self.game_map, 'world_engine'):
@@ -1347,8 +1359,7 @@ class Game:
 
         for enemy in attackers:
             try:
-                enemy_audio_mgr.play_spatial(
-                    enemy.type,
+                enemy_audio_mgr.play_spatial(                    enemy.type,
                     'attack',
                     p.x,
                     p.y,
@@ -1598,6 +1609,9 @@ class Game:
 
             prev_state = self.state
             events = pygame.event.get()
+            if getattr(self, 'godot_bridge', None) is not None:
+                # Remote events enter the exact same handlers as local Pygame input.
+                events = self.godot_bridge.poll_events(pygame) + events
             for event in events:
                 if event.type == pygame.QUIT:
                     running = False
@@ -1748,7 +1762,11 @@ class Game:
 
             self.render(dt)
             self.perf.update(self._work_ms, self.state == STATE_PLAYING)
+            if getattr(self, 'godot_bridge', None) is not None:
+                self.godot_bridge.send_state(self)
 
+        if getattr(self, 'godot_bridge', None) is not None:
+            self.godot_bridge.close()
         pygame.quit()
         sys.exit()
 
@@ -1778,4 +1796,3 @@ if __name__ == '__main__':
         except Exception:
             pass
         sys.exit(1)
-
