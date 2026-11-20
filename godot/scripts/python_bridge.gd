@@ -36,9 +36,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		mouse_delta += event.relative
 	elif event is InputEventMouseButton:
-		if event.pressed and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and event.button_index == MOUSE_BUTTON_LEFT:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			mouse_wheel += 1
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			mouse_wheel -= 1
