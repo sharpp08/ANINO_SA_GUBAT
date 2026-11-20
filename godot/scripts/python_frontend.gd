@@ -318,7 +318,10 @@ func _sync_enemies(items: Array) -> void:
 			enemy_nodes[id] = node
 		var target_position := Vector3(float(item.get("x", 0.0)), float(item.get("flight_lift", 0.0)), -float(item.get("y", 0.0)))
 		var target_yaw := float(item.get("angle", 0.0)) - PI * 0.5
-		node.visible = bool(item.get("alive", true))
+		var enemy_visible := bool(item.get("alive", true))
+		for visual in node.get_children():
+			if visual is VisualInstance3D:
+				visual.visible = enemy_visible
 		if node.position == Vector3.ZERO:
 			node.position = target_position
 		else:
