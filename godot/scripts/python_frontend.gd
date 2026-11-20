@@ -34,8 +34,8 @@ func _create_bridge() -> void:
 	bridge = BRIDGE_SCRIPT.new()
 	bridge.name = "PythonBridge"
 	add_child(bridge)
-	bridge.state_received.connect(_on_python_state)
-	bridge.bridge_error.connect(_on_bridge_error)
+	bridge.connect("state_received", Callable(self, "_on_python_state"))
+	bridge.connect("bridge_error", Callable(self, "_on_bridge_error"))
 
 func _setup_environment() -> void:
 	var world_env := WorldEnvironment.new()
@@ -198,12 +198,12 @@ func _show_menu() -> void:
 func _start_game() -> void:
 	menu_panel.hide()
 	pause_panel.hide()
-	bridge.send_command("start_game")
+	bridge.call("send_command", "start_game")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	connection_label.text = "START REQUEST SENT TO PYTHON"
 
 func _resume_game() -> void:
-	bridge.send_command("resume_game")
+	bridge.call("send_command", "resume_game")
 	pause_panel.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -215,7 +215,7 @@ func _on_python_state(state: Dictionary) -> void:
 	var game_state := str(state.get("game_state", "menu"))
 	var player_data: Dictionary = state.get("player", {})
 	if player_view and player_view.has_method("apply_python_state"):
-		player_view.apply_python_state(player_data)
+		player_view.call("apply_python_state", player_data)
 	if state.has("world"):
 		_apply_world(state["world"])
 	_sync_enemies(state.get("enemies", []))
