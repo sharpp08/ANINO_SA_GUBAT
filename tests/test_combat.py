@@ -5,6 +5,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import unittest
+import pygame
 from unittest.mock import patch
 
 from settings import (
@@ -14,6 +15,7 @@ from settings import (
 from player import Player
 from enemies import Enemy, EnemyManager, EnemyState
 from renderer import Renderer
+from main import Game, STATE_PLAYING
 
 
 class FakeMap:
@@ -376,6 +378,43 @@ class CombatRegressionTests(unittest.TestCase):
         enemy.take_damage(10, "physical")
         self.assertEqual(enemy.health, 0)
 
+
+
+    def test_damage_recovery_does_not_retrigger_chase_alert(self):
+        enemy = Enemy("aswang", 5.0, 0.0)
+
+        enemy.update(0.016, 0.0, 0.0, FakeMap())
+        self.assertTrue(enemy.just_entered_chase)
+        enemy.just_entered_chase = False
+
+        enemy.take_damage(1)
+        self.assertEqual(enemy.state, EnemyState.RECOVER)
+        enemy.update(0.016, 0.0, 0.0, FakeMap())
+
+        self.assertFalse(enemy.just_entered_chase)
+
+    def test_removed_debug_hotkeys_cannot_bypass_combat_or_teleport(self):
+        game = Game.__new__(Game)
+        game.player = Player()
+        game.state = STATE_PLAYING
+        game._graphics_mgr = None
+        game.renderer = type(
+            "RendererStub", (), {"show_debug": False, "debug_f4": False}
+        )()
+        enemy = Enemy("aswang", 8.0, 8.0)
+        game.enemy_manager = EnemyManager()
+        game.enemy_manager.enemies = [enemy]
+        original_position = (game.player.x, game.player.y)
+
+        for key in (pygame.K_F3, pygame.K_F4, pygame.K_F6, pygame.K_F7):
+            event = pygame.event.Event(pygame.KEYDOWN, key=key)
+            game.handle_playing_events(event)
+
+        self.assertEqual((game.player.x, game.player.y), original_position)
+        self.assertFalse(game.renderer.show_debug)
+        self.assertFalse(game.renderer.debug_f4)
+        self.assertTrue(enemy.alive)
+        self.assertEqual(enemy.health, enemy.max_health)
 
     def test_multo_jumpscare_audio_loads_from_repository_folder(self):
         from jumpscare import JumpscareManager

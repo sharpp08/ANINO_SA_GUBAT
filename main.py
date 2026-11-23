@@ -536,32 +536,8 @@ class Game:
                 self._cycle_quality('next')
             elif k == pygame.K_F6:
                 self._cycle_quality('prev')
-            elif k == pygame.K_F3:
-                self.renderer.show_debug = not self.renderer.show_debug
-            elif k == pygame.K_F4:
-                self.renderer.debug_f4 = not getattr(self.renderer, 'debug_f4', False)
-                self.notify(f"Debug Mode F4 (Raw Scene): {'ON' if self.renderer.debug_f4 else 'OFF'}")
             elif k == pygame.K_m:
                 self.notify("Radar: ON" if self.radar.toggle() else "Radar: OFF")
-            elif k == pygame.K_F6:
-                # DEBUG: teleport 4 tiles from the nearest living enemy, facing it
-                alive = self.enemy_manager.get_alive_enemies()
-                if alive:
-                    e = min(alive, key=lambda en: en.distance_to(p.x, p.y))
-                    for step in range(16):
-                        a = step * math.pi / 8
-                        nx = e.x + math.cos(a) * 4.0
-                        ny = e.y + math.sin(a) * 4.0
-                        if not self.game_map.is_solid(nx, ny):
-                            p.x, p.y = nx, ny
-                            p.angle = math.atan2(e.y - ny, e.x - nx)
-                            self.notify(f"DEBUG: teleported near {e.type}")
-                            break
-            elif k == pygame.K_F7:
-                # DEBUG: defeat every enemy to test chapter progression
-                for e in self.enemy_manager.enemies:
-                    e.take_damage(99999)
-                self.notify("DEBUG: all enemies defeated")
             elif k == pygame.K_r:
                 p.start_reload()
             elif k == pygame.K_f:

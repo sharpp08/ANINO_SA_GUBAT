@@ -285,7 +285,16 @@ class Enemy:
         # Every living enemy is permanently hostile. No detection cutoff,
         # passive patrol, stalking at range, or low-health retreat.
         prev_state = self.state
-        if self.state != EnemyState.ATTACK:
+        # Alert audio is for the first transition from a passive state into
+        # pursuit. Taking damage briefly sets RECOVER; that reaction must not
+        # replay the chase alert on the next update.
+        if prev_state in (
+            EnemyState.IDLE,
+            EnemyState.PATROL,
+            EnemyState.INVESTIGATE,
+            EnemyState.STALK,
+            EnemyState.RETREAT,
+        ):
             self.just_entered_chase = True
         self.state = EnemyState.ATTACK
 
